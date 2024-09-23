@@ -5,12 +5,12 @@
 // providing as much compile-time type safety as possible.
 package gomme
 
-// FIXME: Ideally, I would want the combinators working with sequences
-// to produce somewhat detailed errors, and tell me which of the combinators failed
-
-// Bytes is a generic type alias for string
-type Bytes interface {
-	string | []byte
+type InputBytes struct {
+	// Go is fundamentally working with bytes and can interpret them as strings or as containing runes.
+	// There are no standard library functions for handling []rune or the like.
+	Bytes []byte
+	Text  bool
+	Pos   uint // position in the sequence a.k.a. the *byte* index
 }
 
 // Separator is a generic type alias for separator characters
@@ -19,56 +19,58 @@ type Separator interface {
 }
 
 // Result is a generic type alias for Result
-type Result[Output any, Remaining Bytes] struct {
+type Result[Output any] struct {
 	Output    Output
-	Err       *Error[Remaining]
-	Remaining Remaining
+	Err       *Error
+	Remaining InputBytes
 }
 
-// Parser is a generic type alias for Parser
-type Parser[Input Bytes, Output any] func(input Input) Result[Output, Input]
+// Parser defines the type of a generic Parser function
+type Parser[Output any] func(input InputBytes) Result[Output]
 
-// Success creates a Result with a output set from
+// Success creates a Result with an output set from
 // the result of a successful parsing.
-func Success[Output any, Remaining Bytes](output Output, r Remaining) Result[Output, Remaining] {
-	return Result[Output, Remaining]{output, nil, r}
+func Success[Output any](output Output, r InputBytes) Result[Output] {
+	return Result[Output]{output, nil, r}
 }
 
 // Failure creates a Result with an error set from
 // the result of a failed parsing.
-// TODO: The Error type could be generic too
-func Failure[Input Bytes, Output any](err *Error[Input], input Input) Result[Output, Input] {
+func Failure[Output any](err *Error, input InputBytes) Result[Output] {
 	var output Output
-	return Result[Output, Input]{output, err, input}
+	return Result[Output]{output, err, input}
 }
 
 // Map applies a function to the result of a parser.
-func Map[Input Bytes, ParserOutput any, MapperOutput any](parse Parser[Input, ParserOutput], fn func(ParserOutput) (MapperOutput, error)) Parser[Input, MapperOutput] {
-	return func(input Input) Result[MapperOutput, Input] {
+func Map[ParserOutput any, MapperOutput any](parse Parser[ParserOutput], fn func(ParserOutput) (MapperOutput, error)) Parser[MapperOutput] {
+	return func(input InputBytes) Result[MapperOutput] {
 		res := parse(input)
 		if res.Err != nil {
-			return Failure[Input, MapperOutput](NewError(input, "Map"), input)
+			return Failure[MapperOutput](NewError(input, "Map"), input)
 		}
 
 		output, err := fn(res.Output)
 		if err != nil {
-			return Failure[Input, MapperOutput](NewError(input, err.Error()), input)
+			return Failure[MapperOutput](NewError(input, err.Error()), input)
 		}
 
 		return Success(output, res.Remaining)
 	}
 }
 
-// Optional applies a an optional child parser. Will return nil
+// Optional applies an optional child parser. Will return nil
 // if not successful.
 //
-// N.B: unless a FatalError is encountered, Optional will ignore
+// N.B: unless a FatalError or NoWayBack is encountered, Optional will ignore
 // any parsing failures and errors.
-func Optional[Input Bytes, Output any](parse Parser[Input, Output]) Parser[Input, Output] {
-	return func(input Input) Result[Output, Input] {
+func Optional[Output any](parse Parser[Output]) Parser[Output] {
+	return func(input InputBytes) Result[Output] {
 		result := parse(input)
-		if result.Err != nil && !result.Err.IsFatal() {
-			result.Err = nil
+		if result.Err != nil {
+			if result.Err.IsFatal() || result.Err.NoWayBack {
+				return Failure[Output](result.Err, input)
+			}
+			result.Err = nil // ignore normal errors
 		}
 
 		return Success(result.Output, result.Remaining)
@@ -77,37 +79,40 @@ func Optional[Input Bytes, Output any](parse Parser[Input, Output]) Parser[Input
 
 // Peek tries to apply the provided parser without consuming any input.
 // It effectively allows to look ahead in the input.
-func Peek[Input Bytes, Output any](parse Parser[Input, Output]) Parser[Input, Output] {
-	return func(input Input) Result[Output, Input] {
+func Peek[Output any](parse Parser[Output]) Parser[Output] {
+	return func(input InputBytes) Result[Output] {
+		oldPos := input.Pos
 		result := parse(input)
 		if result.Err != nil {
-			return Failure[Input, Output](result.Err, input)
+			return Failure[Output](result.Err, input)
 		}
 
+		input.Pos = oldPos // don't consume any input
 		return Success(result.Output, input)
 	}
 }
 
-// Recognize returns the consumed input as the produced value when
-// the provided parser succeeds.
-func Recognize[Input Bytes, Output any](parse Parser[Input, Output]) Parser[Input, Input] {
-	return func(input Input) Result[Input, Input] {
+// Recognize returns the consumed input (instead of the original parsers output)
+// as the produced value when the provided parser succeeds.
+func Recognize[Output any](parse Parser[Output]) Parser[[]byte] {
+	return func(input InputBytes) Result[[]byte] {
+		pos0 := input.Pos
 		result := parse(input)
 		if result.Err != nil {
-			return Failure[Input, Input](result.Err, input)
+			return Failure[[]byte](result.Err, input)
 		}
 
-		return Success(input[:len(input)-len(result.Remaining)], result.Remaining)
+		return Success(input.Bytes[pos0:input.Pos], result.Remaining)
 	}
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
-func Assign[Input Bytes, Output1, Output2 any](value Output1, parse Parser[Input, Output2]) Parser[Input, Output1] {
-	return func(input Input) Result[Output1, Input] {
+func Assign[Output1, Output2 any](value Output1, parse Parser[Output2]) Parser[Output1] {
+	return func(input InputBytes) Result[Output1] {
 		result := parse(input)
 		if result.Err != nil {
-			return Failure[Input, Output1](result.Err, input)
+			return Failure[Output1](result.Err, input)
 		}
 
 		return Success(value, result.Remaining)

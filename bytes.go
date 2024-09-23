@@ -6,41 +6,53 @@ import (
 )
 
 // Take returns a subset of the input of size `count`.
-func Take[Input Bytes](count uint) Parser[Input, Input] {
-	return func(input Input) Result[Input, Input] {
-		if len(input) == 0 && count > 0 {
-			return Failure[Input, Input](NewError(input, "TakeUntil"), input)
+func Take(count uint) Parser[[]byte] {
+	return func(input InputBytes) Result[[]byte] {
+		if uint(len(input.Bytes))-input.Pos < count {
+			return Failure[[]byte](NewError(input, fmt.Sprintf("Take(%d)", count)), input)
 		}
 
-		if uint(len(input)) < count {
-			return Failure[Input, Input](NewError(input, "Take"), input)
-		}
-
-		return Success(input[:count], input[count:])
+		oldPos := input.Pos
+		input.Pos += count
+		return Success(input.Bytes[oldPos:input.Pos], input)
 	}
 }
 
 // TakeUntil parses any number of characters until the provided parser is successful.
 // If the provided parser is not successful, the parser fails, and the entire input is
 // returned as the Result's Remaining.
-func TakeUntil[Input Bytes, Output any](parse Parser[Input, Output]) Parser[Input, Input] {
-	return func(input Input) Result[Input, Input] {
-		if len(input) == 0 {
-			return Failure[Input, Input](NewError(input, "TakeUntil"), input)
+func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
+	return func(input InputBytes) Result[[]byte] {
+		if input.Pos >= uint(len(input.Bytes)) {
+			return Failure[[]byte](NewError(input, "TakeUntil"), input)
 		}
 
-		pos := 0
-		for ; pos < len(input); pos++ {
-			current := input[pos:]
-			res := parse(current)
-			if res.Err == nil {
-				return Success(input[:pos], input[pos:])
+		if input.Text {
+			for i, _ := range string(input.Bytes[input.Pos:]) { // this will loop over runes of a string
+				current := input
+				current.Pos += uint(i)
+				res := parse(current)
+				if res.Err == nil {
+					oldPos := input.Pos
+					input.Pos += uint(i)
+					return Success(input.Bytes[oldPos:input.Pos], input)
+				}
 			}
 
-			continue
+		} else {
+			for i := input.Pos; i < uint(len(input.Bytes)); i++ { // this will loop over bytes
+				current := input
+				current.Pos += i
+				res := parse(current)
+				if res.Err == nil {
+					oldPos := input.Pos
+					input.Pos += i
+					return Success(input.Bytes[oldPos:input.Pos], input)
+				}
+			}
 		}
 
-		return Failure[Input, Input](NewError(input, "TakeUntil"), input)
+		return Failure[[]byte](NewError(input, "TakeUntil"), input)
 	}
 }
 
@@ -50,50 +62,57 @@ func TakeUntil[Input Bytes, Output any](parse Parser[Input, Output]) Parser[Inpu
 // If the provided parser is not successful or the pattern is out of the
 // `atLeast` <= len(input) <= `atMost` range, the parser fails, and the entire
 // input is returned as the Result's Remaining.
-func TakeWhileMN[Input Bytes](atLeast, atMost uint, predicate func(rune) bool) Parser[Input, Input] {
-	return func(input Input) Result[Input, Input] {
-		if len(input) == 0 {
-			return Failure[Input, Input](NewError(input, "TakeWhileMN"), input)
+func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte] {
+	return func(input InputBytes) Result[[]byte] {
+		if input.Pos >= uint(len(input.Bytes)) {
+			return Failure[[]byte](NewError(input, "TakeWhileMN"), input)
 		}
 
 		// Input is shorter than the minimum expected matching length,
 		// it is thus not possible to match it within the established
 		// constraints.
-		if uint(len(input)) < atLeast {
-			return Failure[Input, Input](NewError(input, "TakeWhileMN"), input)
+		if uint(len(input.Bytes))-input.Pos < atLeast {
+			return Failure[[]byte](NewError(input, fmt.Sprintf("TakeWhileMN(%d, ...)", atLeast)), input)
 		}
 
 		lastValidPos := 0
-		for idx := 0; idx < len(input); idx++ {
-			if uint(idx) == atMost {
+		count := uint(0)
+		for i, r := range string(input.Bytes[input.Pos:]) { // this will loop over runes of a string
+			if count >= atMost {
 				break
 			}
-
-			matched := predicate(rune(input[idx]))
+			matched := predicate(r)
 			if !matched {
-				if uint(idx) < atLeast {
-					return Failure[Input, Input](NewError(input, "TakeWhileMN"), input)
+				if count < atLeast {
+					return Failure[[]byte](NewError(input, "TakeWhileMN"), input)
 				}
 
-				return Success(input[:idx], input[idx:])
+				oldPos := input.Pos
+				input.Pos += uint(i)
+				return Success(input.Bytes[oldPos:input.Pos], input)
 			}
 
-			lastValidPos++
+			count++
+			lastValidPos = i
 		}
 
-		return Success(input[:lastValidPos], input[lastValidPos:])
+		oldPos := input.Pos
+		input.Pos += uint(lastValidPos)
+		return Success(input.Bytes[oldPos:input.Pos], input)
 	}
 }
 
 // Token parses a token from the input, and returns the part of the input that
 // matched the token.
 // If the token could not be found, the parser returns an error result.
-func Token[Input Bytes](token string) Parser[Input, Input] {
-	return func(input Input) Result[Input, Input] {
-		if !strings.HasPrefix(string(input), token) {
-			return Failure[Input, Input](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
+func Token(token string) Parser[[]byte] {
+	return func(input InputBytes) Result[[]byte] {
+		if !strings.HasPrefix(string(input.Bytes[input.Pos:]), token) {
+			return Failure[[]byte](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
 		}
 
-		return Success(input[:len(token)], input[len(token):])
+		oldPos := input.Pos
+		input.Pos += uint(len(token))
+		return Success(input.Bytes[oldPos:input.Pos], input)
 	}
 }
