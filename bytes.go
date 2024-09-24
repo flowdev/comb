@@ -5,16 +5,15 @@ import (
 	"strings"
 )
 
-// Take returns a subset of the input of size `count`.
+// Take returns the next `count` bytes of the input.
 func Take(count uint) Parser[[]byte] {
 	return func(input InputBytes) Result[[]byte] {
-		if uint(len(input.Bytes))-input.Pos < count {
+		if input.BytesRemaining() < count {
 			return Failure[[]byte](NewError(input, fmt.Sprintf("Take(%d)", count)), input)
 		}
 
-		oldPos := input.Pos
-		input.Pos += count
-		return Success(input.Bytes[oldPos:input.Pos], input)
+		newInput := input.MoveBy(count)
+		return Success(input.BytesTo(newInput), newInput)
 	}
 }
 
@@ -23,31 +22,26 @@ func Take(count uint) Parser[[]byte] {
 // returned as the Result's Remaining.
 func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
 	return func(input InputBytes) Result[[]byte] {
-		if input.Pos >= uint(len(input.Bytes)) {
+		if input.AtEnd() {
 			return Failure[[]byte](NewError(input, "TakeUntil"), input)
 		}
 
 		if input.Text {
-			for i, _ := range string(input.Bytes[input.Pos:]) { // this will loop over runes of a string
+			for i, _ := range input.CurrentString() { // this will loop over runes of a string
 				current := input
 				current.Pos += uint(i)
 				res := parse(current)
 				if res.Err == nil {
-					oldPos := input.Pos
-					input.Pos += uint(i)
-					return Success(input.Bytes[oldPos:input.Pos], input)
+					return Success(input.BytesTo(current), res.Remaining)
 				}
 			}
-
 		} else {
-			for i := input.Pos; i < uint(len(input.Bytes)); i++ { // this will loop over bytes
+			for i, _ := range input.CurrentBytes() { // this will loop over bytes
 				current := input
-				current.Pos += i
+				current.Pos += uint(i)
 				res := parse(current)
 				if res.Err == nil {
-					oldPos := input.Pos
-					input.Pos += i
-					return Success(input.Bytes[oldPos:input.Pos], input)
+					return Success(input.BytesTo(current), res.Remaining)
 				}
 			}
 		}
@@ -64,20 +58,20 @@ func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
 // input is returned as the Result's Remaining.
 func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte] {
 	return func(input InputBytes) Result[[]byte] {
-		if input.Pos >= uint(len(input.Bytes)) {
+		if input.AtEnd() {
 			return Failure[[]byte](NewError(input, "TakeWhileMN"), input)
 		}
 
 		// Input is shorter than the minimum expected matching length,
 		// it is thus not possible to match it within the established
 		// constraints.
-		if uint(len(input.Bytes))-input.Pos < atLeast {
+		if input.BytesRemaining() < atLeast {
 			return Failure[[]byte](NewError(input, fmt.Sprintf("TakeWhileMN(%d, ...)", atLeast)), input)
 		}
 
 		lastValidPos := 0
 		count := uint(0)
-		for i, r := range string(input.Bytes[input.Pos:]) { // this will loop over runes of a string
+		for i, r := range input.CurrentString() { // this will loop over runes of a string
 			if count >= atMost {
 				break
 			}
@@ -96,9 +90,8 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 			lastValidPos = i
 		}
 
-		oldPos := input.Pos
-		input.Pos += uint(lastValidPos)
-		return Success(input.Bytes[oldPos:input.Pos], input)
+		newInput := input.MoveBy(uint(lastValidPos))
+		return Success(input.BytesTo(newInput), newInput)
 	}
 }
 
@@ -107,12 +100,11 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 // If the token could not be found, the parser returns an error result.
 func Token(token string) Parser[[]byte] {
 	return func(input InputBytes) Result[[]byte] {
-		if !strings.HasPrefix(string(input.Bytes[input.Pos:]), token) {
+		if !strings.HasPrefix(input.CurrentString(), token) {
 			return Failure[[]byte](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
 		}
 
-		oldPos := input.Pos
-		input.Pos += uint(len(token))
-		return Success(input.Bytes[oldPos:input.Pos], input)
+		newInput := input.MoveBy(uint(len(token)))
+		return Success(input.BytesTo(newInput), newInput)
 	}
 }

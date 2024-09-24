@@ -13,12 +13,68 @@ type InputBytes struct {
 	Pos   uint // position in the sequence a.k.a. the *byte* index
 }
 
-// Separator is a generic type alias for separator characters
-type Separator interface {
-	rune | byte | string
+func NewFromString(input string) InputBytes {
+	return InputBytes{
+		Bytes: []byte(input),
+		Text:  true,
+		Pos:   0,
+	}
 }
 
-// Result is a generic type alias for Result
+func NewFromBytes(input []byte) InputBytes {
+	return InputBytes{
+		Bytes: input,
+		Text:  false,
+		Pos:   0,
+	}
+}
+
+func (i InputBytes) AtEnd() bool {
+	return i.Pos >= uint(len(i.Bytes))
+}
+
+func (i InputBytes) BytesRemaining() uint {
+	return uint(len(i.Bytes)) - i.Pos
+}
+
+func (i InputBytes) CurrentString() string {
+	return string(i.Bytes[i.Pos:])
+}
+
+func (i InputBytes) CurrentBytes() []byte {
+	return i.Bytes[i.Pos:]
+}
+
+func (i InputBytes) StringTo(remaining InputBytes) string {
+	return string(i.BytesTo(remaining))
+}
+
+func (i InputBytes) BytesTo(remaining InputBytes) []byte {
+	if remaining.Pos < i.Pos {
+		return []byte{}
+	}
+	if remaining.Pos > uint(len(i.Bytes)) {
+		return i.Bytes[i.Pos:]
+	}
+	return i.Bytes[i.Pos:remaining.Pos]
+}
+
+func (i InputBytes) MoveBy(countBytes uint) InputBytes {
+	i2 := i
+	i2.Pos += countBytes
+	ulen := uint(len(i.Bytes))
+	if i2.Pos > ulen { // prevent overrun
+		i2.Pos = ulen
+	}
+	return i2
+}
+
+// Separator is a generic type alias for separators (byte, rune, []byte or string)
+type Separator interface {
+	rune | byte | string | []byte
+}
+
+// Result is a generic parser result
 type Result[Output any] struct {
 	Output    Output
 	Err       *Error
@@ -29,16 +85,16 @@ type Result[Output any] struct {
 type Parser[Output any] func(input InputBytes) Result[Output]
 
 // Success creates a Result with an output set from
-// the result of a successful parsing.
+// the result of successful parsing.
 func Success[Output any](output Output, r InputBytes) Result[Output] {
-	return Result[Output]{output, nil, r}
+	return Result[Output]{Output: output, Err: nil, Remaining: r}
 }
 
 // Failure creates a Result with an error set from
-// the result of a failed parsing.
+// the result of failed parsing.
 func Failure[Output any](err *Error, input InputBytes) Result[Output] {
 	var output Output
-	return Result[Output]{output, err, input}
+	return Result[Output]{Output: output, Err: err, Remaining: input}
 }
 
 // Map applies a function to the result of a parser.
@@ -96,13 +152,12 @@ func Peek[Output any](parse Parser[Output]) Parser[Output] {
 // as the produced value when the provided parser succeeds.
 func Recognize[Output any](parse Parser[Output]) Parser[[]byte] {
 	return func(input InputBytes) Result[[]byte] {
-		pos0 := input.Pos
 		result := parse(input)
 		if result.Err != nil {
 			return Failure[[]byte](result.Err, input)
 		}
 
-		return Success(input.Bytes[pos0:input.Pos], result.Remaining)
+		return Success(input.BytesTo(result.Remaining), result.Remaining)
 	}
 }
 
