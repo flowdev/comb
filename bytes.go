@@ -3,6 +3,7 @@ package gomme
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Take returns the next `count` bytes of the input.
@@ -27,7 +28,7 @@ func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
 		}
 
 		if input.Text {
-			for i, _ := range input.CurrentString() { // this will loop over runes of a string
+			for i := range input.CurrentString() { // this will loop over runes of a string
 				current := input
 				current.Pos += uint(i)
 				res := parse(current)
@@ -36,7 +37,7 @@ func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
 				}
 			}
 		} else {
-			for i, _ := range input.CurrentBytes() { // this will loop over bytes
+			for i := range input.CurrentBytes() { // this will loop over bytes
 				current := input
 				current.Pos += uint(i)
 				res := parse(current)
@@ -69,29 +70,34 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 			return Failure[[]byte](NewError(input, fmt.Sprintf("TakeWhileMN(%d, ...)", atLeast)), input)
 		}
 
-		lastValidPos := 0
 		count := uint(0)
-		for i, r := range input.CurrentString() { // this will loop over runes of a string
+		current := input
+		for !current.AtEnd() { // loop over runes of the input
 			if count >= atMost {
 				break
 			}
+
+			r, size := utf8.DecodeRune(current.CurrentBytes())
+			if r == utf8.RuneError {
+				if input.Text {
+					return Failure[[]byte](NewError(current, "TakeWhileMN: UTF-8 error"), input)
+				}
+				return Success(input.BytesTo(current), current)
+			}
+
 			matched := predicate(r)
 			if !matched {
 				if count < atLeast {
 					return Failure[[]byte](NewError(input, "TakeWhileMN"), input)
 				}
-
-				oldPos := input.Pos
-				input.Pos += uint(i)
-				return Success(input.Bytes[oldPos:input.Pos], input)
+				return Success(input.BytesTo(current), current)
 			}
 
 			count++
-			lastValidPos = i
+			current = current.MoveBy(uint(size))
 		}
 
-		newInput := input.MoveBy(uint(lastValidPos))
-		return Success(input.BytesTo(newInput), newInput)
+		return Success(input.BytesTo(current), current)
 	}
 }
 

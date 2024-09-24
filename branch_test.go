@@ -10,7 +10,7 @@ func TestAlternative(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, string]
+		p Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -24,7 +24,7 @@ func TestAlternative(t *testing.T) {
 			name:  "head matching parser should succeed",
 			input: "123",
 			args: args{
-				p: Alternative(Digit1[string](), Alpha0[string]()),
+				p: Alternative(Digit1(), Alpha0()),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -34,7 +34,7 @@ func TestAlternative(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "1",
 			args: args{
-				p: Alternative(Digit1[string](), Alpha0[string]()),
+				p: Alternative(Digit1(), Alpha0()),
 			},
 			wantErr:       false,
 			wantOutput:    "1",
@@ -44,7 +44,7 @@ func TestAlternative(t *testing.T) {
 			name:  "no matching parser should fail",
 			input: "$%^*",
 			args: args{
-				p: Alternative(Digit1[string](), Alpha1[string]()),
+				p: Alternative(Digit1(), Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -54,7 +54,7 @@ func TestAlternative(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Alternative(Digit1[string](), Alpha1[string]()),
+				p: Alternative(Digit1(), Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -67,7 +67,8 @@ func TestAlternative(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			input := NewFromString(tc.input)
+			gotResult := tc.args.p(input)
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -78,7 +79,7 @@ func TestAlternative(t *testing.T) {
 				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
 			)
 
-			if gotResult.Remaining != tc.wantRemaining {
+			if gotResult.Remaining.CurrentString() != tc.wantRemaining {
 				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
 			}
 		})
@@ -86,9 +87,10 @@ func TestAlternative(t *testing.T) {
 }
 
 func BenchmarkAlternative(b *testing.B) {
-	p := Alternative(Digit1[string](), Alpha1[string]())
+	p := Alternative(Digit1(), Alpha1())
+	input := NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
-		p("123")
+		p(input)
 	}
 }

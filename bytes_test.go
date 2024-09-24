@@ -3,13 +3,14 @@ package gomme
 import (
 	"fmt"
 	"testing"
+	"unicode"
 )
 
 func TestTake(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, string]
+		p Parser[[]byte]
 	}
 	testCases := []struct {
 		name          string
@@ -23,7 +24,7 @@ func TestTake(t *testing.T) {
 			name:  "taking less than input size should succeed",
 			input: "1234567",
 			args: args{
-				p: Take[string](6),
+				p: Take(6),
 			},
 			wantErr:       false,
 			wantOutput:    "123456",
@@ -33,7 +34,7 @@ func TestTake(t *testing.T) {
 			name:  "taking exact input size should succeed",
 			input: "123456",
 			args: args{
-				p: Take[string](6),
+				p: Take(6),
 			},
 			wantErr:       false,
 			wantOutput:    "123456",
@@ -43,7 +44,7 @@ func TestTake(t *testing.T) {
 			name:  "taking more than input size should fail",
 			input: "123",
 			args: args{
-				p: Take[string](6),
+				p: Take(6),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -53,7 +54,7 @@ func TestTake(t *testing.T) {
 			name:  "taking from empty input should fail",
 			input: "",
 			args: args{
-				p: Take[string](6),
+				p: Take(6),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -66,28 +67,32 @@ func TestTake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			input := NewFromString(tc.input)
+			gotResult := tc.args.p(input)
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
+			gotOutput := string(gotResult.Output)
+			if gotOutput != tc.wantOutput {
 				t.Errorf("got output %v, want output %v", gotResult.Output, tc.wantOutput)
 			}
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %v, want remaining %v", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkTake(b *testing.B) {
-	p := Take[string](6)
+	p := Take(6)
+	input := NewFromString("123456")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p("123456")
+		p(input)
 	}
 }
 
@@ -95,7 +100,7 @@ func TestTakeUntil(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, string]
+		p Parser[[]byte]
 	}
 	testCases := []struct {
 		name          string
@@ -109,27 +114,27 @@ func TestTakeUntil(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc123",
 			args: args{
-				p: TakeUntil(Digit1[string]()),
+				p: TakeUntil(Digit1()),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
-			wantRemaining: "123",
+			wantRemaining: "",
 		},
 		{
 			name:  "immediately matching parser should succeed",
 			input: "123",
 			args: args{
-				p: TakeUntil(Digit1[string]()),
+				p: TakeUntil(Digit1()),
 			},
 			wantErr:       false,
 			wantOutput:    "",
-			wantRemaining: "123",
+			wantRemaining: "",
 		},
 		{
 			name:  "no match should fail",
 			input: "abcdef",
 			args: args{
-				p: TakeUntil(Digit1[string]()),
+				p: TakeUntil(Digit1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -139,7 +144,7 @@ func TestTakeUntil(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: TakeUntil(Digit1[string]()),
+				p: TakeUntil(Digit1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -152,28 +157,30 @@ func TestTakeUntil(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", gotResult.Output, tc.wantOutput)
+			if string(gotResult.Output) != tc.wantOutput {
+				t.Errorf("got output %v, want output %v", string(gotResult.Output), tc.wantOutput)
 			}
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkTakeUntil(b *testing.B) {
-	p := TakeUntil(Digit1[string]())
+	p := TakeUntil(Digit1())
+	input := NewFromString("abc123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p("abc123")
+		p(input)
 	}
 }
 
@@ -181,7 +188,7 @@ func TestTakeWhileMN(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, string]
+		p Parser[[]byte]
 	}
 	testCases := []struct {
 		name          string
@@ -195,7 +202,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing input with enough characters and partially matching predicated should succeed",
 			input: "latin123",
 			args: args{
-				p: TakeWhileMN[string](3, 6, IsAlpha),
+				p: TakeWhileMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -205,7 +212,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and atMost should succeed",
 			input: "lengthy",
 			args: args{
-				p: TakeWhileMN[string](3, 6, IsAlpha),
+				p: TakeWhileMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "length",
@@ -215,7 +222,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and shorter than atMost should succeed",
 			input: "latin",
 			args: args{
-				p: TakeWhileMN[string](3, 6, IsAlpha),
+				p: TakeWhileMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -225,7 +232,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing empty input should fail",
 			input: "",
 			args: args{
-				p: TakeWhileMN[string](3, 6, IsAlpha),
+				p: TakeWhileMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -235,7 +242,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing too short input should fail",
 			input: "ed",
 			args: args{
-				p: TakeWhileMN[string](3, 6, IsAlpha),
+				p: TakeWhileMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -245,7 +252,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing with non-matching predicate should fail",
 			input: "12345",
 			args: args{
-				p: TakeWhileMN[string](3, 6, IsAlpha),
+				p: TakeWhileMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -258,34 +265,36 @@ func TestTakeWhileMN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", gotResult.Output, tc.wantOutput)
+			if string(gotResult.Output) != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", string(gotResult.Output), tc.wantOutput)
 			}
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkTakeWhileMN(b *testing.B) {
-	p := TakeWhileMN[string](3, 6, IsAlpha)
+	p := TakeWhileMN(3, 6, IsDigit)
+	input := NewFromString("13579")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p("latin")
+		p(input)
 	}
 }
 
 // TakeWhileOneOf parses any number of characters present in the
 // provided collection of runes.
-func TakeWhileOneOf[I Bytes](collection ...rune) Parser[I, I] {
+func TakeWhileOneOf(collection ...rune) Parser[string] {
 	index := make(map[rune]struct{}, len(collection))
 
 	for _, r := range collection {
@@ -294,24 +303,26 @@ func TakeWhileOneOf[I Bytes](collection ...rune) Parser[I, I] {
 
 	expected := fmt.Sprintf("chars(%v)", string(collection))
 
-	return func(input I) Result[I, I] {
-		if len(input) == 0 {
-			return Failure[I, I](NewError(input, expected), input)
+	return func(input InputBytes) Result[string] {
+		if input.AtEnd() {
+			return Failure[string](NewError(input, expected), input)
 		}
 
 		pos := 0
-		for ; pos < len(input); pos++ {
-			_, exists := index[rune(input[pos])]
+		var r rune
+		for pos, r = range input.CurrentString() {
+			_, exists := index[r]
 			if !exists {
 				if pos == 0 {
-					return Failure[I, I](NewError(input, expected), input)
+					return Failure[string](NewError(input, expected), input)
 				}
 
 				break
 			}
 		}
 
-		return Success(input[:pos], input[pos:])
+		nextInput := input.MoveBy(uint(pos))
+		return Success(input.StringTo(nextInput), nextInput)
 	}
 }
 
@@ -319,7 +330,7 @@ func TestTakeWhileOneOf(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, string]
+		p Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -333,7 +344,7 @@ func TestTakeWhileOneOf(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc123",
 			args: args{
-				p: TakeWhileOneOf[string]('a', 'b', 'c'),
+				p: TakeWhileOneOf('a', 'b', 'c'),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
@@ -343,7 +354,7 @@ func TestTakeWhileOneOf(t *testing.T) {
 			name:  "no match should fail",
 			input: "123",
 			args: args{
-				p: TakeWhileOneOf[string]('a', 'b', 'c'),
+				p: TakeWhileOneOf('a', 'b', 'c'),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -353,7 +364,7 @@ func TestTakeWhileOneOf(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: TakeWhileOneOf[string]('a', 'b', 'c'),
+				p: TakeWhileOneOf('a', 'b', 'c'),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -366,28 +377,30 @@ func TestTakeWhileOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
 
 			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", gotResult.Output, tc.wantOutput)
+				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
 			}
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkTakeWhileOneOf(b *testing.B) {
-	p := TakeWhileOneOf[string]('a', 'b', 'c')
+	p := TakeWhileOneOf('a', 'b', 'c')
+	input := NewFromString("abc123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p("abc123")
+		p(input)
 	}
 }
 
@@ -396,7 +409,7 @@ func TestToken(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        Parser[string, string]
+		parser        Parser[[]byte]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -404,15 +417,15 @@ func TestToken(t *testing.T) {
 	}{
 		{
 			name:          "parsing a token from an input starting with it should succeed",
-			parser:        Token[string]("Bonjour"),
+			parser:        Token("Bonjour"),
 			input:         "Bonjour tout le monde",
 			wantErr:       false,
 			wantOutput:    "Bonjour",
 			wantRemaining: " tout le monde",
 		},
 		{
-			name:          "parsing a token from an non-matching input should fail",
-			parser:        Token[string]("Bonjour"),
+			name:          "parsing a token from a non-matching input should fail",
+			parser:        Token("Bonjour"),
 			input:         "Hello tout le monde",
 			wantErr:       true,
 			wantOutput:    "",
@@ -420,7 +433,7 @@ func TestToken(t *testing.T) {
 		},
 		{
 			name:          "parsing a token from an empty input should fail",
-			parser:        Token[string]("Bonjour"),
+			parser:        Token("Bonjour"),
 			input:         "",
 			wantErr:       true,
 			wantOutput:    "",
@@ -434,26 +447,28 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(tc.input)
+			gotResult := tc.parser(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", gotResult.Output, tc.wantOutput)
+			if string(gotResult.Output) != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", string(gotResult.Output), tc.wantOutput)
 			}
-
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkToken(b *testing.B) {
-	parser := Token[string]("Bonjour")
+	parser := Token("Bonjour")
+	input := NewFromString("Bonjour tout le monde")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser("Bonjour tout le monde")
+		parser(input)
 	}
 }
