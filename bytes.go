@@ -2,7 +2,6 @@ package gomme
 
 import (
 	"fmt"
-	"strings"
 	"unicode/utf8"
 )
 
@@ -98,20 +97,6 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 		}
 
 		return Success(input.BytesTo(current), current)
-	}
-}
-
-// Token parses a token from the input, and returns the part of the input that
-// matched the token.
-// If the token could not be found, the parser returns an error result.
-func Token(token string) Parser[[]byte] {
-	return func(input Input) Result[[]byte] {
-		if !strings.HasPrefix(input.CurrentString(), token) {
-			return Failure[[]byte](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
-		}
-
-		newInput := input.MoveBy(uint(len(token)))
-		return Success(input.BytesTo(newInput), newInput)
 	}
 }
 

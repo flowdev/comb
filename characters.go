@@ -1,7 +1,9 @@
 package gomme
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -493,6 +495,20 @@ func UInt8() Parser[uint8] {
 		}
 
 		return Success(uint8(n), result.Remaining)
+	}
+}
+
+// Token parses a token from the input, and returns the part of the input that
+// matched the token.
+// If the token could not be found, the parser returns an error result.
+func Token(token string) Parser[string] {
+	return func(input Input) Result[string] {
+		if !strings.HasPrefix(input.CurrentString(), token) {
+			return Failure[string](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
+		}
+
+		newInput := input.MoveBy(uint(len(token)))
+		return Success(input.StringTo(newInput), newInput)
 	}
 }
 

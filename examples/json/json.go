@@ -185,7 +185,7 @@ var _ gomme.Parser[JSONValue] = parseString
 func parseFalse(input gomme.Input) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Token("false"),
-		func(_ []byte) (JSONValue, error) { return JSONBool(false), nil },
+		func(_ string) (JSONValue, error) { return JSONBool(false), nil },
 	)(input)
 }
 
@@ -196,7 +196,7 @@ var _ gomme.Parser[JSONValue] = parseFalse
 func parseTrue(input gomme.Input) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Token("true"),
-		func(_ []byte) (JSONValue, error) { return JSONBool(true), nil },
+		func(_ string) (JSONValue, error) { return JSONBool(true), nil },
 	)(input)
 }
 
@@ -207,7 +207,7 @@ var _ gomme.Parser[JSONValue] = parseTrue
 func parseNull(input gomme.Input) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Token("null"),
-		func(_ []byte) (JSONValue, error) { return nil, nil },
+		func(_ string) (JSONValue, error) { return nil, nil },
 	)(input)
 }
 
@@ -217,7 +217,7 @@ var _ gomme.Parser[JSONValue] = parseNull
 // parseElements parses the elements of a JSON array.
 func parseElements(input gomme.Input) gomme.Result[[]JSONValue] {
 	return gomme.Map1(
-		gomme.SeparatedList0[JSONValue, []byte](
+		gomme.SeparatedList0[JSONValue, string](
 			parseElement,
 			gomme.Token(","),
 			false,
@@ -234,7 +234,7 @@ var _ gomme.Parser[[]JSONValue] = parseElements
 // parseElement parses a single element of a JSON array.
 func parseMembers(input gomme.Input) gomme.Result[map[string]JSONValue] {
 	return gomme.Map1(
-		gomme.SeparatedList0[kv, []byte](
+		gomme.SeparatedList0[kv, string](
 			parseMember,
 			gomme.Token(","),
 			false,
@@ -356,14 +356,14 @@ func digits() gomme.Parser[string] {
 // It distinguishes between '0' and non-zero digits.
 func digit() gomme.Parser[string] {
 	return gomme.Alternative(
-		gomme.BytesToString(gomme.Token("0")),
+		gomme.Token("0"),
 		onenine(),
 	)
 }
 
 // onenine creates a parser for digits from 1 to 9.
 func onenine() gomme.Parser[string] {
-	return gomme.BytesToString(gomme.Alternative(
+	return gomme.Alternative(
 		gomme.Token("1"),
 		gomme.Token("2"),
 		gomme.Token("3"),
@@ -373,7 +373,7 @@ func onenine() gomme.Parser[string] {
 		gomme.Token("7"),
 		gomme.Token("8"),
 		gomme.Token("9"),
-	))
+	)
 }
 
 // fraction creates a parser for the fractional part of a JSON number.
@@ -406,10 +406,10 @@ func exponent() gomme.Parser[string] {
 // It can parse both positive ('+') and negative ('-') signs.
 func sign() gomme.Parser[string] {
 	return gomme.Optional(
-		gomme.BytesToString(gomme.Alternative(
+		gomme.Alternative(
 			gomme.Token("-"),
 			gomme.Token("+"),
-		)),
+		),
 	)
 }
 

@@ -315,7 +315,7 @@ func Array() gomme.Parser[RESPMessage] {
 	)
 }
 
-func sizePrefix(prefix gomme.Parser[[]byte]) gomme.Parser[int64] {
+func sizePrefix(prefix gomme.Parser[string]) gomme.Parser[int64] {
 	return gomme.Delimited(
 		prefix,
 		gomme.Int64(),

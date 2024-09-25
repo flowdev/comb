@@ -19,7 +19,7 @@ func TestCount(t *testing.T) {
 	}{
 		{
 			name:          "parsing exact count should succeed",
-			parser:        Count(BytesToString(Token("abc")), 2),
+			parser:        Count(Token("abc"), 2),
 			input:         "abcabc",
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc"},
@@ -27,7 +27,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing more than count should succeed",
-			parser:        Count(BytesToString(Token("abc")), 2),
+			parser:        Count(Token("abc"), 2),
 			input:         "abcabcabc",
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc"},
@@ -35,7 +35,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing less than count should fail",
-			parser:        Count(BytesToString(Token("abc")), 2),
+			parser:        Count(Token("abc"), 2),
 			input:         "abc123",
 			wantErr:       true,
 			wantOutput:    nil,
@@ -43,7 +43,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing no count should fail",
-			parser:        Count(BytesToString(Token("abc")), 2),
+			parser:        Count(Token("abc"), 2),
 			input:         "123123",
 			wantErr:       true,
 			wantOutput:    nil,
@@ -51,7 +51,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing empty input should fail",
-			parser:        Count(BytesToString(Token("abc")), 2),
+			parser:        Count(Token("abc"), 2),
 			input:         "",
 			wantErr:       true,
 			wantOutput:    nil,
@@ -320,7 +320,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc,abc,abc",
 			args: args{
-				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList0(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc", "abc"},
@@ -330,7 +330,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "matching parser and missing separator should succeed",
 			input: "abc123abc",
 			args: args{
-				p: SeparatedList0(BytesToString(Token("abc")), Char(','), true),
+				p: SeparatedList0(Token("abc"), Char(','), true),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -340,7 +340,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "parser with separator but non-matching right side should succeed",
 			input: "abc,def",
 			args: args{
-				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList0(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -350,7 +350,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "parser matching on the right of the separator should succeed",
 			input: "def,abc",
 			args: args{
-				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList0(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{},
@@ -360,7 +360,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "empty input should succeed",
 			input: "",
 			args: args{
-				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList0(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{},
@@ -440,7 +440,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc,abc,abc",
 			args: args{
-				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList1(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc", "abc"},
@@ -450,7 +450,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "matching parser and missing separator should succeed",
 			input: "abc123abc",
 			args: args{
-				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList1(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -460,7 +460,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "parser with separator but non-matching right side should succeed",
 			input: "abc,def",
 			args: args{
-				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList1(Token("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -470,7 +470,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "parser matching on the right of the separator should fail",
 			input: "def,abc",
 			args: args{
-				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList1(Token("abc"), Char(','), false),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -480,7 +480,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
+				p: SeparatedList1(Token("abc"), Char(','), false),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
