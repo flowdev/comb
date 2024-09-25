@@ -109,7 +109,7 @@ func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
 func SeparatedList0[Output any, S Separator](
 	parse Parser[Output],
 	separator Parser[S],
-	separatorAtEndOK bool,
+	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
 	return func(input InputBytes) Result[[]Output] {
 		results := []Output{}
@@ -142,10 +142,10 @@ func SeparatedList0[Output any, S Separator](
 
 			parserResult := parse(separatorResult.Remaining)
 			if parserResult.Err != nil {
-				if separatorAtEndOK {
+				if parseSeparatorAtEnd {
 					return Success(results, separatorResult.Remaining)
 				} else {
-					return Failure[[]Output](NewError(separatorResult.Remaining, "SeparatedList0"), input)
+					return Success(results, remaining)
 				}
 			}
 
@@ -172,7 +172,7 @@ func SeparatedList0[Output any, S Separator](
 func SeparatedList1[Output any, S Separator](
 	parse Parser[Output],
 	separator Parser[S],
-	separatorAtEndOK bool,
+	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
 	return func(input InputBytes) Result[[]Output] {
 		res := parse(input)
@@ -203,10 +203,10 @@ func SeparatedList1[Output any, S Separator](
 
 			parserResult := parse(separatorResult.Remaining)
 			if parserResult.Err != nil {
-				if separatorAtEndOK {
+				if parseSeparatorAtEnd {
 					return Success(results, separatorResult.Remaining)
 				} else {
-					return Failure[[]Output](NewError(separatorResult.Remaining, "SeparatedList1"), input)
+					return Success(results, remaining)
 				}
 			}
 

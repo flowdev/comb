@@ -11,7 +11,7 @@ func TestCount(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        Parser[string, []string]
+		parser        Parser[[]string]
 		input         string
 		wantErr       bool
 		wantOutput    []string
@@ -19,7 +19,7 @@ func TestCount(t *testing.T) {
 	}{
 		{
 			name:          "parsing exact count should succeed",
-			parser:        Count(Token[string]("abc"), 2),
+			parser:        Count(BytesToString(Token("abc")), 2),
 			input:         "abcabc",
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc"},
@@ -27,7 +27,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing more than count should succeed",
-			parser:        Count(Token[string]("abc"), 2),
+			parser:        Count(BytesToString(Token("abc")), 2),
 			input:         "abcabcabc",
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc"},
@@ -35,7 +35,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing less than count should fail",
-			parser:        Count(Token[string]("abc"), 2),
+			parser:        Count(BytesToString(Token("abc")), 2),
 			input:         "abc123",
 			wantErr:       true,
 			wantOutput:    nil,
@@ -43,7 +43,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing no count should fail",
-			parser:        Count(Token[string]("abc"), 2),
+			parser:        Count(BytesToString(Token("abc")), 2),
 			input:         "123123",
 			wantErr:       true,
 			wantOutput:    nil,
@@ -51,7 +51,7 @@ func TestCount(t *testing.T) {
 		},
 		{
 			name:          "parsing empty input should fail",
-			parser:        Count(Token[string]("abc"), 2),
+			parser:        Count(BytesToString(Token("abc")), 2),
 			input:         "",
 			wantErr:       true,
 			wantOutput:    nil,
@@ -65,7 +65,7 @@ func TestCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(tc.input)
+			gotResult := tc.parser(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -76,19 +76,21 @@ func TestCount(t *testing.T) {
 				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
 			)
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkCount(b *testing.B) {
-	parser := Count(Char[string]('#'), 3)
+	parser := Count(Char('#'), 3)
+	input := NewFromString("###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser("###")
+		parser(input)
 	}
 }
 
@@ -96,7 +98,7 @@ func TestMany0(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, []rune]
+		p Parser[[]rune]
 	}
 	testCases := []struct {
 		name          string
@@ -110,7 +112,7 @@ func TestMany0(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "###",
 			args: args{
-				p: Many0(Char[string]('#')),
+				p: Many0(Char('#')),
 			},
 			wantErr:       false,
 			wantOutput:    []rune{'#', '#', '#'},
@@ -120,7 +122,7 @@ func TestMany0(t *testing.T) {
 			name:  "no match should succeed",
 			input: "abc",
 			args: args{
-				p: Many0(Char[string]('#')),
+				p: Many0(Char('#')),
 			},
 			wantErr:       false,
 			wantOutput:    []rune{},
@@ -130,7 +132,7 @@ func TestMany0(t *testing.T) {
 			name:  "empty input should succeed",
 			input: "",
 			args: args{
-				p: Many0(Char[string]('#')),
+				p: Many0(Char('#')),
 			},
 			wantErr:       false,
 			wantOutput:    []rune{},
@@ -143,7 +145,7 @@ func TestMany0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -154,8 +156,9 @@ func TestMany0(t *testing.T) {
 				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
 			)
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
@@ -165,8 +168,8 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty input, and would cause an infinite loop if not detected
-	input := "abcdef"
-	parser := Many0(Digit0[string]())
+	input := NewFromString("abcdef")
+	parser := Many0(Digit0())
 
 	result := parser(input)
 
@@ -176,11 +179,12 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 }
 
 func BenchmarkMany0(b *testing.B) {
-	parser := Many0(Char[string]('#'))
+	parser := Many0(Char('#'))
+	input := NewFromString("###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser("###")
+		parser(input)
 	}
 }
 
@@ -188,7 +192,7 @@ func TestMany1(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, []rune]
+		p Parser[[]rune]
 	}
 	testCases := []struct {
 		name          string
@@ -202,7 +206,7 @@ func TestMany1(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "###",
 			args: args{
-				p: Many1(Char[string]('#')),
+				p: Many1(Char('#')),
 			},
 			wantErr:       false,
 			wantOutput:    []rune{'#', '#', '#'},
@@ -212,7 +216,7 @@ func TestMany1(t *testing.T) {
 			name:  "matching at least once should succeed",
 			input: "#abc",
 			args: args{
-				p: Many1(Char[string]('#')),
+				p: Many1(Char('#')),
 			},
 			wantErr:       false,
 			wantOutput:    []rune{'#'},
@@ -222,7 +226,7 @@ func TestMany1(t *testing.T) {
 			name:  "not matching at least once should fail",
 			input: "a##",
 			args: args{
-				p: Many1(Char[string]('#')),
+				p: Many1(Char('#')),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -232,7 +236,7 @@ func TestMany1(t *testing.T) {
 			name:  "no match should fail",
 			input: "abc",
 			args: args{
-				p: Many1(Char[string]('#')),
+				p: Many1(Char('#')),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -242,7 +246,7 @@ func TestMany1(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Many1(Char[string]('#')),
+				p: Many1(Char('#')),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -255,7 +259,7 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -266,8 +270,9 @@ func TestMany1(t *testing.T) {
 				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
 			)
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
@@ -277,8 +282,8 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty input, and would cause an infinite loop if not detected
-	input := "abcdef"
-	parser := Many1(Digit0[string]())
+	input := NewFromString("abcdef")
+	parser := Many1(Digit0())
 
 	result := parser(input)
 
@@ -288,11 +293,12 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 }
 
 func BenchmarkMany1(b *testing.B) {
-	parser := Many1(Char[string]('#'))
+	parser := Many1(Char('#'))
+	input := NewFromString("###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser("###")
+		parser(input)
 	}
 }
 
@@ -300,7 +306,7 @@ func TestSeparatedList0(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, []string]
+		p Parser[[]string]
 	}
 	testCases := []struct {
 		name          string
@@ -314,7 +320,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc,abc,abc",
 			args: args{
-				p: SeparatedList0(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc", "abc"},
@@ -324,7 +330,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "matching parser and missing separator should succeed",
 			input: "abc123abc",
 			args: args{
-				p: SeparatedList0(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList0(BytesToString(Token("abc")), Char(','), true),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -334,7 +340,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "parser with separator but non-matching right side should succeed",
 			input: "abc,def",
 			args: args{
-				p: SeparatedList0(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -344,7 +350,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "parser matching on the right of the separator should succeed",
 			input: "def,abc",
 			args: args{
-				p: SeparatedList0(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{},
@@ -354,7 +360,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "empty input should succeed",
 			input: "",
 			args: args{
-				p: SeparatedList0(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList0(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{},
@@ -364,7 +370,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "parsing input without separator should succeed",
 			input: "123",
 			args: args{
-				p: SeparatedList0(Digit0[string](), Char[string](',')),
+				p: SeparatedList0(Digit0(), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"123"},
@@ -374,7 +380,7 @@ func TestSeparatedList0(t *testing.T) {
 			name:  "using a parser accepting empty input should fail",
 			input: "",
 			args: args{
-				p: SeparatedList0(Digit0[string](), Char[string](',')),
+				p: SeparatedList0(Digit0(), Char(','), true),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -387,7 +393,7 @@ func TestSeparatedList0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -398,19 +404,21 @@ func TestSeparatedList0(t *testing.T) {
 				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
 			)
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkSeparatedList0(t *testing.B) {
-	parser := SeparatedList0(Char[string]('#'), Char[string](','))
+	parser := SeparatedList0(Char('#'), Char(','), false)
+	input := NewFromString("#,#,#")
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		parser("#,#,#")
+		parser(input)
 	}
 }
 
@@ -418,7 +426,7 @@ func TestSeparatedList1(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string, []string]
+		p Parser[[]string]
 	}
 	testCases := []struct {
 		name          string
@@ -432,7 +440,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc,abc,abc",
 			args: args{
-				p: SeparatedList1(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc", "abc"},
@@ -442,7 +450,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "matching parser and missing separator should succeed",
 			input: "abc123abc",
 			args: args{
-				p: SeparatedList1(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -452,17 +460,17 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "parser with separator but non-matching right side should succeed",
 			input: "abc,def",
 			args: args{
-				p: SeparatedList1(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
 			wantRemaining: ",def",
 		},
 		{
-			name:  "parser matching on the right of the separator should succeed",
+			name:  "parser matching on the right of the separator should fail",
 			input: "def,abc",
 			args: args{
-				p: SeparatedList1(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -472,7 +480,7 @@ func TestSeparatedList1(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: SeparatedList1(Token[string]("abc"), Char[string](',')),
+				p: SeparatedList1(BytesToString(Token("abc")), Char(','), false),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -485,7 +493,7 @@ func TestSeparatedList1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(tc.input)
+			gotResult := tc.args.p(NewFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -496,18 +504,20 @@ func TestSeparatedList1(t *testing.T) {
 				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
 			)
 
-			if gotResult.Remaining != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkSeparatedList1(t *testing.B) {
-	parser := SeparatedList1(Char[string]('#'), Char[string](','))
+	parser := SeparatedList1(Char('#'), Char(','), false)
+	input := NewFromString("#,#,#,#")
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		parser("#,#,#")
+		parser(input)
 	}
 }

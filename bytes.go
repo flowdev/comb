@@ -114,3 +114,16 @@ func Token(token string) Parser[[]byte] {
 		return Success(input.BytesTo(newInput), newInput)
 	}
 }
+
+// BytesToString convertes a parser that has an output of []byte to a parser that outputs a string.
+// Errors are not changed. This allowes parsers from this file to be used in text parsers.
+func BytesToString(parse Parser[[]byte]) Parser[string] {
+	return func(input InputBytes) Result[string] {
+		res := parse(input)
+		return Result[string]{
+			Output:    string(res.Output),
+			Err:       res.Err,
+			Remaining: res.Remaining,
+		}
+	}
+}

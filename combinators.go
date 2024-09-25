@@ -29,49 +29,49 @@ func NewFromBytes(input []byte) InputBytes {
 	}
 }
 
-func (i InputBytes) AtEnd() bool {
-	return i.Pos >= uint(len(i.Bytes))
+func (ib InputBytes) AtEnd() bool {
+	return ib.Pos >= uint(len(ib.Bytes))
 }
 
-func (i InputBytes) BytesRemaining() uint {
-	return uint(len(i.Bytes)) - i.Pos
+func (ib InputBytes) BytesRemaining() uint {
+	return uint(len(ib.Bytes)) - ib.Pos
 }
 
-func (i InputBytes) CurrentString() string {
-	return string(i.Bytes[i.Pos:])
+func (ib InputBytes) CurrentString() string {
+	return string(ib.Bytes[ib.Pos:])
 }
 
-func (i InputBytes) CurrentBytes() []byte {
-	return i.Bytes[i.Pos:]
+func (ib InputBytes) CurrentBytes() []byte {
+	return ib.Bytes[ib.Pos:]
 }
 
-func (i InputBytes) StringTo(remaining InputBytes) string {
-	return string(i.BytesTo(remaining))
+func (ib InputBytes) StringTo(remaining InputBytes) string {
+	return string(ib.BytesTo(remaining))
 }
 
-func (i InputBytes) BytesTo(remaining InputBytes) []byte {
-	if remaining.Pos < i.Pos {
+func (ib InputBytes) BytesTo(remaining InputBytes) []byte {
+	if remaining.Pos < ib.Pos {
 		return []byte{}
 	}
-	if remaining.Pos > uint(len(i.Bytes)) {
-		return i.Bytes[i.Pos:]
+	if remaining.Pos > uint(len(ib.Bytes)) {
+		return ib.Bytes[ib.Pos:]
 	}
-	return i.Bytes[i.Pos:remaining.Pos]
+	return ib.Bytes[ib.Pos:remaining.Pos]
 }
 
-func (i InputBytes) MoveBy(countBytes uint) InputBytes {
-	i2 := i
-	i2.Pos += countBytes
-	ulen := uint(len(i.Bytes))
-	if i2.Pos > ulen { // prevent overrun
-		i2.Pos = ulen
+func (ib InputBytes) MoveBy(countBytes uint) InputBytes {
+	ib2 := ib
+	ib2.Pos += countBytes
+	ulen := uint(len(ib.Bytes))
+	if ib2.Pos > ulen { // prevent overrun
+		ib2.Pos = ulen
 	}
-	return i2
+	return ib2
 }
 
 // Separator is a generic type alias for separators (byte, rune, []byte or string)
 type Separator interface {
-	rune | byte | string | []byte
+	~rune | ~byte | ~string | ~[]byte
 }
 
 // Result is a generic parser result

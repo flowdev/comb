@@ -399,7 +399,7 @@ func TestAssign(t *testing.T) {
 			}
 
 			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", gotResult.Output, tc.wantOutput)
+				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
 			}
 
 			remainingString := gotResult.Remaining.CurrentString()
