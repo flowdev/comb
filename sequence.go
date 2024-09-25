@@ -9,26 +9,6 @@ func Delimited[OP, O, OS any](prefix Parser[OP], parser Parser[O], suffix Parser
 	}
 }
 
-// Pair applies two parsers and returns a Result containing a pair container holding
-// the resulting values.
-func Pair[LO, RO any, LP Parser[LO], RP Parser[RO]](
-	leftParser LP, rightParser RP,
-) Parser[PairContainer[LO, RO]] {
-	return func(input Input) Result[PairContainer[LO, RO]] {
-		leftResult := leftParser(input)
-		if leftResult.Err != nil {
-			return Failure[PairContainer[LO, RO]](NewError(input, "Pair"), input)
-		}
-
-		rightResult := rightParser(leftResult.Remaining)
-		if rightResult.Err != nil {
-			return Failure[PairContainer[LO, RO]](NewError(leftResult.Remaining, "Pair"), input)
-		}
-
-		return Success(NewPairContainer(leftResult.Output, rightResult.Output), rightResult.Remaining)
-	}
-}
-
 // Preceded parses and discards a result from the prefix parser. It
 // then parses a result from the main parser and returns its result.
 //
@@ -47,31 +27,6 @@ func Preceded[OP, O any](prefix Parser[OP], parser Parser[O]) Parser[O] {
 		}
 
 		return result
-	}
-}
-
-// SeparatedPair applies two separated parsers and returns a PairContainer as Result.
-// The result of the separator parser is discarded.
-func SeparatedPair[LO, RO any, S Separator, LP Parser[LO], SP Parser[S], RP Parser[RO]](
-	leftParser LP, separator SP, rightParser RP,
-) Parser[PairContainer[LO, RO]] {
-	return func(input Input) Result[PairContainer[LO, RO]] {
-		leftResult := leftParser(input)
-		if leftResult.Err != nil {
-			return Failure[PairContainer[LO, RO]](NewError(input, "SeparatedPair"), input)
-		}
-
-		sepResult := separator(leftResult.Remaining)
-		if sepResult.Err != nil {
-			return Failure[PairContainer[LO, RO]](NewError(leftResult.Remaining, "SeparatedPair"), input)
-		}
-
-		rightResult := rightParser(sepResult.Remaining)
-		if rightResult.Err != nil {
-			return Failure[PairContainer[LO, RO]](NewError(sepResult.Remaining, "SeparatedPair"), input)
-		}
-
-		return Success(PairContainer[LO, RO]{leftResult.Output, rightResult.Output}, rightResult.Remaining)
 	}
 }
 

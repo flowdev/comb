@@ -170,7 +170,9 @@ func TestRecognize(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "123abc",
 			args: args{
-				p: Recognize(Pair(Digit1(), Alpha1())),
+				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)), /*func(po1 string, po2 string) (string, error) {
+					return po1 + po2, nil
+				})),*/
 			},
 			wantErr:       false,
 			wantOutput:    "123abc",
@@ -180,7 +182,7 @@ func TestRecognize(t *testing.T) {
 			name:  "no prefix match should fail",
 			input: "abc",
 			args: args{
-				p: Recognize(Pair(Digit1(), Alpha1())),
+				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -190,7 +192,7 @@ func TestRecognize(t *testing.T) {
 			name:  "no parser match should fail",
 			input: "123",
 			args: args{
-				p: Recognize(Pair(Digit1(), Alpha1())),
+				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -200,7 +202,7 @@ func TestRecognize(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Recognize(Pair(Digit1(), Alpha1())),
+				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -231,7 +233,7 @@ func TestRecognize(t *testing.T) {
 }
 
 func BenchmarkRecognize(b *testing.B) {
-	p := Recognize(Pair(Digit1(), Alpha1()))
+	p := Recognize(Map2(Digit1(), Alpha1(), pairMapFunc))
 	input := NewInputFromString("123abc")
 
 	b.ResetTimer()
@@ -331,9 +333,9 @@ func TestMap1(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "1abc\r\n",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+					left, _ := strconv.Atoi(digit)
+					return TestStruct{Foo: left, Bar: string(alpha)}, nil
 				}),
 			},
 			wantErr:       false,
@@ -344,9 +346,9 @@ func TestMap1(t *testing.T) {
 			name:  "failing parser should fail",
 			input: "abc\r\n",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+					left, _ := strconv.Atoi(digit)
+					return TestStruct{Foo: left, Bar: string(alpha)}, nil
 				}),
 			},
 			wantErr:       true,
@@ -357,7 +359,7 @@ func TestMap1(t *testing.T) {
 			name:  "failing mapper should fail",
 			input: "1abc\r\n",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
 					return TestStruct{}, errors.New("unexpected error")
 				}),
 			},
@@ -369,9 +371,9 @@ func TestMap1(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+					left, _ := strconv.Atoi(digit)
+					return TestStruct{Foo: left, Bar: string(alpha)}, nil
 				}),
 			},
 			wantErr:       true,
@@ -408,9 +410,9 @@ func BenchmarkMap1(b *testing.B) {
 		Bar string
 	}
 
-	p := Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-		left, _ := strconv.Atoi(p.Left)
-		return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+	p := Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+		left, _ := strconv.Atoi(digit)
+		return TestStruct{Foo: left, Bar: string(alpha)}, nil
 	})
 	input := NewInputFromString("1abc\r\n")
 
@@ -443,9 +445,9 @@ func TestMap2(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "1abc\r\n",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+					left, _ := strconv.Atoi(digit)
+					return TestStruct{Foo: left, Bar: string(alpha)}, nil
 				}),
 			},
 			wantErr:       false,
@@ -456,9 +458,9 @@ func TestMap2(t *testing.T) {
 			name:  "failing parser should fail",
 			input: "abc\r\n",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+					left, _ := strconv.Atoi(digit)
+					return TestStruct{Foo: left, Bar: string(alpha)}, nil
 				}),
 			},
 			wantErr:       true,
@@ -469,7 +471,7 @@ func TestMap2(t *testing.T) {
 			name:  "failing mapper should fail",
 			input: "1abc\r\n",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
 					return TestStruct{}, errors.New("unexpected error")
 				}),
 			},
@@ -481,9 +483,9 @@ func TestMap2(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+					left, _ := strconv.Atoi(digit)
+					return TestStruct{Foo: left, Bar: string(alpha)}, nil
 				}),
 			},
 			wantErr:       true,
@@ -530,4 +532,8 @@ func BenchmarkMap2(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		p(input)
 	}
+}
+
+func pairMapFunc(a string, b string) ([]byte, error) {
+	return nil, nil
 }
