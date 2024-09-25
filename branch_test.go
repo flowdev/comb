@@ -67,7 +67,7 @@ func TestAlternative(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			input := NewFromString(tc.input)
+			input := NewInputFromString(tc.input)
 			gotResult := tc.args.p(input)
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
@@ -88,7 +88,7 @@ func TestAlternative(t *testing.T) {
 
 func BenchmarkAlternative(b *testing.B) {
 	p := Alternative(Digit1(), Alpha1())
-	input := NewFromString("123")
+	input := NewInputFromString("123")
 
 	for i := 0; i < b.N; i++ {
 		p(input)

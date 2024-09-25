@@ -5,7 +5,7 @@ package gomme
 //
 // If none of the parsers succeed, this combinator produces an error Result.
 func Alternative[Output any](parsers ...Parser[Output]) Parser[Output] {
-	return func(input InputBytes) Result[Output] {
+	return func(input Input) Result[Output] {
 		if len(parsers) == 0 {
 			return Failure[Output](NewError(input, "Alternative(no parser given)"), input)
 		}

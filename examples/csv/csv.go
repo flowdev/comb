@@ -1,7 +1,7 @@
 // Package csv implements a parser for CSV files.
 //
 // It is a simple, incomplete, example of how to use the gomme
-// parser combinator library to build a parser targetting the
+// parser combinator library to build a parser targeting the
 // format described in [RFC4180].
 //
 // [RFC4180]: https://tools.ietf.org/html/rfc4180
@@ -13,15 +13,17 @@ func ParseCSV(input string) ([][]string, error) {
 	parser := gomme.SeparatedList1(
 		gomme.SeparatedList1(
 			gomme.Alternative(
-				gomme.Alphanumeric1[string](),
-				gomme.Delimited(gomme.Char[string]('"'), gomme.Alphanumeric1[string](), gomme.Char[string]('"')),
+				gomme.Alphanumeric1(),
+				gomme.Delimited(gomme.Char('"'), gomme.Alphanumeric1(), gomme.Char('"')),
 			),
-			gomme.Char[string](','),
+			gomme.Char(','),
+			false,
 		),
-		gomme.CRLF[string](),
+		gomme.CRLF(),
+		false,
 	)
 
-	result := parser(input)
+	result := parser(gomme.NewInputFromString(input))
 	if result.Err != nil {
 		return nil, result.Err
 	}

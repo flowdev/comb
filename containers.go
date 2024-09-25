@@ -7,9 +7,6 @@ type PairContainer[Left, Right any] struct {
 }
 
 // NewPairContainer instantiates a new Pair
-func NewPairContainer[Left, Right any](left Left, right Right) *PairContainer[Left, Right] {
-	return &PairContainer[Left, Right]{
-		Left:  left,
-		Right: right,
-	}
+func NewPairContainer[Left, Right any](left Left, right Right) PairContainer[Left, Right] {
+	return PairContainer[Left, Right]{Left: left, Right: right}
 }

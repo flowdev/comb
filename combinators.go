@@ -5,112 +5,15 @@
 // providing as much compile-time type safety as possible.
 package gomme
 
-type InputBytes struct {
-	// Go is fundamentally working with bytes and can interpret them as strings or as containing runes.
-	// There are no standard library functions for handling []rune or the like.
-	Bytes []byte
-	Text  bool
-	Pos   uint // position in the sequence a.k.a. the *byte* index
-}
-
-func NewFromString(input string) InputBytes {
-	return InputBytes{
-		Bytes: []byte(input),
-		Text:  true,
-		Pos:   0,
-	}
-}
-
-func NewFromBytes(input []byte) InputBytes {
-	return InputBytes{
-		Bytes: input,
-		Text:  false,
-		Pos:   0,
-	}
-}
-
-func (ib InputBytes) AtEnd() bool {
-	return ib.Pos >= uint(len(ib.Bytes))
-}
-
-func (ib InputBytes) BytesRemaining() uint {
-	return uint(len(ib.Bytes)) - ib.Pos
-}
-
-func (ib InputBytes) CurrentString() string {
-	return string(ib.Bytes[ib.Pos:])
-}
-
-func (ib InputBytes) CurrentBytes() []byte {
-	return ib.Bytes[ib.Pos:]
-}
-
-func (ib InputBytes) StringTo(remaining InputBytes) string {
-	return string(ib.BytesTo(remaining))
-}
-
-func (ib InputBytes) BytesTo(remaining InputBytes) []byte {
-	if remaining.Pos < ib.Pos {
-		return []byte{}
-	}
-	if remaining.Pos > uint(len(ib.Bytes)) {
-		return ib.Bytes[ib.Pos:]
-	}
-	return ib.Bytes[ib.Pos:remaining.Pos]
-}
-
-func (ib InputBytes) MoveBy(countBytes uint) InputBytes {
-	ib2 := ib
-	ib2.Pos += countBytes
-	ulen := uint(len(ib.Bytes))
-	if ib2.Pos > ulen { // prevent overrun
-		ib2.Pos = ulen
-	}
-	return ib2
-}
-
-// Separator is a generic type alias for separators (byte, rune, []byte or string)
-type Separator interface {
-	~rune | ~byte | ~string | ~[]byte
-}
-
-// Result is a generic parser result
-type Result[Output any] struct {
-	Output    Output
-	Err       *Error
-	Remaining InputBytes
-}
-
-// Parser defines the type of a generic Parser function
-type Parser[Output any] func(input InputBytes) Result[Output]
-
-// Success creates a Result with an output set from
-// the result of successful parsing.
-func Success[Output any](output Output, r InputBytes) Result[Output] {
-	return Result[Output]{Output: output, Err: nil, Remaining: r}
-}
-
-// Failure creates a Result with an error set from
-// the result of failed parsing.
-func Failure[Output any](err *Error, input InputBytes) Result[Output] {
-	var output Output
-	return Result[Output]{Output: output, Err: err, Remaining: input}
-}
-
-// Map applies a function to the result of a parser.
-func Map[ParserOutput any, MapperOutput any](parse Parser[ParserOutput], fn func(ParserOutput) (MapperOutput, error)) Parser[MapperOutput] {
-	return func(input InputBytes) Result[MapperOutput] {
-		res := parse(input)
-		if res.Err != nil {
-			return Failure[MapperOutput](NewError(input, "Map"), input)
+// NoWayBack applies a child parser and marks a successful result with NoWayBack.
+func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
+	return func(input Input) Result[Output] {
+		result := parse(input)
+		if result.Err != nil {
+			result.NoWayBack = true
 		}
 
-		output, err := fn(res.Output)
-		if err != nil {
-			return Failure[MapperOutput](NewError(input, err.Error()), input)
-		}
-
-		return Success(output, res.Remaining)
+		return result
 	}
 }
 
@@ -120,11 +23,11 @@ func Map[ParserOutput any, MapperOutput any](parse Parser[ParserOutput], fn func
 // N.B: unless a FatalError or NoWayBack is encountered, Optional will ignore
 // any parsing failures and errors.
 func Optional[Output any](parse Parser[Output]) Parser[Output] {
-	return func(input InputBytes) Result[Output] {
+	return func(input Input) Result[Output] {
 		result := parse(input)
 		if result.Err != nil {
-			if result.Err.IsFatal() || result.Err.NoWayBack {
-				return Failure[Output](result.Err, input)
+			if result.Err.IsFatal() || result.NoWayBack {
+				return result
 			}
 			result.Err = nil // ignore normal errors
 		}
@@ -136,7 +39,7 @@ func Optional[Output any](parse Parser[Output]) Parser[Output] {
 // Peek tries to apply the provided parser without consuming any input.
 // It effectively allows to look ahead in the input.
 func Peek[Output any](parse Parser[Output]) Parser[Output] {
-	return func(input InputBytes) Result[Output] {
+	return func(input Input) Result[Output] {
 		oldPos := input.Pos
 		result := parse(input)
 		if result.Err != nil {
@@ -151,7 +54,7 @@ func Peek[Output any](parse Parser[Output]) Parser[Output] {
 // Recognize returns the consumed input (instead of the original parsers output)
 // as the produced value when the provided parser succeeds.
 func Recognize[Output any](parse Parser[Output]) Parser[[]byte] {
-	return func(input InputBytes) Result[[]byte] {
+	return func(input Input) Result[[]byte] {
 		result := parse(input)
 		if result.Err != nil {
 			return Failure[[]byte](result.Err, input)
@@ -164,12 +67,164 @@ func Recognize[Output any](parse Parser[Output]) Parser[[]byte] {
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
 func Assign[Output1, Output2 any](value Output1, parse Parser[Output2]) Parser[Output1] {
-	return func(input InputBytes) Result[Output1] {
+	return func(input Input) Result[Output1] {
 		result := parse(input)
 		if result.Err != nil {
 			return Failure[Output1](result.Err, input)
 		}
 
 		return Success(value, result.Remaining)
+	}
+}
+
+// Map1 applies a function to the successful result of 1 parser.
+// Arbitrary complex data structures can be built with Map1 and Map2 alone.
+// The other Map* parsers are provided for convenience.
+func Map1[PO1 any, MO any](parse Parser[PO1], fn func(PO1) (MO, error)) Parser[MO] {
+	return func(input Input) Result[MO] {
+		res := parse(input)
+		if res.Err != nil {
+			return Failure[MO](res.Err, input)
+		}
+
+		output, err := fn(res.Output)
+		if err != nil {
+			return Failure[MO](NewError(input, err.Error()), input)
+		}
+
+		return Success(output, res.Remaining)
+	}
+}
+
+// Map2 applies a function to the successful result of 2 parsers.
+// Arbitrary complex data structures can be built with Map1 and Map2 alone.
+// The other Map* parsers are provided for convenience.
+func Map2[PO1, PO2 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], fn func(PO1, PO2) (MO, error)) Parser[MO] {
+	return func(input Input) Result[MO] {
+		res1 := parse1(input)
+		if res1.Err != nil {
+			return Failure[MO](NewError(input, "Map2"), input)
+		}
+
+		res2 := parse2(res1.Remaining)
+		if res2.Err != nil {
+			return Failure[MO](NewError(input, "Map2"), input)
+		}
+
+		output, err := fn(res1.Output, res2.Output)
+		if err != nil {
+			return Failure[MO](NewError(input, err.Error()), input)
+		}
+
+		return Success(output, res2.Remaining)
+	}
+}
+
+// Map3 applies a function to the successful result of 3 parsers.
+// Arbitrary complex data structures can be built with Map1 and Map2 alone.
+// The other Map* parsers are provided for convenience.
+func Map3[PO1, PO2, PO3 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], parse3 Parser[PO3],
+	fn func(PO1, PO2, PO3) (MO, error),
+) Parser[MO] {
+	return func(input Input) Result[MO] {
+		res1 := parse1(input)
+		if res1.Err != nil {
+			return Failure[MO](NewError(input, "Map3"), input)
+		}
+
+		res2 := parse2(res1.Remaining)
+		if res2.Err != nil {
+			return Failure[MO](NewError(input, "Map3"), input)
+		}
+
+		res3 := parse3(res2.Remaining)
+		if res3.Err != nil {
+			return Failure[MO](NewError(input, "Map3"), input)
+		}
+
+		output, err := fn(res1.Output, res2.Output, res3.Output)
+		if err != nil {
+			return Failure[MO](NewError(input, err.Error()), input)
+		}
+
+		return Success(output, res3.Remaining)
+	}
+}
+
+// Map4 applies a function to the successful result of 4 parsers.
+// Arbitrary complex data structures can be built with Map1 and Map2 alone.
+// The other Map* parsers are provided for convenience.
+func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], parse3 Parser[PO3], parse4 Parser[PO4],
+	fn func(PO1, PO2, PO3, PO4) (MO, error),
+) Parser[MO] {
+	return func(input Input) Result[MO] {
+		res1 := parse1(input)
+		if res1.Err != nil {
+			return Failure[MO](NewError(input, "Map4"), input)
+		}
+
+		res2 := parse2(res1.Remaining)
+		if res2.Err != nil {
+			return Failure[MO](NewError(input, "Map4"), input)
+		}
+
+		res3 := parse3(res2.Remaining)
+		if res3.Err != nil {
+			return Failure[MO](NewError(input, "Map4"), input)
+		}
+
+		res4 := parse4(res3.Remaining)
+		if res4.Err != nil {
+			return Failure[MO](NewError(input, "Map4"), input)
+		}
+
+		output, err := fn(res1.Output, res2.Output, res3.Output, res4.Output)
+		if err != nil {
+			return Failure[MO](NewError(input, err.Error()), input)
+		}
+
+		return Success(output, res4.Remaining)
+	}
+}
+
+// Map5 applies a function to the successful result of 5 parsers.
+// Arbitrary complex data structures can be built with Map1 and Map2 alone.
+// The other Map* parsers are provided for convenience.
+func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
+	parse1 Parser[PO1], parse2 Parser[PO2], parse3 Parser[PO3], parse4 Parser[PO4], parse5 Parser[PO5],
+	fn func(PO1, PO2, PO3, PO4, PO5) (MO, error),
+) Parser[MO] {
+	return func(input Input) Result[MO] {
+		res1 := parse1(input)
+		if res1.Err != nil {
+			return Failure[MO](NewError(input, "Map5"), input)
+		}
+
+		res2 := parse2(res1.Remaining)
+		if res2.Err != nil {
+			return Failure[MO](NewError(input, "Map5"), input)
+		}
+
+		res3 := parse3(res2.Remaining)
+		if res3.Err != nil {
+			return Failure[MO](NewError(input, "Map5"), input)
+		}
+
+		res4 := parse4(res3.Remaining)
+		if res4.Err != nil {
+			return Failure[MO](NewError(input, "Map5"), input)
+		}
+
+		res5 := parse5(res4.Remaining)
+		if res5.Err != nil {
+			return Failure[MO](NewError(input, "Map5"), input)
+		}
+
+		output, err := fn(res1.Output, res2.Output, res3.Output, res4.Output, res5.Output)
+		if err != nil {
+			return Failure[MO](NewError(input, err.Error()), input)
+		}
+
+		return Success(output, res5.Remaining)
 	}
 }

@@ -6,118 +6,6 @@ import (
 	"testing"
 )
 
-func TestMap(t *testing.T) {
-	t.Parallel()
-
-	type TestStruct struct {
-		Foo int
-		Bar string
-	}
-
-	type args struct {
-		parser Parser[TestStruct]
-	}
-	testCases := []struct {
-		name          string
-		input         string
-		args          args
-		wantErr       bool
-		wantOutput    TestStruct
-		wantRemaining string
-	}{
-		{
-			name:  "matching parser should succeed",
-			input: "1abc\r\n",
-			args: args{
-				Map(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
-				}),
-			},
-			wantErr:       false,
-			wantOutput:    TestStruct{Foo: 1, Bar: "abc"},
-			wantRemaining: "",
-		},
-		{
-			name:  "failing parser should fail",
-			input: "abc\r\n",
-			args: args{
-				Map(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
-				}),
-			},
-			wantErr:       true,
-			wantOutput:    TestStruct{},
-			wantRemaining: "abc\r\n",
-		},
-		{
-			name:  "failing mapper should fail",
-			input: "1abc\r\n",
-			args: args{
-				Map(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					return TestStruct{}, errors.New("unexpected error")
-				}),
-			},
-			wantErr:       true,
-			wantOutput:    TestStruct{},
-			wantRemaining: "1abc\r\n",
-		},
-		{
-			name:  "empty input should fail",
-			input: "",
-			args: args{
-				Map(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-					left, _ := strconv.Atoi(p.Left)
-					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
-				}),
-			},
-			wantErr:       true,
-			wantOutput:    TestStruct{},
-			wantRemaining: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotResult := tc.args.parser(NewFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
-			}
-
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %#v, want output %#v", gotResult.Output, tc.wantOutput)
-			}
-			remainingString := gotResult.Remaining.CurrentString()
-			if remainingString != tc.wantRemaining {
-				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
-			}
-		})
-	}
-}
-
-func BenchmarkMap(b *testing.B) {
-	type TestStruct struct {
-		Foo int
-		Bar string
-	}
-
-	p := Map(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
-		left, _ := strconv.Atoi(p.Left)
-		return TestStruct{Foo: left, Bar: string(p.Right)}, nil
-	})
-	input := NewFromString("1abc\r\n")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p(input)
-	}
-}
-
 func TestOptional(t *testing.T) {
 	t.Parallel()
 
@@ -169,7 +57,7 @@ func TestOptional(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -188,7 +76,7 @@ func TestOptional(t *testing.T) {
 
 func BenchmarkOptional(b *testing.B) {
 	p := Optional(CRLF())
-	input := NewFromString("\r\n123")
+	input := NewInputFromString("\r\n123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -237,7 +125,7 @@ func TestPeek(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -256,7 +144,7 @@ func TestPeek(t *testing.T) {
 
 func BenchmarkPeek(b *testing.B) {
 	p := Peek(Alpha1())
-	input := NewFromString("abcd;")
+	input := NewInputFromString("abcd;")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -325,7 +213,7 @@ func TestRecognize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -344,7 +232,7 @@ func TestRecognize(t *testing.T) {
 
 func BenchmarkRecognize(b *testing.B) {
 	p := Recognize(Pair(Digit1(), Alpha1()))
-	input := NewFromString("123abc")
+	input := NewInputFromString("123abc")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -393,7 +281,7 @@ func TestAssign(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -412,7 +300,231 @@ func TestAssign(t *testing.T) {
 
 func BenchmarkAssign(b *testing.B) {
 	p := Assign(1234, Alpha1())
-	input := NewFromString("abcd")
+	input := NewInputFromString("abcd")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		p(input)
+	}
+}
+
+func TestMap1(t *testing.T) {
+	t.Parallel()
+
+	type TestStruct struct {
+		Foo int
+		Bar string
+	}
+
+	type args struct {
+		parser Parser[TestStruct]
+	}
+	testCases := []struct {
+		name          string
+		input         string
+		args          args
+		wantErr       bool
+		wantOutput    TestStruct
+		wantRemaining string
+	}{
+		{
+			name:  "matching parser should succeed",
+			input: "1abc\r\n",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					left, _ := strconv.Atoi(p.Left)
+					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				}),
+			},
+			wantErr:       false,
+			wantOutput:    TestStruct{Foo: 1, Bar: "abc"},
+			wantRemaining: "",
+		},
+		{
+			name:  "failing parser should fail",
+			input: "abc\r\n",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					left, _ := strconv.Atoi(p.Left)
+					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				}),
+			},
+			wantErr:       true,
+			wantOutput:    TestStruct{},
+			wantRemaining: "abc\r\n",
+		},
+		{
+			name:  "failing mapper should fail",
+			input: "1abc\r\n",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					return TestStruct{}, errors.New("unexpected error")
+				}),
+			},
+			wantErr:       true,
+			wantOutput:    TestStruct{},
+			wantRemaining: "1abc\r\n",
+		},
+		{
+			name:  "empty input should fail",
+			input: "",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					left, _ := strconv.Atoi(p.Left)
+					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				}),
+			},
+			wantErr:       true,
+			wantOutput:    TestStruct{},
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotResult := tc.args.parser(NewInputFromString(tc.input))
+			if (gotResult.Err != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			}
+
+			if gotResult.Output != tc.wantOutput {
+				t.Errorf("got output %#v, want output %#v", gotResult.Output, tc.wantOutput)
+			}
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkMap1(b *testing.B) {
+	type TestStruct struct {
+		Foo int
+		Bar string
+	}
+
+	p := Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+		left, _ := strconv.Atoi(p.Left)
+		return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+	})
+	input := NewInputFromString("1abc\r\n")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		p(input)
+	}
+}
+
+func TestMap2(t *testing.T) {
+	t.Parallel()
+
+	type TestStruct struct {
+		Foo int
+		Bar string
+	}
+
+	type args struct {
+		parser Parser[TestStruct]
+	}
+	testCases := []struct {
+		name          string
+		input         string
+		args          args
+		wantErr       bool
+		wantOutput    TestStruct
+		wantRemaining string
+	}{
+		{
+			name:  "matching parser should succeed",
+			input: "1abc\r\n",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					left, _ := strconv.Atoi(p.Left)
+					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				}),
+			},
+			wantErr:       false,
+			wantOutput:    TestStruct{Foo: 1, Bar: "abc"},
+			wantRemaining: "",
+		},
+		{
+			name:  "failing parser should fail",
+			input: "abc\r\n",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					left, _ := strconv.Atoi(p.Left)
+					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				}),
+			},
+			wantErr:       true,
+			wantOutput:    TestStruct{},
+			wantRemaining: "abc\r\n",
+		},
+		{
+			name:  "failing mapper should fail",
+			input: "1abc\r\n",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					return TestStruct{}, errors.New("unexpected error")
+				}),
+			},
+			wantErr:       true,
+			wantOutput:    TestStruct{},
+			wantRemaining: "1abc\r\n",
+		},
+		{
+			name:  "empty input should fail",
+			input: "",
+			args: args{
+				Map1(Pair(Digit1(), TakeUntil(CRLF())), func(p PairContainer[string, []byte]) (TestStruct, error) {
+					left, _ := strconv.Atoi(p.Left)
+					return TestStruct{Foo: left, Bar: string(p.Right)}, nil
+				}),
+			},
+			wantErr:       true,
+			wantOutput:    TestStruct{},
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotResult := tc.args.parser(NewInputFromString(tc.input))
+			if (gotResult.Err != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			}
+
+			if gotResult.Output != tc.wantOutput {
+				t.Errorf("got output %#v, want output %#v", gotResult.Output, tc.wantOutput)
+			}
+			remainingString := gotResult.Remaining.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkMap2(b *testing.B) {
+	type TestStruct struct {
+		Foo int
+		Bar string
+	}
+
+	p := Map2(Digit1(), TakeUntil(CRLF()), func(s string, bs []byte) (TestStruct, error) {
+		first, _ := strconv.Atoi(s)
+		return TestStruct{Foo: first, Bar: string(bs)}, nil
+	})
+	input := NewInputFromString("1abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

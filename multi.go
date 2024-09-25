@@ -5,7 +5,7 @@ package gomme
 // If the provided parser cannot be successfully applied `count` times, the operation
 // fails and the Result will contain an error.
 func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
-	return func(input InputBytes) Result[[]Output] {
+	return func(input Input) Result[[]Output] {
 		if input.AtEnd() || count == 0 {
 			return Failure[[]Output](NewError(input, "Count"), input)
 		}
@@ -33,7 +33,7 @@ func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
 // however fail if the provided parser accepts empty inputs (such as `Digit0`, or
 // `Alpha0`) in order to prevent infinite loops.
 func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
-	return func(input InputBytes) Result[[]Output] {
+	return func(input Input) Result[[]Output] {
 		results := []Output{}
 
 		remaining := input
@@ -62,7 +62,7 @@ func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
 // Note that Many1 will fail if the provided parser accepts empty
 // inputs (such as `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
-	return func(input InputBytes) Result[[]Output] {
+	return func(input Input) Result[[]Output] {
 		first := parse(input)
 		if first.Err != nil {
 			return Failure[[]Output](first.Err, input)
@@ -111,7 +111,7 @@ func SeparatedList0[Output any, S Separator](
 	separator Parser[S],
 	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
-	return func(input InputBytes) Result[[]Output] {
+	return func(input Input) Result[[]Output] {
 		results := []Output{}
 
 		res := parse(input)
@@ -174,7 +174,7 @@ func SeparatedList1[Output any, S Separator](
 	separator Parser[S],
 	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
-	return func(input InputBytes) Result[[]Output] {
+	return func(input Input) Result[[]Output] {
 		res := parse(input)
 		if res.Err != nil {
 			return Failure[[]Output](res.Err, input)

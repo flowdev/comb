@@ -67,7 +67,7 @@ func TestTake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			input := NewFromString(tc.input)
+			input := NewInputFromString(tc.input)
 			gotResult := tc.args.p(input)
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
@@ -88,7 +88,7 @@ func TestTake(t *testing.T) {
 
 func BenchmarkTake(b *testing.B) {
 	p := Take(6)
-	input := NewFromString("123456")
+	input := NewInputFromString("123456")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -157,7 +157,7 @@ func TestTakeUntil(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -176,7 +176,7 @@ func TestTakeUntil(t *testing.T) {
 
 func BenchmarkTakeUntil(b *testing.B) {
 	p := TakeUntil(Digit1())
-	input := NewFromString("abc123")
+	input := NewInputFromString("abc123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -265,7 +265,7 @@ func TestTakeWhileMN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -284,7 +284,7 @@ func TestTakeWhileMN(t *testing.T) {
 
 func BenchmarkTakeWhileMN(b *testing.B) {
 	p := TakeWhileMN(3, 6, IsDigit)
-	input := NewFromString("13579")
+	input := NewInputFromString("13579")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -303,7 +303,7 @@ func TakeWhileOneOf(collection ...rune) Parser[string] {
 
 	expected := fmt.Sprintf("chars(%v)", string(collection))
 
-	return func(input InputBytes) Result[string] {
+	return func(input Input) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, expected), input)
 		}
@@ -377,7 +377,7 @@ func TestTakeWhileOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -396,7 +396,7 @@ func TestTakeWhileOneOf(t *testing.T) {
 
 func BenchmarkTakeWhileOneOf(b *testing.B) {
 	p := TakeWhileOneOf('a', 'b', 'c')
-	input := NewFromString("abc123")
+	input := NewInputFromString("abc123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -447,7 +447,7 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -465,7 +465,7 @@ func TestToken(t *testing.T) {
 
 func BenchmarkToken(b *testing.B) {
 	parser := Token("Bonjour")
-	input := NewFromString("Bonjour tout le monde")
+	input := NewInputFromString("Bonjour tout le monde")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

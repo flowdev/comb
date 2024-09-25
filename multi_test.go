@@ -65,7 +65,7 @@ func TestCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -86,7 +86,7 @@ func TestCount(t *testing.T) {
 
 func BenchmarkCount(b *testing.B) {
 	parser := Count(Char('#'), 3)
-	input := NewFromString("###")
+	input := NewInputFromString("###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -145,7 +145,7 @@ func TestMany0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -168,7 +168,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty input, and would cause an infinite loop if not detected
-	input := NewFromString("abcdef")
+	input := NewInputFromString("abcdef")
 	parser := Many0(Digit0())
 
 	result := parser(input)
@@ -180,7 +180,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany0(b *testing.B) {
 	parser := Many0(Char('#'))
-	input := NewFromString("###")
+	input := NewInputFromString("###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -259,7 +259,7 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -282,7 +282,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty input, and would cause an infinite loop if not detected
-	input := NewFromString("abcdef")
+	input := NewInputFromString("abcdef")
 	parser := Many1(Digit0())
 
 	result := parser(input)
@@ -294,7 +294,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany1(b *testing.B) {
 	parser := Many1(Char('#'))
-	input := NewFromString("###")
+	input := NewInputFromString("###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -393,7 +393,7 @@ func TestSeparatedList0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -414,7 +414,7 @@ func TestSeparatedList0(t *testing.T) {
 
 func BenchmarkSeparatedList0(t *testing.B) {
 	parser := SeparatedList0(Char('#'), Char(','), false)
-	input := NewFromString("#,#,#")
+	input := NewInputFromString("#,#,#")
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
@@ -493,7 +493,7 @@ func TestSeparatedList1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -514,7 +514,7 @@ func TestSeparatedList1(t *testing.T) {
 
 func BenchmarkSeparatedList1(t *testing.B) {
 	parser := SeparatedList1(Char('#'), Char(','), false)
-	input := NewFromString("#,#,#,#")
+	input := NewInputFromString("#,#,#,#")
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {

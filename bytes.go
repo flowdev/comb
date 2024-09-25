@@ -8,7 +8,7 @@ import (
 
 // Take returns the next `count` bytes of the input.
 func Take(count uint) Parser[[]byte] {
-	return func(input InputBytes) Result[[]byte] {
+	return func(input Input) Result[[]byte] {
 		if input.BytesRemaining() < count {
 			return Failure[[]byte](NewError(input, fmt.Sprintf("Take(%d)", count)), input)
 		}
@@ -22,7 +22,7 @@ func Take(count uint) Parser[[]byte] {
 // If the provided parser is not successful, the parser fails, and the entire input is
 // returned as the Result's Remaining.
 func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
-	return func(input InputBytes) Result[[]byte] {
+	return func(input Input) Result[[]byte] {
 		if input.AtEnd() {
 			return Failure[[]byte](NewError(input, "TakeUntil"), input)
 		}
@@ -58,7 +58,7 @@ func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
 // `atLeast` <= len(input) <= `atMost` range, the parser fails, and the entire
 // input is returned as the Result's Remaining.
 func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte] {
-	return func(input InputBytes) Result[[]byte] {
+	return func(input Input) Result[[]byte] {
 		if input.AtEnd() {
 			return Failure[[]byte](NewError(input, "TakeWhileMN"), input)
 		}
@@ -105,7 +105,7 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 // matched the token.
 // If the token could not be found, the parser returns an error result.
 func Token(token string) Parser[[]byte] {
-	return func(input InputBytes) Result[[]byte] {
+	return func(input Input) Result[[]byte] {
 		if !strings.HasPrefix(input.CurrentString(), token) {
 			return Failure[[]byte](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
 		}
@@ -118,7 +118,7 @@ func Token(token string) Parser[[]byte] {
 // BytesToString convertes a parser that has an output of []byte to a parser that outputs a string.
 // Errors are not changed. This allowes parsers from this file to be used in text parsers.
 func BytesToString(parse Parser[[]byte]) Parser[string] {
-	return func(input InputBytes) Result[string] {
+	return func(input Input) Result[string] {
 		res := parse(input)
 		return Result[string]{
 			Output:    string(res.Output),

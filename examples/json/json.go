@@ -14,7 +14,7 @@ import (
 var testJSON string
 
 func main() {
-	result := parseJSON(testJSON)
+	result := parseJSON(gomme.NewInputFromString(testJSON))
 	if result.Err != nil {
 		log.Fatal(result.Err)
 		return
@@ -48,13 +48,13 @@ type (
 )
 
 // parseJSON is a convenience function to start parsing JSON from the given input string.
-func parseJSON(input string) gomme.Result[JSONValue, string] {
+func parseJSON(input gomme.Input) gomme.Result[JSONValue] {
 	return parseValue(input)
 }
 
 // parseValue is a parser that attempts to parse different types of
 // JSON values (object, array, string, etc.).
-func parseValue(input string) gomme.Result[JSONValue, string] {
+func parseValue(input gomme.Input) gomme.Result[JSONValue] {
 	return gomme.Alternative(
 		parseObject,
 		parseArray,
@@ -68,20 +68,20 @@ func parseValue(input string) gomme.Result[JSONValue, string] {
 
 // parseObject parses a JSON object, which starts and ends with
 // curly braces and contains key-value pairs.
-func parseObject(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
-		gomme.Delimited[string, rune, map[string]JSONValue, rune](
-			gomme.Char[string]('{'),
-			gomme.Optional[string, map[string]JSONValue](
+func parseObject(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
+		gomme.Delimited[rune, map[string]JSONValue, rune](
+			gomme.Char('{'),
+			gomme.Optional[map[string]JSONValue](
 				gomme.Preceded(
 					ws(),
-					gomme.Terminated[string, map[string]JSONValue](
+					gomme.Terminated[map[string]JSONValue](
 						parseMembers,
 						ws(),
 					),
 				),
 			),
-			gomme.Char[string]('}'),
+			gomme.Char('}'),
 		),
 		func(members map[string]JSONValue) (JSONValue, error) {
 			return JSONObject(members), nil
@@ -89,20 +89,20 @@ func parseObject(input string) gomme.Result[JSONValue, string] {
 	)(input)
 }
 
-// Ensure parseObject is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseObject
+// Ensure parseObject is a Parser[JSONValue]
+var _ gomme.Parser[JSONValue] = parseObject
 
 // parseArray parses a JSON array, which starts and ends with
 // square brackets and contains a list of values.
-func parseArray(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
-		gomme.Delimited[string, rune, []JSONValue, rune](
-			gomme.Char[string]('['),
+func parseArray(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
+		gomme.Delimited[rune, []JSONValue, rune](
+			gomme.Char('['),
 			gomme.Alternative(
 				parseElements,
-				gomme.Map(ws(), func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
+				gomme.Map1(ws(), func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
 			),
-			gomme.Char[string](']'),
+			gomme.Char(']'),
 		),
 		func(elements []JSONValue) (JSONValue, error) {
 			return JSONArray(elements), nil
@@ -111,23 +111,23 @@ func parseArray(input string) gomme.Result[JSONValue, string] {
 }
 
 // Ensure parseArray is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseArray
+var _ gomme.Parser[JSONValue] = parseArray
 
-func parseElement(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
-		gomme.Delimited[string](ws(), parseValue, ws()),
+func parseElement(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
+		gomme.Delimited[string, JSONValue, string](ws(), parseValue, ws()),
 		func(v JSONValue) (JSONValue, error) { return v, nil },
 	)(input)
 }
 
-// Ensure parseElement is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseElement
+// Ensure parseElement is a Parser[JSONValue]
+var _ gomme.Parser[JSONValue] = parseElement
 
 // parseNumber parses a JSON number.
-func parseNumber(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map[string](
+func parseNumber(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1[[]string, JSONValue](
 		gomme.Sequence(
-			gomme.Map(integer(), func(i int) (string, error) { return strconv.Itoa(i), nil }),
+			gomme.Map1(integer(), func(i int) (string, error) { return strconv.Itoa(i), nil }),
 			gomme.Optional(fraction()),
 			gomme.Optional(exponent()),
 		),
@@ -146,13 +146,13 @@ func parseNumber(input string) gomme.Result[JSONValue, string] {
 				}
 
 				if fractionPart != 0 {
-					floatStr += fmt.Sprintf(".%d", fractionPart)
+					floatStr += "." + parts[1]
 				}
 			}
 
 			// Exponent part
 			if parts[2] != "" {
-				floatStr += fmt.Sprintf("e%s", parts[2])
+				floatStr += "e" + parts[2]
 			}
 
 			f, err := strconv.ParseFloat(floatStr, 64)
@@ -165,12 +165,12 @@ func parseNumber(input string) gomme.Result[JSONValue, string] {
 	)(input)
 }
 
-// Ensure parseNumber is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseNumber
+// Ensure parseNumber is a Parser[JSONValue]
+var _ gomme.Parser[JSONValue] = parseNumber
 
 // parseString parses a JSON string.
-func parseString(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
+func parseString(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
 		stringParser(),
 		func(s string) (JSONValue, error) {
 			return JSONString(s), nil
@@ -178,48 +178,49 @@ func parseString(input string) gomme.Result[JSONValue, string] {
 	)(input)
 }
 
-// Ensure parseString is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseString
+// Ensure parseString is a Parser[JSONValue]
+var _ gomme.Parser[JSONValue] = parseString
 
 // parseFalse parses the JSON boolean value 'false'.
-func parseFalse(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
-		gomme.Token[string]("false"),
-		func(_ string) (JSONValue, error) { return JSONBool(false), nil },
+func parseFalse(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
+		gomme.Token("false"),
+		func(_ []byte) (JSONValue, error) { return JSONBool(false), nil },
 	)(input)
 }
 
-// Ensure parseFalse is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseFalse
+// Ensure parseFalse is a Parser[JSONValue]
+var _ gomme.Parser[JSONValue] = parseFalse
 
 // parseTrue parses the JSON boolean value 'true'.
-func parseTrue(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
-		gomme.Token[string]("true"),
-		func(_ string) (JSONValue, error) { return JSONBool(true), nil },
+func parseTrue(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
+		gomme.Token("true"),
+		func(_ []byte) (JSONValue, error) { return JSONBool(true), nil },
 	)(input)
 }
 
-// Ensure parseTrue is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseTrue
+// Ensure parseTrue is a Parser[JSONValue]
+var _ gomme.Parser[JSONValue] = parseTrue
 
 // parseNull parses the JSON 'null' value.
-func parseNull(input string) gomme.Result[JSONValue, string] {
-	return gomme.Map(
-		gomme.Token[string]("null"),
-		func(_ string) (JSONValue, error) { return nil, nil },
+func parseNull(input gomme.Input) gomme.Result[JSONValue] {
+	return gomme.Map1(
+		gomme.Token("null"),
+		func(_ []byte) (JSONValue, error) { return nil, nil },
 	)(input)
 }
 
 // Ensure parseNull is a Parser[string, JSONValue]
-var _ gomme.Parser[string, JSONValue] = parseNull
+var _ gomme.Parser[JSONValue] = parseNull
 
 // parseElements parses the elements of a JSON array.
-func parseElements(input string) gomme.Result[[]JSONValue, string] {
-	return gomme.Map(
-		gomme.SeparatedList0[string](
+func parseElements(input gomme.Input) gomme.Result[[]JSONValue] {
+	return gomme.Map1(
+		gomme.SeparatedList0[JSONValue, []byte](
 			parseElement,
-			gomme.Token[string](","),
+			gomme.Token(","),
+			false,
 		),
 		func(elems []JSONValue) ([]JSONValue, error) {
 			return elems, nil
@@ -227,15 +228,16 @@ func parseElements(input string) gomme.Result[[]JSONValue, string] {
 	)(input)
 }
 
-// Ensure parseElements is a Parser[string, []JSONValue]
-var _ gomme.Parser[string, []JSONValue] = parseElements
+// Ensure parseElements is a Parser[[]JSONValue]
+var _ gomme.Parser[[]JSONValue] = parseElements
 
 // parseElement parses a single element of a JSON array.
-func parseMembers(input string) gomme.Result[map[string]JSONValue, string] {
-	return gomme.Map(
-		gomme.SeparatedList0[string](
+func parseMembers(input gomme.Input) gomme.Result[map[string]JSONValue] {
+	return gomme.Map1(
+		gomme.SeparatedList0[kv, []byte](
 			parseMember,
-			gomme.Token[string](","),
+			gomme.Token(","),
+			false,
 		),
 		func(kvs []kv) (map[string]JSONValue, error) {
 			obj := make(JSONObject)
@@ -247,32 +249,31 @@ func parseMembers(input string) gomme.Result[map[string]JSONValue, string] {
 	)(input)
 }
 
-// Ensure parseMembers is a Parser[string, map[string]JSONValue]
-var _ gomme.Parser[string, map[string]JSONValue] = parseMembers
+// Ensure parseMembers is a Parser[map[string]JSONValue]
+var _ gomme.Parser[map[string]JSONValue] = parseMembers
 
 // parseMember parses a single member (key-value pair) of a JSON object.
-func parseMember(input string) gomme.Result[kv, string] {
+func parseMember(input gomme.Input) gomme.Result[kv] {
 	return member()(input)
 }
 
-// Ensure parseMember is a Parser[string, kv]
-var _ gomme.Parser[string, kv] = parseMember
+// Ensure parseMember is a Parser[kv]
+var _ gomme.Parser[kv] = parseMember
 
 // member creates a parser for a single key-value pair in a JSON object.
 //
 // It expects a string followed by a colon and then a JSON value.
 // The result is a kv struct with the parsed key and value.
-func member() gomme.Parser[string, kv] {
-	mapFunc := func(p gomme.PairContainer[string, JSONValue]) (kv, error) {
-		return kv{p.Left, p.Right}, nil
+func member() gomme.Parser[kv] {
+	mapFunc := func(left string, right JSONValue) (kv, error) {
+		return kv{left, right}, nil
 	}
 
-	return gomme.Map(
-		gomme.SeparatedPair[string](
-			gomme.Delimited(ws(), stringParser(), ws()),
-			gomme.Token[string](":"),
-			element(),
-		),
+	return gomme.Map2(
+		gomme.Delimited(ws(), stringParser(), ws()),
+		gomme.Preceded(
+			gomme.Token(":"),
+			element()),
 		mapFunc,
 	)
 }
@@ -280,11 +281,8 @@ func member() gomme.Parser[string, kv] {
 // element creates a parser for a single element in a JSON array.
 //
 // It wraps the element with optional whitespace on either side.
-func element() gomme.Parser[string, JSONValue] {
-	return gomme.Map(
-		gomme.Delimited(ws(), parseValue, ws()),
-		func(v JSONValue) (JSONValue, error) { return v, nil },
-	)
+func element() gomme.Parser[JSONValue] {
+	return gomme.Delimited(ws(), parseValue, ws())
 }
 
 // kv is a struct representing a key-value pair in a JSON object.
@@ -298,57 +296,57 @@ type kv struct {
 // stringParser creates a parser for a JSON string.
 //
 // It expects a sequence of characters enclosed in double quotes.
-func stringParser() gomme.Parser[string, string] {
-	return gomme.Delimited[string, rune, string, rune](
-		gomme.Char[string]('"'),
+func stringParser() gomme.Parser[string] {
+	return gomme.Delimited[rune, string, rune](
+		gomme.Char('"'),
 		characters(),
-		gomme.Char[string]('"'),
+		gomme.Char('"'),
 	)
 }
 
 // integer creates a parser for a JSON number's integer part.
 //
 // It handles negative and positive integers including zero.
-func integer() gomme.Parser[string, int] {
+func integer() gomme.Parser[int] {
 	return gomme.Alternative(
 		// "-" onenine digits
 		gomme.Preceded(
-			gomme.Token[string]("-"),
-			gomme.Map(
-				gomme.Pair(onenine(), digits()),
-				func(p gomme.PairContainer[string, string]) (int, error) {
-					return strconv.Atoi(p.Left + p.Right)
+			gomme.Token("-"),
+			gomme.Map2(
+				onenine(), digits(),
+				func(first string, rest string) (int, error) {
+					return strconv.Atoi(first + rest)
 				},
 			),
 		),
 
 		// onenine digits
-		gomme.Map(
-			gomme.Pair(onenine(), digits()),
-			func(p gomme.PairContainer[string, string]) (int, error) {
-				return strconv.Atoi(p.Left + p.Right)
+		gomme.Map2(
+			onenine(), digits(),
+			func(first string, rest string) (int, error) {
+				return strconv.Atoi(first + rest)
 			},
 		),
 
 		// "-" digit
 		gomme.Preceded(
-			gomme.Token[string]("-"),
-			gomme.Map(
+			gomme.Token("-"),
+			gomme.Map1(
 				digit(),
 				strconv.Atoi,
 			),
 		),
 
 		// digit
-		gomme.Map(digit(), strconv.Atoi),
+		gomme.Map1(digit(), strconv.Atoi),
 	)
 }
 
 // digits creates a parser for a sequence of digits.
 //
 // It concatenates the sequence into a single string.
-func digits() gomme.Parser[string, string] {
-	return gomme.Map(gomme.Many1(digit()), func(digits []string) (string, error) {
+func digits() gomme.Parser[string] {
+	return gomme.Map1(gomme.Many1(digit()), func(digits []string) (string, error) {
 		return strings.Join(digits, ""), nil
 	})
 }
@@ -356,48 +354,48 @@ func digits() gomme.Parser[string, string] {
 // digit creates a parser for a single digit.
 //
 // It distinguishes between '0' and non-zero digits.
-func digit() gomme.Parser[string, string] {
+func digit() gomme.Parser[string] {
 	return gomme.Alternative(
-		gomme.Token[string]("0"),
+		gomme.BytesToString(gomme.Token("0")),
 		onenine(),
 	)
 }
 
 // onenine creates a parser for digits from 1 to 9.
-func onenine() gomme.Parser[string, string] {
-	return gomme.Alternative(
-		gomme.Token[string]("1"),
-		gomme.Token[string]("2"),
-		gomme.Token[string]("3"),
-		gomme.Token[string]("4"),
-		gomme.Token[string]("5"),
-		gomme.Token[string]("6"),
-		gomme.Token[string]("7"),
-		gomme.Token[string]("8"),
-		gomme.Token[string]("9"),
-	)
+func onenine() gomme.Parser[string] {
+	return gomme.BytesToString(gomme.Alternative(
+		gomme.Token("1"),
+		gomme.Token("2"),
+		gomme.Token("3"),
+		gomme.Token("4"),
+		gomme.Token("5"),
+		gomme.Token("6"),
+		gomme.Token("7"),
+		gomme.Token("8"),
+		gomme.Token("9"),
+	))
 }
 
 // fraction creates a parser for the fractional part of a JSON number.
 //
 // It expects a dot followed by at least one digit.
-func fraction() gomme.Parser[string, string] {
+func fraction() gomme.Parser[string] {
 	return gomme.Preceded(
-		gomme.Token[string]("."),
-		gomme.Digit1[string](),
+		gomme.Token("."),
+		gomme.Digit1(),
 	)
 }
 
 // exponent creates a parser for the exponent part of a JSON number.
 //
 // It handles the exponent sign and the exponent digits.
-func exponent() gomme.Parser[string, string] {
+func exponent() gomme.Parser[string] {
 	return gomme.Preceded(
-		gomme.Token[string]("e"),
-		gomme.Map(
-			gomme.Pair(sign(), digits()),
-			func(p gomme.PairContainer[string, string]) (string, error) {
-				return p.Left + p.Right, nil
+		gomme.Token("e"),
+		gomme.Map2(
+			sign(), digits(),
+			func(sign string, digits string) (string, error) {
+				return sign + digits, nil
 			},
 		),
 	)
@@ -406,22 +404,22 @@ func exponent() gomme.Parser[string, string] {
 // sign creates a parser for the sign part of a number's exponent.
 //
 // It can parse both positive ('+') and negative ('-') signs.
-func sign() gomme.Parser[string, string] {
+func sign() gomme.Parser[string] {
 	return gomme.Optional(
-		gomme.Alternative[string, string](
-			gomme.Token[string]("-"),
-			gomme.Token[string]("+"),
-		),
+		gomme.BytesToString(gomme.Alternative(
+			gomme.Token("-"),
+			gomme.Token("+"),
+		)),
 	)
 }
 
 // characters creates a parser for a sequence of JSON string characters.
 //
 // It handles regular characters and escaped sequences.
-func characters() gomme.Parser[string, string] {
+func characters() gomme.Parser[string] {
 	return gomme.Optional(
-		gomme.Map(
-			gomme.Many1[string, rune](character()),
+		gomme.Map1(
+			gomme.Many1[rune](character()),
 			func(chars []rune) (string, error) {
 				return string(chars), nil
 			},
@@ -432,10 +430,10 @@ func characters() gomme.Parser[string, string] {
 // character creates a parser for a single JSON string character.
 //
 // It distinguishes between regular characters and escape sequences.
-func character() gomme.Parser[string, rune] {
+func character() gomme.Parser[rune] {
 	return gomme.Alternative(
 		// normal character
-		gomme.Satisfy[string](func(c rune) bool {
+		gomme.Satisfy(func(c rune) bool {
 			return c != '"' && c != '\\' && c >= 0x20 && c <= 0x10FFFF
 		}),
 
@@ -447,7 +445,7 @@ func character() gomme.Parser[string, rune] {
 // escape creates a parser for escaped characters in a JSON string.
 //
 // It handles common escape sequences like '\n', '\t', etc., and unicode escapes.
-func escape() gomme.Parser[string, rune] {
+func escape() gomme.Parser[rune] {
 	mapFunc := func(chars []rune) (rune, error) {
 		// chars[0] will always be '\\'
 		switch chars[1] {
@@ -472,18 +470,18 @@ func escape() gomme.Parser[string, rune] {
 		}
 	}
 
-	return gomme.Map(
+	return gomme.Map1(
 		gomme.Sequence(
-			gomme.Char[string]('\\'),
+			gomme.Char('\\'),
 			gomme.Alternative(
-				gomme.Char[string]('"'),
-				gomme.Char[string]('\\'),
-				gomme.Char[string]('/'),
-				gomme.Char[string]('b'),
-				gomme.Char[string]('f'),
-				gomme.Char[string]('n'),
-				gomme.Char[string]('r'),
-				gomme.Char[string]('t'),
+				gomme.Char('"'),
+				gomme.Char('\\'),
+				gomme.Char('/'),
+				gomme.Char('b'),
+				gomme.Char('f'),
+				gomme.Char('n'),
+				gomme.Char('r'),
+				gomme.Char('t'),
 				unicodeEscape(),
 			),
 		),
@@ -491,11 +489,11 @@ func escape() gomme.Parser[string, rune] {
 	)
 }
 
-// unicodeEscape creates a parser for a unicode escape sequence in a JSON string.
+// unicodeEscape creates a parser for a Unicode escape sequence in a JSON string.
 //
 // It expects a sequence starting with 'u' followed by four hexadecimal digits and
 // converts them to the corresponding rune.
-func unicodeEscape() gomme.Parser[string, rune] {
+func unicodeEscape() gomme.Parser[rune] {
 	mapFunc := func(chars []rune) (rune, error) {
 		// chars[0] will always be 'u'
 		hex := string(chars[1:5])
@@ -506,9 +504,9 @@ func unicodeEscape() gomme.Parser[string, rune] {
 		return rune(codePoint), nil
 	}
 
-	return gomme.Map(
+	return gomme.Map1(
 		gomme.Sequence(
-			gomme.Char[string]('u'),
+			gomme.Char('u'),
 			hex(),
 			hex(),
 			hex(),
@@ -522,8 +520,8 @@ func unicodeEscape() gomme.Parser[string, rune] {
 //
 // It can parse digits ('0'-'9') as well as
 // letters ('a'-'f', 'A'-'F') used in hexadecimal numbers.
-func hex() gomme.Parser[string, rune] {
-	return gomme.Satisfy[string](func(r rune) bool {
+func hex() gomme.Parser[rune] {
+	return gomme.Satisfy(func(r rune) bool {
 		return ('0' <= r && r <= '9') || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')
 	})
 }
@@ -532,16 +530,14 @@ func hex() gomme.Parser[string, rune] {
 //
 // It can handle spaces, tabs, newlines, and carriage returns.
 // The parser accumulates all whitespace characters and returns them as a single string.
-func ws() gomme.Parser[string, string] {
-	parser := gomme.Many0(
-		gomme.Satisfy[string](func(r rune) bool {
-			return r == ' ' || r == '\t' || r == '\n' || r == '\r'
-		}),
-	)
-
+func ws() gomme.Parser[string] {
 	mapFunc := func(runes []rune) (string, error) {
 		return string(runes), nil
 	}
 
-	return gomme.Map(parser, mapFunc)
+	return gomme.Map1(gomme.Many0(
+		gomme.Satisfy(func(r rune) bool {
+			return r == ' ' || r == '\t' || r == '\n' || r == '\r'
+		}),
+	), mapFunc)
 }

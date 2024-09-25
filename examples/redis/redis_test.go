@@ -196,7 +196,7 @@ func TestParseRESPMessage(t *testing.T) {
 			want: RESPMessage{
 				Kind: BulkStringKind,
 				BulkString: &BulkStringMessage{
-					Data: []byte(""),
+					Data: nil,
 				},
 			},
 			wantErr: false,

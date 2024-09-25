@@ -37,7 +37,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		Array(),
 	)
 
-	result := parser(input)
+	result := parser(gomme.NewInputFromString(input))
 	if result.Err != nil {
 		return RESPMessage{}, result.Err
 	}
@@ -110,24 +110,24 @@ type SimpleStringMessage struct {
 //
 // Once parsed, the content of the simple string is available in the
 // simpleString field of the result's RESPMessage.
-func SimpleString() gomme.Parser[string, RESPMessage] {
-	mapFn := func(message string) (RESPMessage, error) {
-		if strings.ContainsAny(message, "\r\n") {
+func SimpleString() gomme.Parser[RESPMessage] {
+	mapFn := func(message []byte) (RESPMessage, error) {
+		smessage := string(message)
+		if strings.ContainsAny(smessage, "\r\n") {
 			return RESPMessage{}, fmt.Errorf("malformed simple string: %s", message)
 		}
 
 		return RESPMessage{
 			Kind: SimpleStringKind,
 			SimpleString: &SimpleStringMessage{
-				Content: message,
+				Content: smessage,
 			},
 		}, nil
 	}
 
-	return gomme.Delimited(
-		gomme.Token[string](string(SimpleStringKind)),
-		gomme.Map(gomme.TakeUntil(gomme.CRLF[string]()), mapFn),
-		gomme.CRLF[string](),
+	return gomme.Preceded(
+		gomme.Token(string(SimpleStringKind)),
+		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
 	)
 }
 
@@ -146,9 +146,10 @@ type ErrorStringMessage struct {
 //
 // The error message is available in the Error field of the result's
 // RESPMessage.
-func Error() gomme.Parser[string, RESPMessage] {
-	mapFn := func(message string) (RESPMessage, error) {
-		if strings.ContainsAny(message, "\r\n") {
+func Error() gomme.Parser[RESPMessage] {
+	mapFn := func(message []byte) (RESPMessage, error) {
+		smessage := string(message)
+		if strings.ContainsAny(smessage, "\r\n") {
 			return RESPMessage{}, fmt.Errorf("malformed error string: %s", message)
 		}
 
@@ -156,15 +157,14 @@ func Error() gomme.Parser[string, RESPMessage] {
 			Kind: ErrorKind,
 			Error: &ErrorStringMessage{
 				Kind:    "ERR",
-				Message: message,
+				Message: smessage,
 			},
 		}, nil
 	}
 
-	return gomme.Delimited(
-		gomme.Token[string](string(ErrorKind)),
-		gomme.Map(gomme.TakeUntil(gomme.CRLF[string]()), mapFn),
-		gomme.CRLF[string](),
+	return gomme.Preceded(
+		gomme.Token(string((ErrorKind))),
+		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
 	)
 }
 
@@ -178,14 +178,14 @@ type IntegerMessage struct {
 
 // Integer is a parser for Redis' RESP protocol integers.
 //
-// Integers are signed nummerical values represented as string messages
+// Integers are signed numerical values represented as string messages
 // that start with a ":" character, and end with a gomme.CRLF.
 //
 // The integer value is available in the IntegerMessage field of the result's
 // RESPMessage.
-func Integer() gomme.Parser[string, RESPMessage] {
-	mapFn := func(message string) (RESPMessage, error) {
-		value, err := strconv.Atoi(message)
+func Integer() gomme.Parser[RESPMessage] {
+	mapFn := func(message []byte) (RESPMessage, error) {
+		value, err := strconv.Atoi(string(message))
 		if err != nil {
 			return RESPMessage{}, err
 		}
@@ -198,10 +198,9 @@ func Integer() gomme.Parser[string, RESPMessage] {
 		}, nil
 	}
 
-	return gomme.Delimited(
-		gomme.Token[string](string(IntegerKind)),
-		gomme.Map(gomme.TakeUntil(gomme.CRLF[string]()), mapFn),
-		gomme.CRLF[string](),
+	return gomme.Preceded(
+		gomme.Token(string(IntegerKind)),
+		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
 	)
 }
 
@@ -220,45 +219,42 @@ type BulkStringMessage struct {
 //
 // The bulk string's data is available in the BulkString field of the result's
 // RESPMessage.
-func BulkString() gomme.Parser[string, RESPMessage] {
-	mapFn := func(message gomme.PairContainer[int64, string]) (RESPMessage, error) {
-		if message.Left < 0 {
-			if message.Left < -1 {
+func BulkString() gomme.Parser[RESPMessage] {
+	mapFn := func(length int64, message []byte) (RESPMessage, error) {
+		if length < 0 {
+			if length < -1 {
 				return RESPMessage{}, fmt.Errorf(
 					"unable to parse bulk string; "+
 						"reason: negative length %d",
-					message.Left,
+					length,
 				)
 			}
 
-			if message.Left == -1 && len(message.Right) != 0 {
+			if length == -1 && len(message) != 0 {
 				return RESPMessage{}, fmt.Errorf(
-					"malformed array: declared message size -1, and actual size differ %d",
-					len(message.Right),
+					"malformed bulkstring: declared message size -1, and actual size differ %d",
+					len(message),
 				)
 			}
-		} else if len(message.Right) != int(message.Left) {
+		} else if int64(len(message)) != length {
 			return RESPMessage{}, fmt.Errorf(
-				"malformed array: declared message size %d, and actual size differ %d",
-				message.Left,
-				len(message.Right),
+				"malformed bulkstring: declared message size %d, and actual size differ %d; message: %q",
+				length, len(message), string(message),
 			)
 		}
 
 		return RESPMessage{
 			Kind: BulkStringKind,
 			BulkString: &BulkStringMessage{
-				Data: []byte(message.Right),
+				Data: message,
 			},
 		}, nil
 	}
 
-	return gomme.Map(
-		gomme.Pair(
-			sizePrefix(gomme.Token[string](string(BulkStringKind))),
-			gomme.Optional(
-				gomme.Terminated(gomme.TakeUntil(gomme.CRLF[string]()), gomme.CRLF[string]()),
-			),
+	return gomme.Map2(
+		sizePrefix(gomme.Token(string(BulkStringKind))),
+		gomme.Optional(
+			gomme.TakeUntil(gomme.CRLF()),
 		),
 		mapFn,
 	)
@@ -278,57 +274,52 @@ type ArrayMessage struct {
 //
 // The array's messages are available in the Array field of the result's
 // RESPMessage.
-func Array() gomme.Parser[string, RESPMessage] {
-	mapFn := func(message gomme.PairContainer[int64, []RESPMessage]) (RESPMessage, error) {
-		if int(message.Left) == -1 {
-			if len(message.Right) != 0 {
+func Array() gomme.Parser[RESPMessage] {
+	mapFn := func(size int64, message []RESPMessage) (RESPMessage, error) {
+		if int(size) == -1 {
+			if len(message) != 0 {
 				return RESPMessage{}, fmt.Errorf(
 					"malformed array: declared message size -1, and actual size differ %d",
-					len(message.Right),
+					len(message),
 				)
 			}
 		} else {
-			if len(message.Right) != int(message.Left) {
+			if len(message) != int(size) {
 				return RESPMessage{}, fmt.Errorf(
 					"malformed array: declared message size %d, and actual size differ %d",
-					message.Left,
-					len(message.Right),
+					size,
+					len(message),
 				)
 			}
 		}
 
-		messages := make([]RESPMessage, 0, len(message.Right))
-		messages = append(messages, message.Right...)
-
 		return RESPMessage{
 			Kind: ArrayKind,
 			Array: &ArrayMessage{
-				Elements: messages,
+				Elements: message,
 			},
 		}, nil
 	}
 
-	return gomme.Map(
-		gomme.Pair(
-			sizePrefix(gomme.Token[string](string(ArrayKind))),
-			gomme.Many0(
-				gomme.Alternative(
-					SimpleString(),
-					Error(),
-					Integer(),
-					BulkString(),
-				),
+	return gomme.Map2(
+		sizePrefix(gomme.Token(string(ArrayKind))),
+		gomme.Many0(
+			gomme.Alternative(
+				SimpleString(),
+				Error(),
+				Integer(),
+				BulkString(),
 			),
 		),
 		mapFn,
 	)
 }
 
-func sizePrefix(prefix gomme.Parser[string, string]) gomme.Parser[string, int64] {
+func sizePrefix(prefix gomme.Parser[[]byte]) gomme.Parser[int64] {
 	return gomme.Delimited(
 		prefix,
-		gomme.Int64[string](),
-		gomme.CRLF[string](),
+		gomme.Int64(),
+		gomme.CRLF(),
 	)
 }
 

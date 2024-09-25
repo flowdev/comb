@@ -56,7 +56,7 @@ func TestChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -75,7 +75,7 @@ func TestChar(t *testing.T) {
 
 func BenchmarkChar(b *testing.B) {
 	parser := Char('a')
-	input := NewFromString("a")
+	input := NewInputFromString("a")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -125,7 +125,7 @@ func TestAnyChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -144,7 +144,7 @@ func TestAnyChar(t *testing.T) {
 
 func BenchmarkAnyChar(b *testing.B) {
 	parser := AnyChar()
-	input := NewFromString("a")
+	input := NewInputFromString("a")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -210,7 +210,7 @@ func TestAlpha0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -229,7 +229,7 @@ func TestAlpha0(t *testing.T) {
 
 func BenchmarkAlpha0(b *testing.B) {
 	parser := Alpha0()
-	input := NewFromString("abc")
+	input := NewInputFromString("abc")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -303,7 +303,7 @@ func TestAlpha1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -322,7 +322,7 @@ func TestAlpha1(t *testing.T) {
 
 func BenchmarkAlpha1(b *testing.B) {
 	parser := Alpha1()
-	input := NewFromString("abc")
+	input := NewInputFromString("abc")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -388,7 +388,7 @@ func TestDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -407,7 +407,7 @@ func TestDigit0(t *testing.T) {
 
 func BenchmarkDigit0(b *testing.B) {
 	parser := Digit0()
-	input := NewFromString("123")
+	input := NewInputFromString("123")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -481,7 +481,7 @@ func TestDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -500,7 +500,7 @@ func TestDigit1(t *testing.T) {
 
 func BenchmarkDigit1(b *testing.B) {
 	parser := Digit1()
-	input := NewFromString("123")
+	input := NewInputFromString("123")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -566,7 +566,7 @@ func TestHexDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -585,7 +585,7 @@ func TestHexDigit0(t *testing.T) {
 
 func BenchmarkHexDigit0(b *testing.B) {
 	parser := HexDigit0()
-	input := NewFromString("1f3")
+	input := NewInputFromString("1f3")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -659,7 +659,7 @@ func TestHexDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -678,7 +678,7 @@ func TestHexDigit1(t *testing.T) {
 
 func BenchmarkHexDigit1(b *testing.B) {
 	parser := HexDigit1()
-	input := NewFromString("1f3")
+	input := NewInputFromString("1f3")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -784,7 +784,7 @@ func TestWhitespace0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -804,7 +804,7 @@ func TestWhitespace0(t *testing.T) {
 func BenchmarkWhitespace0(b *testing.B) {
 	b.ReportAllocs()
 	parser := Whitespace0()
-	input := NewFromString(" \t\n\r")
+	input := NewInputFromString(" \t\n\r")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -911,7 +911,7 @@ func TestWhitespace1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -930,7 +930,7 @@ func TestWhitespace1(t *testing.T) {
 
 func BenchmarkWhitespace1(b *testing.B) {
 	b.ReportAllocs()
-	input := NewFromString(" \t\n\r")
+	input := NewInputFromString(" \t\n\r")
 
 	parser := Whitespace1()
 
@@ -1039,7 +1039,7 @@ func TestAlphanumeric0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1058,7 +1058,7 @@ func TestAlphanumeric0(t *testing.T) {
 
 func BenchmarkAlphanumeric0(b *testing.B) {
 	parser := Alphanumeric0()
-	input := NewFromString("a1b2c3")
+	input := NewInputFromString("a1b2c3")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1172,7 +1172,7 @@ func TestAlphanumeric1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1191,7 +1191,7 @@ func TestAlphanumeric1(t *testing.T) {
 
 func BenchmarkAlphanumeric1(b *testing.B) {
 	parser := Alphanumeric1()
-	input := NewFromString("a1b2c3")
+	input := NewInputFromString("a1b2c3")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1257,7 +1257,7 @@ func TestLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1276,7 +1276,7 @@ func TestLF(t *testing.T) {
 
 func BenchmarkLF(b *testing.B) {
 	parser := LF()
-	input := NewFromString("\n")
+	input := NewInputFromString("\n")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1342,7 +1342,7 @@ func TestCR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1361,7 +1361,7 @@ func TestCR(t *testing.T) {
 
 func BenchmarkCR(b *testing.B) {
 	parser := CR()
-	input := NewFromString("\r")
+	input := NewInputFromString("\r")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1435,7 +1435,7 @@ func TestCRLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1454,7 +1454,7 @@ func TestCRLF(t *testing.T) {
 
 func BenchmarkCRLF(b *testing.B) {
 	parser := CRLF()
-	input := NewFromString("\r\n")
+	input := NewInputFromString("\r\n")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1504,7 +1504,7 @@ func TestOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1523,7 +1523,7 @@ func TestOneOf(t *testing.T) {
 
 func BenchmarkOneOf(b *testing.B) {
 	parser := OneOf('a', '1', '+')
-	input := NewFromString("+")
+	input := NewInputFromString("+")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1581,7 +1581,7 @@ func TestSatisfy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1600,7 +1600,7 @@ func TestSatisfy(t *testing.T) {
 
 func BenchmarkSatisfy(b *testing.B) {
 	parser := Satisfy(unicode.IsLetter)
-	input := NewFromString("a")
+	input := NewInputFromString("a")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1666,7 +1666,7 @@ func TestSpace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1685,7 +1685,7 @@ func TestSpace(t *testing.T) {
 
 func BenchmarkSpace(b *testing.B) {
 	parser := Space()
-	input := NewFromString(" ")
+	input := NewInputFromString(" ")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1751,7 +1751,7 @@ func TestTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1770,7 +1770,7 @@ func TestTab(t *testing.T) {
 
 func BenchmarkTab(b *testing.B) {
 	parser := Tab()
-	input := NewFromString("\t")
+	input := NewInputFromString("\t")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1844,7 +1844,7 @@ func TestInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1863,7 +1863,7 @@ func TestInt64(t *testing.T) {
 
 func BenchmarkInt64(b *testing.B) {
 	parser := Int64()
-	input := NewFromString("123")
+	input := NewInputFromString("123")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -1937,7 +1937,7 @@ func TestInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -1956,7 +1956,7 @@ func TestInt8(t *testing.T) {
 
 func BenchmarkInt8(b *testing.B) {
 	parser := Int8()
-	input := NewFromString("123")
+	input := NewInputFromString("123")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)
@@ -2014,7 +2014,7 @@ func TestUInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewFromString(tc.input))
+			gotResult := tc.parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -2033,7 +2033,7 @@ func TestUInt8(t *testing.T) {
 
 func BenchmarkUInt8(b *testing.B) {
 	parser := UInt8()
-	input := NewFromString("253")
+	input := NewInputFromString("253")
 
 	for i := 0; i < b.N; i++ {
 		parser(input)

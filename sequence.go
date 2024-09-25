@@ -4,7 +4,7 @@ package gomme
 // parses the result of the main parser, and finally parses and discards
 // the result of the suffix parser.
 func Delimited[OP, O, OS any](prefix Parser[OP], parser Parser[O], suffix Parser[OS]) Parser[O] {
-	return func(input InputBytes) Result[O] {
+	return func(input Input) Result[O] {
 		return Terminated(Preceded(prefix, parser), suffix)(input)
 	}
 }
@@ -14,7 +14,7 @@ func Delimited[OP, O, OS any](prefix Parser[OP], parser Parser[O], suffix Parser
 func Pair[LO, RO any, LP Parser[LO], RP Parser[RO]](
 	leftParser LP, rightParser RP,
 ) Parser[PairContainer[LO, RO]] {
-	return func(input InputBytes) Result[PairContainer[LO, RO]] {
+	return func(input Input) Result[PairContainer[LO, RO]] {
 		leftResult := leftParser(input)
 		if leftResult.Err != nil {
 			return Failure[PairContainer[LO, RO]](NewError(input, "Pair"), input)
@@ -25,7 +25,7 @@ func Pair[LO, RO any, LP Parser[LO], RP Parser[RO]](
 			return Failure[PairContainer[LO, RO]](NewError(leftResult.Remaining, "Pair"), input)
 		}
 
-		return Success(PairContainer[LO, RO]{leftResult.Output, rightResult.Output}, rightResult.Remaining)
+		return Success(NewPairContainer(leftResult.Output, rightResult.Output), rightResult.Remaining)
 	}
 }
 
@@ -35,7 +35,7 @@ func Pair[LO, RO any, LP Parser[LO], RP Parser[RO]](
 // Preceded is effectively equivalent to applying DiscardAll(prefix),
 // and then applying the main parser.
 func Preceded[OP, O any](prefix Parser[OP], parser Parser[O]) Parser[O] {
-	return func(input InputBytes) Result[O] {
+	return func(input Input) Result[O] {
 		prefixResult := prefix(input)
 		if prefixResult.Err != nil {
 			return Failure[O](prefixResult.Err, input)
@@ -55,7 +55,7 @@ func Preceded[OP, O any](prefix Parser[OP], parser Parser[O]) Parser[O] {
 func SeparatedPair[LO, RO any, S Separator, LP Parser[LO], SP Parser[S], RP Parser[RO]](
 	leftParser LP, separator SP, rightParser RP,
 ) Parser[PairContainer[LO, RO]] {
-	return func(input InputBytes) Result[PairContainer[LO, RO]] {
+	return func(input Input) Result[PairContainer[LO, RO]] {
 		leftResult := leftParser(input)
 		if leftResult.Err != nil {
 			return Failure[PairContainer[LO, RO]](NewError(input, "SeparatedPair"), input)
@@ -79,7 +79,7 @@ func SeparatedPair[LO, RO any, S Separator, LP Parser[LO], SP Parser[S], RP Pars
 // slice of results or an error if any parser fails.
 // All parsers in the sequence have to produce the same result type.
 func Sequence[O any](parsers ...Parser[O]) Parser[[]O] {
-	return func(input InputBytes) Result[[]O] {
+	return func(input Input) Result[[]O] {
 		remaining := input
 		outputs := make([]O, 0, len(parsers))
 
@@ -101,7 +101,7 @@ func Sequence[O any](parsers ...Parser[O]) Parser[[]O] {
 // parses the result from the suffix parser and discards it; only
 // returning the result of the main parser.
 func Terminated[O, OS any](parser Parser[O], suffix Parser[OS]) Parser[O] {
-	return func(input InputBytes) Result[O] {
+	return func(input Input) Result[O] {
 		result := parser(input)
 		if result.Err != nil {
 			return Failure[O](result.Err, input)

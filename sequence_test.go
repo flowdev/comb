@@ -76,7 +76,7 @@ func TestDelimited(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -95,7 +95,7 @@ func TestDelimited(t *testing.T) {
 
 func BenchmarkDelimited(b *testing.B) {
 	parser := Delimited(Char('+'), Digit1(), CRLF())
-	input := NewFromString("+1\r\n")
+	input := NewInputFromString("+1\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -171,7 +171,7 @@ func TestPair(t *testing.T) {
 
 			parser := Pair(tc.args.leftParser, tc.args.rightParser)
 
-			gotResult := parser(NewFromString(tc.input))
+			gotResult := parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -190,7 +190,7 @@ func TestPair(t *testing.T) {
 
 func BenchmarkPair(b *testing.B) {
 	parser := Pair(Digit1(), TakeUntil(CRLF()))
-	input := NewFromString("1abc\r\n")
+	input := NewInputFromString("1abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -259,7 +259,7 @@ func TestPreceded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -278,7 +278,7 @@ func TestPreceded(t *testing.T) {
 
 func BenchmarkPreceded(b *testing.B) {
 	parser := Preceded(Char('+'), Digit1())
-	input := NewFromString("+123")
+	input := NewInputFromString("+123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -415,7 +415,7 @@ func TestSeparatedPair(t *testing.T) {
 
 			parser := SeparatedPair(tc.args.leftParser, tc.args.separatorParser, tc.args.rightParser)
 
-			gotResult := parser(NewFromString(tc.input))
+			gotResult := parser(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -434,7 +434,7 @@ func TestSeparatedPair(t *testing.T) {
 
 func BenchmarkSeparatedPair(b *testing.B) {
 	parser := SeparatedPair(Digit1(), Char('|'), TakeUntil(CRLF()))
-	input := NewFromString("1|abc\r\n")
+	input := NewInputFromString("1|abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -513,7 +513,7 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -534,7 +534,7 @@ func TestSequence(t *testing.T) {
 
 func BenchmarkSequence(b *testing.B) {
 	parser := Sequence(Digit1(), Alpha0(), Digit1())
-	input := NewFromString("123")
+	input := NewInputFromString("123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -603,7 +603,7 @@ func TestTerminated(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewFromString(tc.input))
+			gotResult := tc.args.p(NewInputFromString(tc.input))
 			if (gotResult.Err != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
 			}
@@ -622,7 +622,7 @@ func TestTerminated(t *testing.T) {
 
 func BenchmarkTerminated(b *testing.B) {
 	parser := Terminated(Digit1(), Char('+'))
-	input := NewFromString("123+")
+	input := NewInputFromString("123+")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
