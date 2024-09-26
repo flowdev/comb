@@ -7,7 +7,7 @@ import (
 
 // Take returns the next `count` bytes of the input.
 func Take(count uint) Parser[[]byte] {
-	return func(input Input) Result[[]byte] {
+	return func(input State) Result[[]byte] {
 		if input.BytesRemaining() < count {
 			return Failure[[]byte](NewError(input, fmt.Sprintf("Take(%d)", count)), input)
 		}
@@ -21,29 +21,22 @@ func Take(count uint) Parser[[]byte] {
 // If the provided parser is not successful, the parser fails, and the entire input is
 // returned as the Result's Remaining.
 func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
-	return func(input Input) Result[[]byte] {
+	return func(input State) Result[[]byte] {
 		if input.AtEnd() {
 			return Failure[[]byte](NewError(input, "TakeUntil"), input)
 		}
 
-		if input.Text {
-			for i := range input.CurrentString() { // this will loop over runes of a string
-				current := input
-				current.Pos += uint(i)
-				res := parse(current)
-				if res.Err == nil {
-					return Success(input.BytesTo(current), res.Remaining)
-				}
+		current := input
+		for !current.AtEnd() { // loop over runes of the input
+			r, size := utf8.DecodeRune(current.CurrentBytes())
+			if r == utf8.RuneError {
+				return Failure[[]byte](NewError(current, "TakeUntil: UTF-8 error"), input)
 			}
-		} else {
-			for i := range input.CurrentBytes() { // this will loop over bytes
-				current := input
-				current.Pos += uint(i)
-				res := parse(current)
-				if res.Err == nil {
-					return Success(input.BytesTo(current), res.Remaining)
-				}
+			res := parse(current)
+			if res.Err == nil {
+				return Success(input.BytesTo(current), res.Remaining)
 			}
+			current = current.MoveBy(uint(size))
 		}
 
 		return Failure[[]byte](NewError(input, "TakeUntil"), input)
@@ -57,12 +50,12 @@ func TakeUntil[Output any](parse Parser[Output]) Parser[[]byte] {
 // `atLeast` <= len(input) <= `atMost` range, the parser fails, and the entire
 // input is returned as the Result's Remaining.
 func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte] {
-	return func(input Input) Result[[]byte] {
+	return func(input State) Result[[]byte] {
 		if input.AtEnd() {
 			return Failure[[]byte](NewError(input, "TakeWhileMN"), input)
 		}
 
-		// Input is shorter than the minimum expected matching length,
+		// State is shorter than the minimum expected matching length,
 		// it is thus not possible to match it within the established
 		// constraints.
 		if input.BytesRemaining() < atLeast {
@@ -78,10 +71,7 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[[]byte](NewError(current, "TakeWhileMN: UTF-8 error"), input)
-				}
-				return Success(input.BytesTo(current), current)
+				return Failure[[]byte](NewError(current, "TakeWhileMN: UTF-8 error"), input)
 			}
 
 			matched := predicate(r)
@@ -103,7 +93,7 @@ func TakeWhileMN(atLeast, atMost uint, predicate func(rune) bool) Parser[[]byte]
 // BytesToString convertes a parser that has an output of []byte to a parser that outputs a string.
 // Errors are not changed. This allowes parsers from this file to be used in text parsers.
 func BytesToString(parse Parser[[]byte]) Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		res := parse(input)
 		return Result[string]{
 			Output:    string(res.Output),

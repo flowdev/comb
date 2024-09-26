@@ -11,7 +11,7 @@ import (
 // Char parses a single character and matches it with
 // a provided candidate.
 func Char(character rune) Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() {
 			return Failure[rune](NewError(input, string(character)), input)
 		}
@@ -29,11 +29,11 @@ func Char(character rune) Parser[rune] {
 
 // AnyChar parses any single character.
 func AnyChar() Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() {
 			return Failure[rune](NewError(input, "AnyChar"), input)
 		}
-		r, size := utf8.DecodeRune(input.Bytes[input.Pos:])
+		r, size := utf8.DecodeRune(input.CurrentBytes())
 		if r == utf8.RuneError {
 			return Failure[rune](NewError(input, "AnyChar"), input)
 		}
@@ -46,15 +46,12 @@ func AnyChar() Parser[rune] {
 // In the cases where the input is empty, or no character is found, the parser
 // returns the input as is.
 func Alpha0() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		current := input
 		for !current.AtEnd() { // loop over runes of the input
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Alpha0: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Alpha0: UTF-8 error"), input)
 			}
 			if !unicode.IsLetter(r) {
 				return Success(input.StringTo(current), current)
@@ -70,7 +67,7 @@ func Alpha0() Parser[string] {
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alpha1() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, "Alpha1"), input)
 		}
@@ -87,10 +84,7 @@ func Alpha1() Parser[string] {
 		for !current.AtEnd() { // loop over runes of the input
 			r, size = utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Alpha1: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Alpha1: UTF-8 error"), input)
 			}
 			if !unicode.IsLetter(r) {
 				return Success(input.StringTo(current), current)
@@ -106,15 +100,12 @@ func Alpha1() Parser[string] {
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Alphanumeric0() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		current := input
 		for !current.AtEnd() { // loop over runes of the input
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Alphanumeric0: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Alphanumeric0: UTF-8 error"), input)
 			}
 			if !IsAlphanumeric(r) {
 				return Success(input.StringTo(current), current)
@@ -130,7 +121,7 @@ func Alphanumeric0() Parser[string] {
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alphanumeric1() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, "Alphanumeric1"), input)
 		}
@@ -147,10 +138,7 @@ func Alphanumeric1() Parser[string] {
 		for !current.AtEnd() { // loop over runes of the input
 			r, size = utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Alphanumeric1: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Alphanumeric1: UTF-8 error"), input)
 			}
 			if !IsAlphanumeric(r) {
 				return Success(input.StringTo(current), current)
@@ -166,15 +154,12 @@ func Alphanumeric1() Parser[string] {
 // In the cases where the input is empty, or no digit character is found, the parser
 // returns the input as is.
 func Digit0() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		current := input
 		for !current.AtEnd() { // loop over runes of the input
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Digit0: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Digit0: UTF-8 error"), input)
 			}
 			if !IsDigit(r) {
 				return Success(input.StringTo(current), current)
@@ -190,7 +175,7 @@ func Digit0() Parser[string] {
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Digit1() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, "Digit1"), input)
 		}
@@ -207,10 +192,7 @@ func Digit1() Parser[string] {
 		for !current.AtEnd() { // loop over runes of the input
 			r, size = utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Digit1: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Digit1: UTF-8 error"), input)
 			}
 			if !IsDigit(r) {
 				return Success(input.StringTo(current), current)
@@ -226,15 +208,12 @@ func Digit1() Parser[string] {
 // In the cases where the input is empty, or no terminating character is found, the parser
 // returns the input as is.
 func HexDigit0() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		current := input
 		for !current.AtEnd() { // loop over runes of the input
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Digit0: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Digit0: UTF-8 error"), input)
 			}
 			if !IsHexDigit(r) {
 				return Success(input.StringTo(current), current)
@@ -250,7 +229,7 @@ func HexDigit0() Parser[string] {
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func HexDigit1() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, "HexDigit1"), input)
 		}
@@ -267,10 +246,7 @@ func HexDigit1() Parser[string] {
 		for !current.AtEnd() { // loop over runes of the input
 			r, size = utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "HexDigit1: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "HexDigit1: UTF-8 error"), input)
 			}
 			if !IsHexDigit(r) {
 				return Success(input.StringTo(current), current)
@@ -286,15 +262,12 @@ func HexDigit1() Parser[string] {
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Whitespace0() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		current := input
 		for !current.AtEnd() { // loop over runes of the input
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Whitespace0: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Whitespace0: UTF-8 error"), input)
 			}
 			if !unicode.IsSpace(r) {
 				return Success(input.StringTo(current), current)
@@ -310,7 +283,7 @@ func Whitespace0() Parser[string] {
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Whitespace1() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, "Whitespace1"), input)
 		}
@@ -327,10 +300,7 @@ func Whitespace1() Parser[string] {
 		for !current.AtEnd() { // loop over runes of the input
 			r, size = utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
-				if input.Text {
-					return Failure[string](NewError(current, "Whitespace1: UTF-8 error"), input)
-				}
-				return Success(input.StringTo(current), current)
+				return Failure[string](NewError(current, "Whitespace1: UTF-8 error"), input)
 			}
 			if !unicode.IsSpace(r) {
 				return Success(input.StringTo(current), current)
@@ -344,7 +314,7 @@ func Whitespace1() Parser[string] {
 
 // LF parses a line feed `\n` character.
 func LF() Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() || input.CurrentBytes()[0] != '\n' {
 			return Failure[rune](NewError(input, "LF"), input)
 		}
@@ -355,7 +325,7 @@ func LF() Parser[rune] {
 
 // CR parses a carriage return `\r` character.
 func CR() Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() || input.CurrentBytes()[0] != '\r' {
 			return Failure[rune](NewError(input, "CR"), input)
 		}
@@ -366,7 +336,7 @@ func CR() Parser[rune] {
 
 // CRLF parses the string `\r\n`.
 func CRLF() Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		bytes := input.CurrentBytes()
 		if len(bytes) < 2 || (bytes[0] != '\r' || bytes[1] != '\n') {
 			return Failure[string](NewError(input, "CRLF"), input)
@@ -378,7 +348,7 @@ func CRLF() Parser[string] {
 
 // OneOf parses a single character from the given set of characters.
 func OneOf(collection ...rune) Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() {
 			return Failure[rune](NewError(input, "OneOf"), input)
 		}
@@ -399,7 +369,7 @@ func OneOf(collection ...rune) Parser[rune] {
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
 func Satisfy(predicate func(rune) bool) Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() {
 			return Failure[rune](NewError(input, "Satisfy"), input)
 		}
@@ -419,7 +389,7 @@ func Satisfy(predicate func(rune) bool) Parser[rune] {
 
 // Space parses an ASCII space character (' ').
 func Space() Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() || input.CurrentBytes()[0] != ' ' {
 			return Failure[rune](NewError(input, "Space"), input)
 		}
@@ -430,7 +400,7 @@ func Space() Parser[rune] {
 
 // Tab parses an ASCII tab character ('\t').
 func Tab() Parser[rune] {
-	return func(input Input) Result[rune] {
+	return func(input State) Result[rune] {
 		if input.AtEnd() || input.CurrentBytes()[0] != '\t' {
 			return Failure[rune](NewError(input, "Tab"), input)
 		}
@@ -441,7 +411,7 @@ func Tab() Parser[rune] {
 
 // Int64 parses an integer from the input, and returns it plus the remaining input.
 func Int64() Parser[int64] {
-	return func(input Input) Result[int64] {
+	return func(input State) Result[int64] {
 		parser := Sequence(Recognize(Optional(OneOf('-', '+'))), Recognize(Digit1()))
 
 		result := parser(input)
@@ -461,7 +431,7 @@ func Int64() Parser[int64] {
 // Int8 parses an 8-bit integer from the input,
 // and returns the part of the input that matched the integer.
 func Int8() Parser[int8] {
-	return func(input Input) Result[int8] {
+	return func(input State) Result[int8] {
 		parser := Sequence(Recognize(Optional(OneOf('-', '+'))), Recognize(Digit1()))
 
 		result := parser(input)
@@ -481,7 +451,7 @@ func Int8() Parser[int8] {
 // UInt8 parses an 8-bit integer from the input,
 // and returns the part of the input that matched the integer.
 func UInt8() Parser[uint8] {
-	return func(input Input) Result[uint8] {
+	return func(input State) Result[uint8] {
 		parser := Sequence(Recognize(Optional(Char('+'))), Recognize(Digit1()))
 
 		result := parser(input)
@@ -502,7 +472,7 @@ func UInt8() Parser[uint8] {
 // matched the token.
 // If the token could not be found, the parser returns an error result.
 func Token(token string) Parser[string] {
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if !strings.HasPrefix(input.CurrentString(), token) {
 			return Failure[string](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
 		}

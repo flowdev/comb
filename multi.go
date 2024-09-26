@@ -5,13 +5,16 @@ package gomme
 // If the provided parser cannot be successfully applied `count` times, the operation
 // fails and the Result will contain an error.
 func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
-	return func(input Input) Result[[]Output] {
-		if input.AtEnd() || count == 0 {
+	return func(input State) Result[[]Output] {
+		if count == 0 { // finding nothing is easy
+			return Success([]Output{}, input)
+		}
+		if input.AtEnd() {
 			return Failure[[]Output](NewError(input, "Count"), input)
 		}
 
-		outputs := make([]Output, 0, int(count))
 		remaining := input
+		outputs := make([]Output, 0, int(count))
 		for i := uint(0); i < count; i++ {
 			result := parse(remaining)
 			if result.Err != nil {
@@ -26,6 +29,38 @@ func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
 	}
 }
 
+// ManyMN applies a parser repeatedly until it fails, and returns a slice of all
+// the results as the Result's Output.
+//
+// Note that ManyMN fail if the provided parser accepts empty inputs (such as
+// `Digit0`, or `Alpha0`) in order to prevent infinite loops.
+func ManyMN[Output any](parse Parser[Output], atLeast, atMost uint) Parser[[]Output] {
+	return func(input State) Result[[]Output] {
+		outputs := []Output{}
+
+		remaining := input
+		count := uint(0)
+		for {
+			res := parse(remaining)
+			if res.Err != nil {
+				if count < atLeast {
+					return Failure[[]Output](res.Err, input)
+				}
+				return Success(outputs, remaining)
+			}
+
+			// Checking for infinite loops, if nothing was consumed,
+			// the provided parser would make us go around in circles.
+			if !res.Remaining.Moved(remaining) {
+				return Failure[[]Output](NewError(input, "Many0"), input)
+			}
+
+			outputs = append(outputs, res.Output)
+			remaining = res.Remaining
+		}
+	}
+}
+
 // Many0 applies a parser repeatedly until it fails, and returns a slice of all
 // the results as the Result's Output.
 //
@@ -33,7 +68,7 @@ func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
 // however fail if the provided parser accepts empty inputs (such as `Digit0`, or
 // `Alpha0`) in order to prevent infinite loops.
 func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
-	return func(input Input) Result[[]Output] {
+	return func(input State) Result[[]Output] {
 		results := []Output{}
 
 		remaining := input
@@ -45,7 +80,7 @@ func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
-			if res.Remaining.Pos == remaining.Pos {
+			if !res.Remaining.Moved(remaining) {
 				return Failure[[]Output](NewError(input, "Many0"), input)
 			}
 
@@ -62,7 +97,7 @@ func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
 // Note that Many1 will fail if the provided parser accepts empty
 // inputs (such as `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
-	return func(input Input) Result[[]Output] {
+	return func(input State) Result[[]Output] {
 		first := parse(input)
 		if first.Err != nil {
 			return Failure[[]Output](first.Err, input)
@@ -70,7 +105,7 @@ func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
 
 		// Checking for infinite loops, if nothing was consumed,
 		// the provided parser would make us go around in circles.
-		if first.Remaining.Pos == input.Pos {
+		if !first.Remaining.Moved(input) {
 			return Failure[[]Output](NewError(input, "Many1"), input)
 		}
 
@@ -85,7 +120,7 @@ func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
-			if res.Remaining.Pos == remaining.Pos {
+			if !res.Remaining.Moved(remaining) {
 				return Failure[[]Output](NewError(remaining, "Many1"), input)
 			}
 
@@ -111,51 +146,51 @@ func SeparatedList0[Output any, S Separator](
 	separator Parser[S],
 	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
-	return func(input Input) Result[[]Output] {
-		results := []Output{}
+	return func(input State) Result[[]Output] {
+		outputs := []Output{}
 
 		res := parse(input)
 		if res.Err != nil {
-			return Success(results, input)
+			return Success(outputs, input)
 		}
 
 		// Checking for infinite loops, if nothing was consumed,
 		// the provided parser would make us go around in circles.
-		if res.Remaining.Pos == input.Pos {
+		if !res.Remaining.Moved(input) {
 			return Failure[[]Output](NewError(input, "SeparatedList0"), input)
 		}
 
-		results = append(results, res.Output)
+		outputs = append(outputs, res.Output)
 		remaining := res.Remaining
 
 		for {
 			separatorResult := separator(remaining)
 			if separatorResult.Err != nil {
-				return Success(results, remaining)
+				return Success(outputs, remaining)
 			}
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
-			if separatorResult.Remaining.Pos == remaining.Pos {
+			if !separatorResult.Remaining.Moved(remaining) {
 				return Failure[[]Output](NewError(remaining, "SeparatedList0"), input)
 			}
 
 			parserResult := parse(separatorResult.Remaining)
 			if parserResult.Err != nil {
 				if parseSeparatorAtEnd {
-					return Success(results, separatorResult.Remaining)
+					return Success(outputs, separatorResult.Remaining)
 				} else {
-					return Success(results, remaining)
+					return Success(outputs, remaining)
 				}
 			}
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
-			if parserResult.Remaining.Pos == separatorResult.Remaining.Pos {
+			if !parserResult.Remaining.Moved(separatorResult.Remaining) {
 				return Failure[[]Output](NewError(separatorResult.Remaining, "SeparatedList0"), input)
 			}
 
-			results = append(results, parserResult.Output)
+			outputs = append(outputs, parserResult.Output)
 			remaining = parserResult.Remaining
 		}
 	}
@@ -174,7 +209,7 @@ func SeparatedList1[Output any, S Separator](
 	separator Parser[S],
 	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
-	return func(input Input) Result[[]Output] {
+	return func(input State) Result[[]Output] {
 		res := parse(input)
 		if res.Err != nil {
 			return Failure[[]Output](res.Err, input)
@@ -182,41 +217,41 @@ func SeparatedList1[Output any, S Separator](
 
 		// Checking for infinite loops, if nothing was consumed,
 		// the provided parser would make us go around in circles.
-		if res.Remaining.Pos == input.Pos {
+		if !res.Remaining.Moved(input) {
 			return Failure[[]Output](NewError(input, "SeparatedList1"), input)
 		}
 
-		results := []Output{res.Output}
+		outputs := []Output{res.Output}
 		remaining := res.Remaining
 
 		for {
 			separatorResult := separator(remaining)
 			if separatorResult.Err != nil {
-				return Success(results, remaining)
+				return Success(outputs, remaining)
 			}
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
-			if separatorResult.Remaining.Pos == remaining.Pos {
+			if !separatorResult.Remaining.Moved(remaining) {
 				return Failure[[]Output](NewError(remaining, "SeparatedList1"), input)
 			}
 
 			parserResult := parse(separatorResult.Remaining)
 			if parserResult.Err != nil {
 				if parseSeparatorAtEnd {
-					return Success(results, separatorResult.Remaining)
+					return Success(outputs, separatorResult.Remaining)
 				} else {
-					return Success(results, remaining)
+					return Success(outputs, remaining)
 				}
 			}
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
-			if parserResult.Remaining.Pos == separatorResult.Remaining.Pos {
+			if !parserResult.Remaining.Moved(separatorResult.Remaining) {
 				return Failure[[]Output](NewError(separatorResult.Remaining, "SeparatedList1"), input)
 			}
 
-			results = append(results, parserResult.Output)
+			outputs = append(outputs, parserResult.Output)
 			remaining = parserResult.Remaining
 		}
 	}

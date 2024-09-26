@@ -39,7 +39,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
 func HexColorComponent() gomme.Parser[uint8] {
-	return func(input gomme.Input) gomme.Result[uint8] {
+	return func(input gomme.State) gomme.Result[uint8] {
 		return gomme.Map1(
 			gomme.TakeWhileMN(2, 2, gomme.IsHexDigit),
 			fromHex,

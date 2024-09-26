@@ -1,6 +1,6 @@
 module github.com/oleiade/gomme
 
-go 1.18
+go 1.21
 
 require github.com/stretchr/testify v1.7.1
 

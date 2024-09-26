@@ -48,13 +48,13 @@ type (
 )
 
 // parseJSON is a convenience function to start parsing JSON from the given input string.
-func parseJSON(input gomme.Input) gomme.Result[JSONValue] {
+func parseJSON(input gomme.State) gomme.Result[JSONValue] {
 	return parseValue(input)
 }
 
 // parseValue is a parser that attempts to parse different types of
 // JSON values (object, array, string, etc.).
-func parseValue(input gomme.Input) gomme.Result[JSONValue] {
+func parseValue(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Alternative(
 		parseObject,
 		parseArray,
@@ -68,7 +68,7 @@ func parseValue(input gomme.Input) gomme.Result[JSONValue] {
 
 // parseObject parses a JSON object, which starts and ends with
 // curly braces and contains key-value pairs.
-func parseObject(input gomme.Input) gomme.Result[JSONValue] {
+func parseObject(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Delimited[rune, map[string]JSONValue, rune](
 			gomme.Char('{'),
@@ -94,7 +94,7 @@ var _ gomme.Parser[JSONValue] = parseObject
 
 // parseArray parses a JSON array, which starts and ends with
 // square brackets and contains a list of values.
-func parseArray(input gomme.Input) gomme.Result[JSONValue] {
+func parseArray(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Delimited[rune, []JSONValue, rune](
 			gomme.Char('['),
@@ -113,7 +113,7 @@ func parseArray(input gomme.Input) gomme.Result[JSONValue] {
 // Ensure parseArray is a Parser[string, JSONValue]
 var _ gomme.Parser[JSONValue] = parseArray
 
-func parseElement(input gomme.Input) gomme.Result[JSONValue] {
+func parseElement(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Delimited[string, JSONValue, string](ws(), parseValue, ws()),
 		func(v JSONValue) (JSONValue, error) { return v, nil },
@@ -124,7 +124,7 @@ func parseElement(input gomme.Input) gomme.Result[JSONValue] {
 var _ gomme.Parser[JSONValue] = parseElement
 
 // parseNumber parses a JSON number.
-func parseNumber(input gomme.Input) gomme.Result[JSONValue] {
+func parseNumber(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1[[]string, JSONValue](
 		gomme.Sequence(
 			gomme.Map1(integer(), func(i int) (string, error) { return strconv.Itoa(i), nil }),
@@ -169,7 +169,7 @@ func parseNumber(input gomme.Input) gomme.Result[JSONValue] {
 var _ gomme.Parser[JSONValue] = parseNumber
 
 // parseString parses a JSON string.
-func parseString(input gomme.Input) gomme.Result[JSONValue] {
+func parseString(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		stringParser(),
 		func(s string) (JSONValue, error) {
@@ -182,7 +182,7 @@ func parseString(input gomme.Input) gomme.Result[JSONValue] {
 var _ gomme.Parser[JSONValue] = parseString
 
 // parseFalse parses the JSON boolean value 'false'.
-func parseFalse(input gomme.Input) gomme.Result[JSONValue] {
+func parseFalse(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Token("false"),
 		func(_ string) (JSONValue, error) { return JSONBool(false), nil },
@@ -193,7 +193,7 @@ func parseFalse(input gomme.Input) gomme.Result[JSONValue] {
 var _ gomme.Parser[JSONValue] = parseFalse
 
 // parseTrue parses the JSON boolean value 'true'.
-func parseTrue(input gomme.Input) gomme.Result[JSONValue] {
+func parseTrue(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Token("true"),
 		func(_ string) (JSONValue, error) { return JSONBool(true), nil },
@@ -204,7 +204,7 @@ func parseTrue(input gomme.Input) gomme.Result[JSONValue] {
 var _ gomme.Parser[JSONValue] = parseTrue
 
 // parseNull parses the JSON 'null' value.
-func parseNull(input gomme.Input) gomme.Result[JSONValue] {
+func parseNull(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
 		gomme.Token("null"),
 		func(_ string) (JSONValue, error) { return nil, nil },
@@ -215,7 +215,7 @@ func parseNull(input gomme.Input) gomme.Result[JSONValue] {
 var _ gomme.Parser[JSONValue] = parseNull
 
 // parseElements parses the elements of a JSON array.
-func parseElements(input gomme.Input) gomme.Result[[]JSONValue] {
+func parseElements(input gomme.State) gomme.Result[[]JSONValue] {
 	return gomme.Map1(
 		gomme.SeparatedList0[JSONValue, string](
 			parseElement,
@@ -232,7 +232,7 @@ func parseElements(input gomme.Input) gomme.Result[[]JSONValue] {
 var _ gomme.Parser[[]JSONValue] = parseElements
 
 // parseElement parses a single element of a JSON array.
-func parseMembers(input gomme.Input) gomme.Result[map[string]JSONValue] {
+func parseMembers(input gomme.State) gomme.Result[map[string]JSONValue] {
 	return gomme.Map1(
 		gomme.SeparatedList0[kv, string](
 			parseMember,
@@ -253,7 +253,7 @@ func parseMembers(input gomme.Input) gomme.Result[map[string]JSONValue] {
 var _ gomme.Parser[map[string]JSONValue] = parseMembers
 
 // parseMember parses a single member (key-value pair) of a JSON object.
-func parseMember(input gomme.Input) gomme.Result[kv] {
+func parseMember(input gomme.State) gomme.Result[kv] {
 	return member()(input)
 }
 

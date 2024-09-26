@@ -303,7 +303,7 @@ func TakeWhileOneOf(collection ...rune) Parser[string] {
 
 	expected := fmt.Sprintf("chars(%v)", string(collection))
 
-	return func(input Input) Result[string] {
+	return func(input State) Result[string] {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, expected), input)
 		}
