@@ -9,7 +9,7 @@ package gomme
 // N.B: it is not the parser's role to make sure the floating point
 // number you're attempting to parse fits into a 64 bits float.
 
-// func Float[I Bytes]() Parser[I, float64] {
+// func Float[I bytes]() Parser[I, float64] {
 // 	digitsParser := TakeWhileOneOf[I]([]rune("0123456789")...)
 // 	minusParser := Char[I]('-')
 // 	dotParser := Char[I]('.')
