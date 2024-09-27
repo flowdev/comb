@@ -14,8 +14,8 @@ import (
 var testJSON string
 
 func main() {
-	result := parseJSON(gomme.NewInputFromString(testJSON))
-	if result.Err != nil {
+	newState, output := parseJSON(gomme.NewInputFromString(testJSON))
+	if newState.Failed() {
 		log.Fatal(result.Err)
 		return
 	}
@@ -184,7 +184,7 @@ var _ gomme.Parser[JSONValue] = parseString
 // parseFalse parses the JSON boolean value 'false'.
 func parseFalse(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
-		gomme.Token("false"),
+		gomme.String("false"),
 		func(_ string) (JSONValue, error) { return JSONBool(false), nil },
 	)(input)
 }
@@ -195,7 +195,7 @@ var _ gomme.Parser[JSONValue] = parseFalse
 // parseTrue parses the JSON boolean value 'true'.
 func parseTrue(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
-		gomme.Token("true"),
+		gomme.String("true"),
 		func(_ string) (JSONValue, error) { return JSONBool(true), nil },
 	)(input)
 }
@@ -206,7 +206,7 @@ var _ gomme.Parser[JSONValue] = parseTrue
 // parseNull parses the JSON 'null' value.
 func parseNull(input gomme.State) gomme.Result[JSONValue] {
 	return gomme.Map1(
-		gomme.Token("null"),
+		gomme.String("null"),
 		func(_ string) (JSONValue, error) { return nil, nil },
 	)(input)
 }
@@ -219,7 +219,7 @@ func parseElements(input gomme.State) gomme.Result[[]JSONValue] {
 	return gomme.Map1(
 		gomme.SeparatedList0[JSONValue, string](
 			parseElement,
-			gomme.Token(","),
+			gomme.String(","),
 			false,
 		),
 		func(elems []JSONValue) ([]JSONValue, error) {
@@ -236,7 +236,7 @@ func parseMembers(input gomme.State) gomme.Result[map[string]JSONValue] {
 	return gomme.Map1(
 		gomme.SeparatedList0[kv, string](
 			parseMember,
-			gomme.Token(","),
+			gomme.String(","),
 			false,
 		),
 		func(kvs []kv) (map[string]JSONValue, error) {
@@ -272,7 +272,7 @@ func member() gomme.Parser[kv] {
 	return gomme.Map2(
 		gomme.Delimited(ws(), stringParser(), ws()),
 		gomme.Preceded(
-			gomme.Token(":"),
+			gomme.String(":"),
 			element()),
 		mapFunc,
 	)
@@ -311,7 +311,7 @@ func integer() gomme.Parser[int] {
 	return gomme.Alternative(
 		// "-" onenine digits
 		gomme.Preceded(
-			gomme.Token("-"),
+			gomme.String("-"),
 			gomme.Map2(
 				onenine(), digits(),
 				func(first string, rest string) (int, error) {
@@ -330,7 +330,7 @@ func integer() gomme.Parser[int] {
 
 		// "-" digit
 		gomme.Preceded(
-			gomme.Token("-"),
+			gomme.String("-"),
 			gomme.Map1(
 				digit(),
 				strconv.Atoi,
@@ -356,7 +356,7 @@ func digits() gomme.Parser[string] {
 // It distinguishes between '0' and non-zero digits.
 func digit() gomme.Parser[string] {
 	return gomme.Alternative(
-		gomme.Token("0"),
+		gomme.String("0"),
 		onenine(),
 	)
 }
@@ -364,15 +364,15 @@ func digit() gomme.Parser[string] {
 // onenine creates a parser for digits from 1 to 9.
 func onenine() gomme.Parser[string] {
 	return gomme.Alternative(
-		gomme.Token("1"),
-		gomme.Token("2"),
-		gomme.Token("3"),
-		gomme.Token("4"),
-		gomme.Token("5"),
-		gomme.Token("6"),
-		gomme.Token("7"),
-		gomme.Token("8"),
-		gomme.Token("9"),
+		gomme.String("1"),
+		gomme.String("2"),
+		gomme.String("3"),
+		gomme.String("4"),
+		gomme.String("5"),
+		gomme.String("6"),
+		gomme.String("7"),
+		gomme.String("8"),
+		gomme.String("9"),
 	)
 }
 
@@ -381,7 +381,7 @@ func onenine() gomme.Parser[string] {
 // It expects a dot followed by at least one digit.
 func fraction() gomme.Parser[string] {
 	return gomme.Preceded(
-		gomme.Token("."),
+		gomme.String("."),
 		gomme.Digit1(),
 	)
 }
@@ -391,7 +391,7 @@ func fraction() gomme.Parser[string] {
 // It handles the exponent sign and the exponent digits.
 func exponent() gomme.Parser[string] {
 	return gomme.Preceded(
-		gomme.Token("e"),
+		gomme.String("e"),
 		gomme.Map2(
 			sign(), digits(),
 			func(sign string, digits string) (string, error) {
@@ -407,8 +407,8 @@ func exponent() gomme.Parser[string] {
 func sign() gomme.Parser[string] {
 	return gomme.Optional(
 		gomme.Alternative(
-			gomme.Token("-"),
-			gomme.Token("+"),
+			gomme.String("-"),
+			gomme.String("+"),
 		),
 	)
 }

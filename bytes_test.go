@@ -202,7 +202,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing input with enough characters and partially matching predicated should succeed",
 			input: "latin123",
 			args: args{
-				p: TakeWhileMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -212,7 +212,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and atMost should succeed",
 			input: "lengthy",
 			args: args{
-				p: TakeWhileMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "length",
@@ -222,7 +222,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and shorter than atMost should succeed",
 			input: "latin",
 			args: args{
-				p: TakeWhileMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -232,7 +232,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing empty input should fail",
 			input: "",
 			args: args{
-				p: TakeWhileMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -242,7 +242,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing too short input should fail",
 			input: "ed",
 			args: args{
-				p: TakeWhileMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -252,7 +252,7 @@ func TestTakeWhileMN(t *testing.T) {
 			name:  "parsing with non-matching predicate should fail",
 			input: "12345",
 			args: args{
-				p: TakeWhileMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN(3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -283,7 +283,7 @@ func TestTakeWhileMN(t *testing.T) {
 }
 
 func BenchmarkTakeWhileMN(b *testing.B) {
-	p := TakeWhileMN(3, 6, IsDigit)
+	p := SatisfyMN(3, 6, IsDigit)
 	input := NewInputFromString("13579")
 
 	b.ResetTimer()
@@ -303,7 +303,7 @@ func TakeWhileOneOf(collection ...rune) Parser[string] {
 
 	expected := fmt.Sprintf("chars(%v)", string(collection))
 
-	return func(input State) Result[string] {
+	return func(input State) (State, string) {
 		if input.AtEnd() {
 			return Failure[string](NewError(input, expected), input)
 		}

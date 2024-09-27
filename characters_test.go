@@ -2053,7 +2053,7 @@ func TestToken(t *testing.T) {
 	}{
 		{
 			name:          "parsing a token from an input starting with it should succeed",
-			parser:        Token("Bonjour"),
+			parser:        String("Bonjour"),
 			input:         "Bonjour tout le monde",
 			wantErr:       false,
 			wantOutput:    "Bonjour",
@@ -2061,7 +2061,7 @@ func TestToken(t *testing.T) {
 		},
 		{
 			name:          "parsing a token from a non-matching input should fail",
-			parser:        Token("Bonjour"),
+			parser:        String("Bonjour"),
 			input:         "Hello tout le monde",
 			wantErr:       true,
 			wantOutput:    "",
@@ -2069,7 +2069,7 @@ func TestToken(t *testing.T) {
 		},
 		{
 			name:          "parsing a token from an empty input should fail",
-			parser:        Token("Bonjour"),
+			parser:        String("Bonjour"),
 			input:         "",
 			wantErr:       true,
 			wantOutput:    "",
@@ -2100,7 +2100,7 @@ func TestToken(t *testing.T) {
 }
 
 func BenchmarkToken(b *testing.B) {
-	parser := Token("Bonjour")
+	parser := String("Bonjour")
 	input := NewInputFromString("Bonjour tout le monde")
 
 	b.ResetTimer()

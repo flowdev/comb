@@ -18,13 +18,13 @@ package gomme
 // 		var negative bool
 
 // 		minusresult := minusParser(input)
-// 		if result.Err == nil {
+// 		if !result.Failed() {
 // 			negative = true
 // 		}
 
 // 		result = digitsParser(result.Remaining)
 // 		// result = Expect(digitsParser, "digits")(result.Remaining)
-// 		// if result.Err != nil {
+// 		// if result.Failed() {
 // 		// 	return result
 // 		// }
 

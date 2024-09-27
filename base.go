@@ -12,7 +12,7 @@ type Separator interface {
 }
 
 // Parser defines the type of a generic Parser function
-type Parser[Output any] func(input State) Result[Output]
+type Parser[Output any] func(input State) (State, Output)
 
 // Input is the input data for all the parsers.
 // It can be either UTF-8 encoded text (a.k.a. string) or raw bytes.
@@ -32,13 +32,17 @@ type Message struct {
 	Pos  uint
 }
 
+func ZeroOf[T any]() T {
+	var t T
+	return t
+}
+
 // State represents the current state of a parser.
-// It consists of the Input, the PointOfNoReturn mark,
-// a Failed signal and a collection of error messages.
+// It consists of the Input, the pointOfNoReturn mark
+// and a collection of error messages.
 type State struct {
 	input           Input
-	PointOfNoReturn uint // mark set by the NoWayBack parser
-	Failed          bool
+	pointOfNoReturn uint // mark set by the NoWayBack parser
 	Messages        []Message
 }
 
@@ -96,14 +100,36 @@ func (st State) Moved(other State) bool {
 }
 
 func (st State) ReachedPointOfNoReturn() State {
-	st.PointOfNoReturn = st.input.pos
+	st.pointOfNoReturn = st.input.pos
 	return st
 }
 
-// KeepMessages returns a state with all messages from the other state appended to this state.
-func (st State) KeepMessages(other State) State {
-	st.Messages = append(st.Messages, other.Messages...)
+func (st State) NoWayBack() bool {
+	return st.pointOfNoReturn >= st.input.pos
+}
 
+//func (st State) PointOfNoReturn() uint {
+//	return st.pointOfNoReturn
+//}
+
+func (st State) Clean() State {
+	st.Messages = make([]Message, 0, 16)
+	return st
+}
+
+// Success return the State advanced to the position of
+// the subState.
+func (st State) Success(subState State) State {
+	st.input.pos = subState.input.pos
+	return st
+}
+
+// Failure return the State with errors kept from
+// the subState.
+func (st State) Failure(subState State) State {
+	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
+
+	st.Messages = append(st.Messages, subState.Messages...)
 	slices.SortFunc(st.Messages, func(a, b Message) int { // always keep them sorted
 		return cmp.Compare(a.Pos, b.Pos)
 	})
@@ -111,67 +137,37 @@ func (st State) KeepMessages(other State) State {
 	return st
 }
 
-// Better returns the more advanced (in the input) state of the two.
-// This should be used for parsers that are alternatives. So the best error is kept.
-func (st State) Better(other State) State {
-	if st.input.pos < other.input.pos {
-		return other
-	}
-	return st
+// Failed returns whether this state is in a failed state or not.
+func (st State) Failed() bool {
+	return len(st.Messages) > 0
 }
 
-func (st State) Clean() State {
-	st.Messages = make([]Message, 0, 16)
-	return st
-}
-
-// Result is a generic parser result.
-type Result[Output any] struct {
-	Output    Output
-	Err       *Error
-	Remaining State
-}
-
-// Success creates a Result with an output set from
-// the result of successful parsing.
-func Success[Output any](output Output, r State) Result[Output] {
-	return Result[Output]{Output: output, Remaining: r}
-}
-
-// Failure creates a Result with an error set from
-// the result of failed parsing.
-func Failure[Output any](err *Error, input State) Result[Output] {
-	var output Output
-	return Result[Output]{Output: output, Err: err, Remaining: input}
-}
-
-// Error represents a parsing error. It holds the input that was being parsed,
-// the error that was produced, whether this is a fatal error or there is no way back
-// plus what was expected to match.
-// If the error is fatal, we have to stop parsing of the file completely.
-// If there is no way back we might be able to continue parsing AFTER the error position.
-type Error struct {
-	Input State
-}
-
-// NewError produces a new Error from the provided input and names of
-// parsers expected to succeed.
-func NewError(st State, messages ...string) *Error {
+// AddError adds the messages to this state at the current position.
+func (st State) AddError(messages ...string) State {
 	ms := make([]Message, len(messages))
 	for i, msg := range messages {
 		ms[i] = Message{Text: msg, Pos: st.input.pos}
 	}
-	st.Messages = append(st.Messages, ms...)
-	return &Error{Input: st}
+
+	return st.Failure(State{Messages: ms})
 }
 
 // Error returns a human readable error string.
-func (e *Error) Error() string {
+func (st State) Error() string {
 	fullMsg := strings.Builder{}
-	for _, message := range e.Input.Messages {
+	for _, message := range st.Messages {
 		fullMsg.WriteString(message.Text)
-		fullMsg.WriteByte('\n')
+		fullMsg.WriteRune('\n')
 	}
 
 	return fullMsg.String()
+}
+
+// BetterOf returns the more advanced (in the input) state of the two.
+// This should be used for parsers that are alternatives. So the best error is kept.
+func BetterOf(state, other State) State {
+	if state.input.pos < other.input.pos {
+		return other
+	}
+	return state
 }

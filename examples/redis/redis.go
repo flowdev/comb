@@ -37,12 +37,12 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		Array(),
 	)
 
-	result := parser(gomme.NewInputFromString(input))
-	if result.Err != nil {
+	newState, output := parser(gomme.NewInputFromString(input))
+	if newState.Failed() {
 		return RESPMessage{}, result.Err
 	}
 
-	return result.Output, nil
+	return output, nil
 }
 
 // ErrMessageTooShort is returned when a message is too short to be valid.
@@ -126,7 +126,7 @@ func SimpleString() gomme.Parser[RESPMessage] {
 	}
 
 	return gomme.Preceded(
-		gomme.Token(string(SimpleStringKind)),
+		gomme.String(string(SimpleStringKind)),
 		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
 	)
 }
@@ -163,7 +163,7 @@ func Error() gomme.Parser[RESPMessage] {
 	}
 
 	return gomme.Preceded(
-		gomme.Token(string((ErrorKind))),
+		gomme.String(string((ErrorKind))),
 		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
 	)
 }
@@ -199,7 +199,7 @@ func Integer() gomme.Parser[RESPMessage] {
 	}
 
 	return gomme.Preceded(
-		gomme.Token(string(IntegerKind)),
+		gomme.String(string(IntegerKind)),
 		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
 	)
 }
@@ -252,7 +252,7 @@ func BulkString() gomme.Parser[RESPMessage] {
 	}
 
 	return gomme.Map2(
-		sizePrefix(gomme.Token(string(BulkStringKind))),
+		sizePrefix(gomme.String(string(BulkStringKind))),
 		gomme.Optional(
 			gomme.TakeUntil(gomme.CRLF()),
 		),
@@ -302,7 +302,7 @@ func Array() gomme.Parser[RESPMessage] {
 	}
 
 	return gomme.Map2(
-		sizePrefix(gomme.Token(string(ArrayKind))),
+		sizePrefix(gomme.String(string(ArrayKind))),
 		gomme.Many0(
 			gomme.Alternative(
 				SimpleString(),

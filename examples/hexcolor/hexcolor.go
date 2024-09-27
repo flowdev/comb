@@ -19,7 +19,7 @@ type RGBColor struct {
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
 	parser := gomme.Preceded(
-		gomme.Token("#"),
+		gomme.String("#"),
 		gomme.Map1(
 			gomme.Count(HexColorComponent(), 3),
 			func(components []uint8) (RGBColor, error) {
@@ -28,12 +28,12 @@ func ParseRGBColor(input string) (RGBColor, error) {
 		),
 	)
 
-	result := parser(gomme.NewInputFromString(input))
-	if result.Err != nil {
+	newState, output := parser(gomme.NewInputFromString(input))
+	if newState.Failed() {
 		return RGBColor{}, result.Err
 	}
 
-	return result.Output, nil
+	return output, nil
 }
 
 // HexColorComponent produces a parser that parses a single hex color component,
@@ -41,7 +41,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 func HexColorComponent() gomme.Parser[uint8] {
 	return func(input gomme.State) gomme.Result[uint8] {
 		return gomme.Map1(
-			gomme.TakeWhileMN(2, 2, gomme.IsHexDigit),
+			gomme.SatisfyMN(2, 2, gomme.IsHexDigit),
 			fromHex,
 		)(input)
 	}

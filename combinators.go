@@ -7,14 +7,13 @@ package gomme
 
 // NoWayBack applies a child parser and marks a successful result with NoWayBack.
 func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
-	return func(state State) Result[Output] {
-		result := parse(state)
-		if result.Err != nil {
-			return result
+	return func(state State) (State, Output) {
+		newState, output := parse(state)
+		if newState.Failed() {
+			return newState, output
 		}
 
-		result.Remaining = result.Remaining.ReachedPointOfNoReturn()
-		return result
+		return newState.ReachedPointOfNoReturn(), output
 	}
 }
 
@@ -23,49 +22,54 @@ func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
 //
 // N.B: Optional will ignore any parsing failures and errors.
 func Optional[Output any](parse Parser[Output]) Parser[Output] {
-	return func(input State) Result[Output] {
-		result := parse(input)
-		result.Err = nil // ignore errors
-		return result
+	return func(input State) (State, Output) {
+		newState, output := parse(input)
+		if newState.NoWayBack() {
+			return newState, output
+		}
+		if newState.Failed() {
+			return input, ZeroOf[Output]()
+		}
+		return newState, output
 	}
 }
 
 // Peek tries to apply the provided parser without consuming any input.
 // It effectively allows to look ahead in the input.
 func Peek[Output any](parse Parser[Output]) Parser[Output] {
-	return func(input State) Result[Output] {
-		result := parse(input)
-		if result.Err != nil {
-			return Failure[Output](result.Err, input)
+	return func(state State) (State, Output) {
+		newState, output := parse(state)
+		if newState.Failed() {
+			return state.Failure(newState), output
 		}
 
-		return Success(result.Output, input)
+		return state, output
 	}
 }
 
 // Recognize returns the consumed input (instead of the original parsers output)
 // as the produced value when the provided parser succeeds.
 func Recognize[Output any](parse Parser[Output]) Parser[[]byte] {
-	return func(input State) Result[[]byte] {
-		result := parse(input)
-		if result.Err != nil {
-			return Failure[[]byte](result.Err, input)
+	return func(state State) (State, []byte) {
+		newState, _ := parse(state)
+		if newState.Failed() {
+			return newState, []byte{}
 		}
 
-		return Success(input.BytesTo(result.Remaining), result.Remaining)
+		return newState, state.BytesTo(newState)
 	}
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
 func Assign[Output1, Output2 any](value Output1, parse Parser[Output2]) Parser[Output1] {
-	return func(input State) Result[Output1] {
-		result := parse(input)
-		if result.Err != nil {
-			return Failure[Output1](result.Err, input)
+	return func(input State) (State, Output1) {
+		newState, _ := parse(input)
+		if newState.Failed() {
+			return newState, ZeroOf[Output1]()
 		}
 
-		return Success(value, result.Remaining)
+		return newState, value
 	}
 }
 
@@ -73,18 +77,18 @@ func Assign[Output1, Output2 any](value Output1, parse Parser[Output2]) Parser[O
 // Arbitrary complex data structures can be built with Map1 and Map2 alone.
 // The other Map* parsers are provided for convenience.
 func Map1[PO1 any, MO any](parse Parser[PO1], fn func(PO1) (MO, error)) Parser[MO] {
-	return func(input State) Result[MO] {
-		res := parse(input)
-		if res.Err != nil {
-			return Failure[MO](res.Err, input)
+	return func(state State) (State, MO) {
+		newState, output := parse(state)
+		if newState.Failed() {
+			return state.Failure(newState), ZeroOf[MO]()
 		}
 
-		output, err := fn(res.Output)
+		mapped, err := fn(output)
 		if err != nil {
-			return Failure[MO](NewError(input, err.Error()), input)
+			return state.AddError(err.Error()), ZeroOf[MO]()
 		}
 
-		return Success(output, res.Remaining)
+		return newState, mapped
 	}
 }
 
@@ -92,23 +96,23 @@ func Map1[PO1 any, MO any](parse Parser[PO1], fn func(PO1) (MO, error)) Parser[M
 // Arbitrary complex data structures can be built with Map1 and Map2 alone.
 // The other Map* parsers are provided for convenience.
 func Map2[PO1, PO2 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], fn func(PO1, PO2) (MO, error)) Parser[MO] {
-	return func(input State) Result[MO] {
-		res1 := parse1(input)
-		if res1.Err != nil {
-			return Failure[MO](NewError(input, "Map2"), input)
+	return func(state State) (State, MO) {
+		newState1, output1 := parse1(state)
+		if newState1.Failed() {
+			return state.Failure(newState1), ZeroOf[MO]()
 		}
 
-		res2 := parse2(res1.Remaining)
-		if res2.Err != nil {
-			return Failure[MO](NewError(input, "Map2"), input)
+		newState2, output2 := parse2(newState1)
+		if newState2.Failed() {
+			return state.Failure(newState2), ZeroOf[MO]()
 		}
 
-		output, err := fn(res1.Output, res2.Output)
+		mapped, err := fn(output1, output2)
 		if err != nil {
-			return Failure[MO](NewError(input, err.Error()), input)
+			return state.AddError(err.Error()), ZeroOf[MO]()
 		}
 
-		return Success(output, res2.Remaining)
+		return newState2, mapped
 	}
 }
 
@@ -118,28 +122,28 @@ func Map2[PO1, PO2 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], fn func(
 func Map3[PO1, PO2, PO3 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], parse3 Parser[PO3],
 	fn func(PO1, PO2, PO3) (MO, error),
 ) Parser[MO] {
-	return func(input State) Result[MO] {
-		res1 := parse1(input)
-		if res1.Err != nil {
-			return Failure[MO](NewError(input, "Map3"), input)
+	return func(state State) (State, MO) {
+		newState1, output1 := parse1(state)
+		if newState1.Failed() {
+			return state.Failure(newState1), ZeroOf[MO]()
 		}
 
-		res2 := parse2(res1.Remaining)
-		if res2.Err != nil {
-			return Failure[MO](NewError(input, "Map3"), input)
+		newState2, output2 := parse2(newState1)
+		if newState2.Failed() {
+			return state.Failure(newState2), ZeroOf[MO]()
 		}
 
-		res3 := parse3(res2.Remaining)
-		if res3.Err != nil {
-			return Failure[MO](NewError(input, "Map3"), input)
+		newState3, output3 := parse3(newState2)
+		if newState3.Failed() {
+			return state.Failure(newState3), ZeroOf[MO]()
 		}
 
-		output, err := fn(res1.Output, res2.Output, res3.Output)
+		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return Failure[MO](NewError(input, err.Error()), input)
+			return state.AddError(err.Error()), ZeroOf[MO]()
 		}
 
-		return Success(output, res3.Remaining)
+		return newState3, mapped
 	}
 }
 
@@ -149,33 +153,33 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], par
 func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 Parser[PO1], parse2 Parser[PO2], parse3 Parser[PO3], parse4 Parser[PO4],
 	fn func(PO1, PO2, PO3, PO4) (MO, error),
 ) Parser[MO] {
-	return func(input State) Result[MO] {
-		res1 := parse1(input)
-		if res1.Err != nil {
-			return Failure[MO](NewError(input, "Map4"), input)
+	return func(state State) (State, MO) {
+		newState1, output1 := parse1(state)
+		if newState1.Failed() {
+			return state.Failure(newState1), ZeroOf[MO]()
 		}
 
-		res2 := parse2(res1.Remaining)
-		if res2.Err != nil {
-			return Failure[MO](NewError(input, "Map4"), input)
+		newState2, output2 := parse2(newState1)
+		if newState2.Failed() {
+			return state.Failure(newState2), ZeroOf[MO]()
 		}
 
-		res3 := parse3(res2.Remaining)
-		if res3.Err != nil {
-			return Failure[MO](NewError(input, "Map4"), input)
+		newState3, output3 := parse3(newState2)
+		if newState3.Failed() {
+			return state.Failure(newState3), ZeroOf[MO]()
 		}
 
-		res4 := parse4(res3.Remaining)
-		if res4.Err != nil {
-			return Failure[MO](NewError(input, "Map4"), input)
+		newState4, output4 := parse4(newState3)
+		if newState4.Failed() {
+			return state.Failure(newState4), ZeroOf[MO]()
 		}
 
-		output, err := fn(res1.Output, res2.Output, res3.Output, res4.Output)
+		mapped, err := fn(output1, output2, output3, output4)
 		if err != nil {
-			return Failure[MO](NewError(input, err.Error()), input)
+			return state.AddError(err.Error()), ZeroOf[MO]()
 		}
 
-		return Success(output, res4.Remaining)
+		return newState4, mapped
 	}
 }
 
@@ -186,37 +190,37 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	parse1 Parser[PO1], parse2 Parser[PO2], parse3 Parser[PO3], parse4 Parser[PO4], parse5 Parser[PO5],
 	fn func(PO1, PO2, PO3, PO4, PO5) (MO, error),
 ) Parser[MO] {
-	return func(input State) Result[MO] {
-		res1 := parse1(input)
-		if res1.Err != nil {
-			return Failure[MO](NewError(input, "Map5"), input)
+	return func(state State) (State, MO) {
+		newState1, output1 := parse1(state)
+		if newState1.Failed() {
+			return state.Failure(newState1), ZeroOf[MO]()
 		}
 
-		res2 := parse2(res1.Remaining)
-		if res2.Err != nil {
-			return Failure[MO](NewError(input, "Map5"), input)
+		newState2, output2 := parse2(newState1)
+		if newState2.Failed() {
+			return state.Failure(newState2), ZeroOf[MO]()
 		}
 
-		res3 := parse3(res2.Remaining)
-		if res3.Err != nil {
-			return Failure[MO](NewError(input, "Map5"), input)
+		newState3, output3 := parse3(newState2)
+		if newState3.Failed() {
+			return state.Failure(newState3), ZeroOf[MO]()
 		}
 
-		res4 := parse4(res3.Remaining)
-		if res4.Err != nil {
-			return Failure[MO](NewError(input, "Map5"), input)
+		newState4, output4 := parse4(newState3)
+		if newState4.Failed() {
+			return state.Failure(newState4), ZeroOf[MO]()
 		}
 
-		res5 := parse5(res4.Remaining)
-		if res5.Err != nil {
-			return Failure[MO](NewError(input, "Map5"), input)
+		newState5, output5 := parse5(newState4)
+		if newState5.Failed() {
+			return state.Failure(newState5), ZeroOf[MO]()
 		}
 
-		output, err := fn(res1.Output, res2.Output, res3.Output, res4.Output, res5.Output)
+		mapped, err := fn(output1, output2, output3, output4, output5)
 		if err != nil {
-			return Failure[MO](NewError(input, err.Error()), input)
+			return state.AddError(err.Error()), ZeroOf[MO]()
 		}
 
-		return Success(output, res5.Remaining)
+		return newState5, mapped
 	}
 }

@@ -23,10 +23,10 @@ func ParseCSV(input string) ([][]string, error) {
 		false,
 	)
 
-	result := parser(gomme.NewInputFromString(input))
-	if result.Err != nil {
+	newState, output := parser(gomme.NewInputFromString(input))
+	if newState.Failed() {
 		return nil, result.Err
 	}
 
-	return result.Output, nil
+	return output, nil
 }

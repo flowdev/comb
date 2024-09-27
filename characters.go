@@ -2,6 +2,7 @@ package gomme
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -10,476 +11,248 @@ import (
 
 // Char parses a single character and matches it with
 // a provided candidate.
-func Char(character rune) Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() {
-			return Failure[rune](NewError(input, string(character)), input)
-		}
-		r, size := utf8.DecodeRune(input.CurrentBytes())
+func Char(char rune) Parser[rune] {
+	return func(state State) (State, rune) {
+		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
-			return Failure[rune](NewError(input, string(character)), input)
+			if size == 0 {
+				return state.AddError(fmt.Sprintf("%q (at EOF)", char)), utf8.RuneError
+			}
+			return state.AddError(fmt.Sprintf("%q (got UTF-8 error)", char)), utf8.RuneError
 		}
-		if r != character {
-			return Failure[rune](NewError(input, string(character)), input)
+		if r != char {
+			return state.AddError(fmt.Sprintf("%q (got %q)", char, r)), utf8.RuneError
 		}
 
-		return Success(r, input.MoveBy(uint(size)))
+		return state.MoveBy(uint(size)), r
 	}
 }
 
-// AnyChar parses any single character.
-func AnyChar() Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() {
-			return Failure[rune](NewError(input, "AnyChar"), input)
-		}
-		r, size := utf8.DecodeRune(input.CurrentBytes())
+// Satisfy parses a single character, and ensures that it satisfies the given predicate.
+func Satisfy(predicate func(rune) bool) Parser[rune] {
+	return func(state State) (State, rune) {
+		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
-			return Failure[rune](NewError(input, "AnyChar"), input)
+			if size == 0 {
+				return state.AddError(fmt.Sprintf("%s (at EOF)", "Satisfy")), utf8.RuneError
+			}
+			return state.AddError(fmt.Sprintf("%s (got UTF-8 error)", "Satisfy")), utf8.RuneError
+		}
+		if !predicate(r) {
+			return state.AddError(fmt.Sprintf("%s (got %q)", "Satisfy", r)), utf8.RuneError
 		}
 
-		return Success(r, input.MoveBy(uint(size)))
+		return state.MoveBy(uint(size)), r
 	}
+}
+
+// String parses a token from the input, and returns the part of the input that
+// matched the token.
+// If the token could not be found, the parser returns an error result.
+func String(token string) Parser[string] {
+	return func(state State) (State, string) {
+		if !strings.HasPrefix(state.CurrentString(), token) {
+			return state.AddError(fmt.Sprintf("%q", token)), ""
+		}
+
+		newState := state.MoveBy(uint(len(token)))
+		return newState, state.StringTo(newState)
+	}
+}
+
+// SatisfyMN returns the longest input subset that matches the predicate,
+// within the boundaries of `atLeast` <= number of runes found <= `atMost`.
+//
+// If the provided parser is not successful or the predicate doesn't match
+// `atLeast` times, the parser fails and goes back to the start.
+func SatisfyMN(atLeast, atMost uint, predicate func(rune) bool) Parser[string] {
+	return func(state State) (State, string) {
+		current := state
+		count := uint(0)
+		for atMost > count {
+			r, size := utf8.DecodeRune(current.CurrentBytes())
+			if r == utf8.RuneError {
+				if count >= atLeast {
+					return current, state.StringTo(current)
+				}
+				if size == 0 {
+					return state.Failure(current.AddError(
+						fmt.Sprintf("<character> (need %d, found %d at EOF)", atLeast, count),
+					)), ""
+				}
+				return state.Failure(current.AddError(
+					fmt.Sprintf("<character> (need %d, found %d, got UTF-8 error)", atLeast, count),
+				)), ""
+			}
+
+			if !predicate(r) {
+				if count >= atLeast {
+					return current, state.StringTo(current)
+				}
+				return state.Failure(current.AddError(
+					fmt.Sprintf("<character> (need %d, found %d, got %q)", atLeast, count, r),
+				)), ""
+			}
+
+			current = current.MoveBy(uint(size))
+		}
+
+		return current, state.StringTo(current)
+	}
+}
+
+// AlphaMN parses at least `atLeast` and at most `atMost` Unicode letters.
+func AlphaMN(atLeast, atMost uint) Parser[string] {
+	return SatisfyMN(atLeast, atMost, unicode.IsLetter)
 }
 
 // Alpha0 parses a zero or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input is empty, or no character is found, the parser
 // returns the input as is.
 func Alpha0() Parser[string] {
-	return func(input State) Result[string] {
-		current := input
-		for !current.AtEnd() { // loop over runes of the input
-			r, size := utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Alpha0: UTF-8 error"), input)
-			}
-			if !unicode.IsLetter(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(0, math.MaxUint, unicode.IsLetter)
 }
 
 // Alpha1 parses one or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alpha1() Parser[string] {
-	return func(input State) Result[string] {
-		if input.AtEnd() {
-			return Failure[string](NewError(input, "Alpha1"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[string](NewError(input, "Alpha1: UTF-8 error"), input)
-		}
-		if !unicode.IsLetter(r) {
-			return Failure[string](NewError(input, "Alpha1"), input)
-		}
-		current := input.MoveBy(uint(size))
-
-		for !current.AtEnd() { // loop over runes of the input
-			r, size = utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Alpha1: UTF-8 error"), input)
-			}
-			if !unicode.IsLetter(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(1, math.MaxUint, unicode.IsLetter)
 }
 
 // Alphanumeric0 parses zero or more alphabetical or numerical Unicode characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Alphanumeric0() Parser[string] {
-	return func(input State) Result[string] {
-		current := input
-		for !current.AtEnd() { // loop over runes of the input
-			r, size := utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Alphanumeric0: UTF-8 error"), input)
-			}
-			if !IsAlphanumeric(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(0, math.MaxUint, IsAlphanumeric)
 }
 
 // Alphanumeric1 parses one or more alphabetical or numerical Unicode characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alphanumeric1() Parser[string] {
-	return func(input State) Result[string] {
-		if input.AtEnd() {
-			return Failure[string](NewError(input, "Alphanumeric1"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[string](NewError(input, "Alphanumeric1: UTF-8 error"), input)
-		}
-		if !IsAlphanumeric(r) {
-			return Failure[string](NewError(input, "Alphanumeric1"), input)
-		}
-		current := input.MoveBy(uint(size))
-
-		for !current.AtEnd() { // loop over runes of the input
-			r, size = utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Alphanumeric1: UTF-8 error"), input)
-			}
-			if !IsAlphanumeric(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(1, math.MaxUint, IsAlphanumeric)
 }
 
 // Digit0 parses zero or more ASCII numerical characters: 0-9.
 // In the cases where the input is empty, or no digit character is found, the parser
 // returns the input as is.
 func Digit0() Parser[string] {
-	return func(input State) Result[string] {
-		current := input
-		for !current.AtEnd() { // loop over runes of the input
-			r, size := utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Digit0: UTF-8 error"), input)
-			}
-			if !IsDigit(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(0, math.MaxUint, IsDigit)
 }
 
 // Digit1 parses one or more numerical characters: 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Digit1() Parser[string] {
-	return func(input State) Result[string] {
-		if input.AtEnd() {
-			return Failure[string](NewError(input, "Digit1"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[string](NewError(input, "Digit1: UTF-8 error"), input)
-		}
-		if !IsDigit(r) {
-			return Failure[string](NewError(input, "Digit1"), input)
-		}
-		current := input.MoveBy(uint(size))
-
-		for !current.AtEnd() { // loop over runes of the input
-			r, size = utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Digit1: UTF-8 error"), input)
-			}
-			if !IsDigit(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(1, math.MaxUint, IsDigit)
 }
 
 // HexDigit0 parses zero or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input is empty, or no terminating character is found, the parser
 // returns the input as is.
 func HexDigit0() Parser[string] {
-	return func(input State) Result[string] {
-		current := input
-		for !current.AtEnd() { // loop over runes of the input
-			r, size := utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Digit0: UTF-8 error"), input)
-			}
-			if !IsHexDigit(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(0, math.MaxUint, IsHexDigit)
 }
 
 // HexDigit1 parses one or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func HexDigit1() Parser[string] {
-	return func(input State) Result[string] {
-		if input.AtEnd() {
-			return Failure[string](NewError(input, "HexDigit1"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[string](NewError(input, "HexDigit1: UTF-8 error"), input)
-		}
-		if !IsHexDigit(r) {
-			return Failure[string](NewError(input, "HexDigit1"), input)
-		}
-		current := input.MoveBy(uint(size))
-
-		for !current.AtEnd() { // loop over runes of the input
-			r, size = utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "HexDigit1: UTF-8 error"), input)
-			}
-			if !IsHexDigit(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(1, math.MaxUint, IsHexDigit)
 }
 
 // Whitespace0 parses zero or more Unicode whitespace characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Whitespace0() Parser[string] {
-	return func(input State) Result[string] {
-		current := input
-		for !current.AtEnd() { // loop over runes of the input
-			r, size := utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Whitespace0: UTF-8 error"), input)
-			}
-			if !unicode.IsSpace(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(0, math.MaxUint, unicode.IsSpace)
 }
 
 // Whitespace1 parses one or more Unicode whitespace characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Whitespace1() Parser[string] {
-	return func(input State) Result[string] {
-		if input.AtEnd() {
-			return Failure[string](NewError(input, "Whitespace1"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[string](NewError(input, "Whitespace1: UTF-8 error"), input)
-		}
-		if !unicode.IsSpace(r) {
-			return Failure[string](NewError(input, "Whitespace1"), input)
-		}
-		current := input.MoveBy(uint(size))
-
-		for !current.AtEnd() { // loop over runes of the input
-			r, size = utf8.DecodeRune(current.CurrentBytes())
-			if r == utf8.RuneError {
-				return Failure[string](NewError(current, "Whitespace1: UTF-8 error"), input)
-			}
-			if !unicode.IsSpace(r) {
-				return Success(input.StringTo(current), current)
-			}
-			current = current.MoveBy(uint(size))
-		}
-
-		return Success(input.StringTo(current), current)
-	}
+	return SatisfyMN(1, math.MaxUint, unicode.IsSpace)
 }
 
 // LF parses a line feed `\n` character.
 func LF() Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() || input.CurrentBytes()[0] != '\n' {
-			return Failure[rune](NewError(input, "LF"), input)
-		}
-
-		return Success('\n', input.MoveBy(1))
-	}
+	return Char('\n')
 }
 
 // CR parses a carriage return `\r` character.
 func CR() Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() || input.CurrentBytes()[0] != '\r' {
-			return Failure[rune](NewError(input, "CR"), input)
-		}
-
-		return Success('\r', input.MoveBy(1))
-	}
+	return Char('\r')
 }
 
 // CRLF parses the string `\r\n`.
 func CRLF() Parser[string] {
-	return func(input State) Result[string] {
-		bytes := input.CurrentBytes()
-		if len(bytes) < 2 || (bytes[0] != '\r' || bytes[1] != '\n') {
-			return Failure[string](NewError(input, "CRLF"), input)
-		}
-
-		return Success(string(bytes[:2]), input.MoveBy(2))
-	}
+	return String("\r\n")
 }
 
 // OneOf parses a single character from the given set of characters.
 func OneOf(collection ...rune) Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() {
-			return Failure[rune](NewError(input, "OneOf"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[rune](NewError(input, "OneOf: UTF-8 error"), input)
-		}
+	return Satisfy(func(r rune) bool {
 		for _, c := range collection {
 			if r == c {
-				return Success(r, input.MoveBy(uint(size)))
+				return true
 			}
 		}
 
-		return Failure[rune](NewError(input, "OneOf"), input)
-	}
-}
-
-// Satisfy parses a single character, and ensures that it satisfies the given predicate.
-func Satisfy(predicate func(rune) bool) Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() {
-			return Failure[rune](NewError(input, "Satisfy"), input)
-		}
-
-		r, size := utf8.DecodeRune(input.CurrentBytes())
-		if r == utf8.RuneError {
-			return Failure[rune](NewError(input, "Satisfy: UTF-8 error"), input)
-		}
-
-		if !predicate(r) {
-			return Failure[rune](NewError(input, "Satisfy"), input)
-		}
-
-		return Success(r, input.MoveBy(uint(size)))
-	}
+		return false
+	})
 }
 
 // Space parses an ASCII space character (' ').
 func Space() Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() || input.CurrentBytes()[0] != ' ' {
-			return Failure[rune](NewError(input, "Space"), input)
-		}
-
-		return Success(' ', input.MoveBy(1))
-	}
+	return Char(' ')
 }
 
 // Tab parses an ASCII tab character ('\t').
 func Tab() Parser[rune] {
-	return func(input State) Result[rune] {
-		if input.AtEnd() || input.CurrentBytes()[0] != '\t' {
-			return Failure[rune](NewError(input, "Tab"), input)
-		}
-
-		return Success('\t', input.MoveBy(1))
-	}
+	return Char('\t')
 }
 
 // Int64 parses an integer from the input, and returns it plus the remaining input.
 func Int64() Parser[int64] {
-	return func(input State) Result[int64] {
-		parser := Sequence(Recognize(Optional(OneOf('-', '+'))), Recognize(Digit1()))
-
-		result := parser(input)
-		if result.Err != nil {
-			return Failure[int64](NewError(input, "Int64"), input)
-		}
-
-		n, err := strconv.ParseInt(input.StringTo(result.Remaining), 10, 64)
+	return Map2(Optional(OneOf('-', '+')), Digit1(), func(optSign rune, digits string) (int64, error) {
+		i, err := strconv.ParseInt(digits, 10, 64)
 		if err != nil {
-			return Failure[int64](NewError(input, "Int64: strconv error"), input)
+			return 0, err
 		}
-
-		return Success(n, result.Remaining)
-	}
+		if optSign == '-' {
+			i = -i
+		}
+		return i, nil
+	})
 }
 
 // Int8 parses an 8-bit integer from the input,
 // and returns the part of the input that matched the integer.
 func Int8() Parser[int8] {
-	return func(input State) Result[int8] {
-		parser := Sequence(Recognize(Optional(OneOf('-', '+'))), Recognize(Digit1()))
-
-		result := parser(input)
-		if result.Err != nil {
-			return Failure[int8](NewError(input, "Int8"), input)
-		}
-
-		n, err := strconv.ParseInt(input.StringTo(result.Remaining), 10, 8)
+	return Map2(Optional(OneOf('-', '+')), Digit1(), func(optSign rune, digits string) (int8, error) {
+		i, err := strconv.ParseInt(digits, 10, 8)
 		if err != nil {
-			return Failure[int8](NewError(input, "Int8: strconv error"), input)
+			return 0, err
 		}
-
-		return Success(int8(n), result.Remaining)
-	}
+		if optSign == '-' {
+			i = -i
+		}
+		return int8(i), nil
+	})
 }
 
 // UInt8 parses an 8-bit integer from the input,
 // and returns the part of the input that matched the integer.
 func UInt8() Parser[uint8] {
-	return func(input State) Result[uint8] {
-		parser := Sequence(Recognize(Optional(Char('+'))), Recognize(Digit1()))
-
-		result := parser(input)
-		if result.Err != nil {
-			return Failure[uint8](NewError(input, "Int8"), input)
-		}
-
-		n, err := strconv.ParseUint(string(result.Output[1]), 10, 8)
+	return Map2(Optional(Char('+')), Digit1(), func(optSign rune, digits string) (uint8, error) {
+		ui, err := strconv.ParseUint(digits, 10, 8)
 		if err != nil {
-			return Failure[uint8](NewError(input, "Int8: strconv error"), input)
+			return 0, err
 		}
-
-		return Success(uint8(n), result.Remaining)
-	}
-}
-
-// Token parses a token from the input, and returns the part of the input that
-// matched the token.
-// If the token could not be found, the parser returns an error result.
-func Token(token string) Parser[string] {
-	return func(input State) Result[string] {
-		if !strings.HasPrefix(input.CurrentString(), token) {
-			return Failure[string](NewError(input, fmt.Sprintf("Token(%s)", token)), input)
-		}
-
-		newInput := input.MoveBy(uint(len(token)))
-		return Success(input.StringTo(newInput), newInput)
-	}
+		return uint8(ui), nil
+	})
 }
 
 // IsAlphanumeric returns true if the rune is an alphanumeric character.
