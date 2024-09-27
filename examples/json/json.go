@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"github.com/oleiade/gomme/pcb"
 	"log"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ func parseJSON(state gomme.State) (gomme.State, JSONValue) {
 // parseValue is a parser that attempts to parse different types of
 // JSON values (object, array, string, etc.).
 func parseValue(state gomme.State) (gomme.State, JSONValue) {
-	return gomme.Alternative(
+	return pcb.Alternative(
 		parseObject,
 		parseArray,
 		parseString,
@@ -69,19 +70,19 @@ func parseValue(state gomme.State) (gomme.State, JSONValue) {
 // parseObject parses a JSON object, which starts and ends with
 // curly braces and contains key-value pairs.
 func parseObject(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
-		gomme.Delimited[rune, map[string]JSONValue, rune](
-			gomme.Char('{'),
-			gomme.Optional[map[string]JSONValue](
-				gomme.Preceded(
+	return pcb.Map1(
+		pcb.Delimited[rune, map[string]JSONValue, rune](
+			pcb.Char('{'),
+			pcb.Optional[map[string]JSONValue](
+				pcb.Preceded(
 					ws(),
-					gomme.Terminated[map[string]JSONValue](
+					pcb.Terminated[map[string]JSONValue](
 						parseMembers,
 						ws(),
 					),
 				),
 			),
-			gomme.Char('}'),
+			pcb.Char('}'),
 		),
 		func(members map[string]JSONValue) (JSONValue, error) {
 			return JSONObject(members), nil
@@ -95,14 +96,14 @@ var _ gomme.Parser[JSONValue] = parseObject
 // parseArray parses a JSON array, which starts and ends with
 // square brackets and contains a list of values.
 func parseArray(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
-		gomme.Delimited[rune, []JSONValue, rune](
-			gomme.Char('['),
-			gomme.Alternative(
+	return pcb.Map1(
+		pcb.Delimited[rune, []JSONValue, rune](
+			pcb.Char('['),
+			pcb.Alternative(
 				parseElements,
-				gomme.Map1(ws(), func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
+				pcb.Map1(ws(), func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
 			),
-			gomme.Char(']'),
+			pcb.Char(']'),
 		),
 		func(elements []JSONValue) (JSONValue, error) {
 			return JSONArray(elements), nil
@@ -114,8 +115,8 @@ func parseArray(input gomme.State) (gomme.State, JSONValue) {
 var _ gomme.Parser[JSONValue] = parseArray
 
 func parseElement(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
-		gomme.Delimited[string, JSONValue, string](ws(), parseValue, ws()),
+	return pcb.Map1(
+		pcb.Delimited[string, JSONValue, string](ws(), parseValue, ws()),
 		func(v JSONValue) (JSONValue, error) { return v, nil },
 	)(input)
 }
@@ -125,11 +126,11 @@ var _ gomme.Parser[JSONValue] = parseElement
 
 // parseNumber parses a JSON number.
 func parseNumber(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1[[]string, JSONValue](
-		gomme.Sequence(
-			gomme.Map1(integer(), func(i int) (string, error) { return strconv.Itoa(i), nil }),
-			gomme.Optional(fraction()),
-			gomme.Optional(exponent()),
+	return pcb.Map1[[]string, JSONValue](
+		pcb.Sequence(
+			pcb.Map1(integer(), func(i int) (string, error) { return strconv.Itoa(i), nil }),
+			pcb.Optional(fraction()),
+			pcb.Optional(exponent()),
 		),
 		func(parts []string) (JSONValue, error) {
 			// Construct the float string from parts
@@ -170,7 +171,7 @@ var _ gomme.Parser[JSONValue] = parseNumber
 
 // parseString parses a JSON string.
 func parseString(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
+	return pcb.Map1(
 		stringParser(),
 		func(s string) (JSONValue, error) {
 			return JSONString(s), nil
@@ -183,8 +184,8 @@ var _ gomme.Parser[JSONValue] = parseString
 
 // parseFalse parses the JSON boolean value 'false'.
 func parseFalse(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
-		gomme.String("false"),
+	return pcb.Map1(
+		pcb.String("false"),
 		func(_ string) (JSONValue, error) { return JSONBool(false), nil },
 	)(input)
 }
@@ -194,8 +195,8 @@ var _ gomme.Parser[JSONValue] = parseFalse
 
 // parseTrue parses the JSON boolean value 'true'.
 func parseTrue(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
-		gomme.String("true"),
+	return pcb.Map1(
+		pcb.String("true"),
 		func(_ string) (JSONValue, error) { return JSONBool(true), nil },
 	)(input)
 }
@@ -205,8 +206,8 @@ var _ gomme.Parser[JSONValue] = parseTrue
 
 // parseNull parses the JSON 'null' value.
 func parseNull(input gomme.State) (gomme.State, JSONValue) {
-	return gomme.Map1(
-		gomme.String("null"),
+	return pcb.Map1(
+		pcb.String("null"),
 		func(_ string) (JSONValue, error) { return nil, nil },
 	)(input)
 }
@@ -216,10 +217,10 @@ var _ gomme.Parser[JSONValue] = parseNull
 
 // parseElements parses the elements of a JSON array.
 func parseElements(input gomme.State) (gomme.State, []JSONValue) {
-	return gomme.Map1(
-		gomme.Separated0[JSONValue, string](
+	return pcb.Map1(
+		pcb.Separated0[JSONValue, string](
 			parseElement,
-			gomme.String(","),
+			pcb.String(","),
 			false,
 		),
 		func(elems []JSONValue) ([]JSONValue, error) {
@@ -233,10 +234,10 @@ var _ gomme.Parser[[]JSONValue] = parseElements
 
 // parseElement parses a single element of a JSON array.
 func parseMembers(input gomme.State) (gomme.State, map[string]JSONValue) {
-	return gomme.Map1(
-		gomme.Separated0[kv, string](
+	return pcb.Map1(
+		pcb.Separated0[kv, string](
 			parseMember,
-			gomme.String(","),
+			pcb.String(","),
 			false,
 		),
 		func(kvs []kv) (map[string]JSONValue, error) {
@@ -269,10 +270,10 @@ func member() gomme.Parser[kv] {
 		return kv{left, right}, nil
 	}
 
-	return gomme.Map2(
-		gomme.Delimited(ws(), stringParser(), ws()),
-		gomme.Preceded(
-			gomme.String(":"),
+	return pcb.Map2(
+		pcb.Delimited(ws(), stringParser(), ws()),
+		pcb.Preceded(
+			pcb.String(":"),
 			element()),
 		mapFunc,
 	)
@@ -282,7 +283,7 @@ func member() gomme.Parser[kv] {
 //
 // It wraps the element with optional whitespace on either side.
 func element() gomme.Parser[JSONValue] {
-	return gomme.Delimited(ws(), parseValue, ws())
+	return pcb.Delimited(ws(), parseValue, ws())
 }
 
 // kv is a struct representing a key-value pair in a JSON object.
@@ -297,10 +298,10 @@ type kv struct {
 //
 // It expects a sequence of characters enclosed in double quotes.
 func stringParser() gomme.Parser[string] {
-	return gomme.Delimited[rune, string, rune](
-		gomme.Char('"'),
+	return pcb.Delimited[rune, string, rune](
+		pcb.Char('"'),
 		characters(),
-		gomme.Char('"'),
+		pcb.Char('"'),
 	)
 }
 
@@ -308,11 +309,11 @@ func stringParser() gomme.Parser[string] {
 //
 // It handles negative and positive integers including zero.
 func integer() gomme.Parser[int] {
-	return gomme.Alternative(
+	return pcb.Alternative(
 		// "-" onenine digits
-		gomme.Preceded(
-			gomme.String("-"),
-			gomme.Map2(
+		pcb.Preceded(
+			pcb.String("-"),
+			pcb.Map2(
 				onenine(), digits(),
 				func(first string, rest string) (int, error) {
 					return strconv.Atoi(first + rest)
@@ -321,7 +322,7 @@ func integer() gomme.Parser[int] {
 		),
 
 		// onenine digits
-		gomme.Map2(
+		pcb.Map2(
 			onenine(), digits(),
 			func(first string, rest string) (int, error) {
 				return strconv.Atoi(first + rest)
@@ -329,16 +330,16 @@ func integer() gomme.Parser[int] {
 		),
 
 		// "-" digit
-		gomme.Preceded(
-			gomme.String("-"),
-			gomme.Map1(
+		pcb.Preceded(
+			pcb.String("-"),
+			pcb.Map1(
 				digit(),
 				strconv.Atoi,
 			),
 		),
 
 		// digit
-		gomme.Map1(digit(), strconv.Atoi),
+		pcb.Map1(digit(), strconv.Atoi),
 	)
 }
 
@@ -346,7 +347,7 @@ func integer() gomme.Parser[int] {
 //
 // It concatenates the sequence into a single string.
 func digits() gomme.Parser[string] {
-	return gomme.Map1(gomme.Many1(digit()), func(digits []string) (string, error) {
+	return pcb.Map1(pcb.Many1(digit()), func(digits []string) (string, error) {
 		return strings.Join(digits, ""), nil
 	})
 }
@@ -355,24 +356,24 @@ func digits() gomme.Parser[string] {
 //
 // It distinguishes between '0' and non-zero digits.
 func digit() gomme.Parser[string] {
-	return gomme.Alternative(
-		gomme.String("0"),
+	return pcb.Alternative(
+		pcb.String("0"),
 		onenine(),
 	)
 }
 
 // onenine creates a parser for digits from 1 to 9.
 func onenine() gomme.Parser[string] {
-	return gomme.Alternative(
-		gomme.String("1"),
-		gomme.String("2"),
-		gomme.String("3"),
-		gomme.String("4"),
-		gomme.String("5"),
-		gomme.String("6"),
-		gomme.String("7"),
-		gomme.String("8"),
-		gomme.String("9"),
+	return pcb.Alternative(
+		pcb.String("1"),
+		pcb.String("2"),
+		pcb.String("3"),
+		pcb.String("4"),
+		pcb.String("5"),
+		pcb.String("6"),
+		pcb.String("7"),
+		pcb.String("8"),
+		pcb.String("9"),
 	)
 }
 
@@ -380,9 +381,9 @@ func onenine() gomme.Parser[string] {
 //
 // It expects a dot followed by at least one digit.
 func fraction() gomme.Parser[string] {
-	return gomme.Preceded(
-		gomme.String("."),
-		gomme.Digit1(),
+	return pcb.Preceded(
+		pcb.String("."),
+		pcb.Digit1(),
 	)
 }
 
@@ -390,9 +391,9 @@ func fraction() gomme.Parser[string] {
 //
 // It handles the exponent sign and the exponent digits.
 func exponent() gomme.Parser[string] {
-	return gomme.Preceded(
-		gomme.String("e"),
-		gomme.Map2(
+	return pcb.Preceded(
+		pcb.String("e"),
+		pcb.Map2(
 			sign(), digits(),
 			func(sign string, digits string) (string, error) {
 				return sign + digits, nil
@@ -405,10 +406,10 @@ func exponent() gomme.Parser[string] {
 //
 // It can parse both positive ('+') and negative ('-') signs.
 func sign() gomme.Parser[string] {
-	return gomme.Optional(
-		gomme.Alternative(
-			gomme.String("-"),
-			gomme.String("+"),
+	return pcb.Optional(
+		pcb.Alternative(
+			pcb.String("-"),
+			pcb.String("+"),
 		),
 	)
 }
@@ -417,9 +418,9 @@ func sign() gomme.Parser[string] {
 //
 // It handles regular characters and escaped sequences.
 func characters() gomme.Parser[string] {
-	return gomme.Optional(
-		gomme.Map1(
-			gomme.Many1[rune](character()),
+	return pcb.Optional(
+		pcb.Map1(
+			pcb.Many1[rune](character()),
 			func(chars []rune) (string, error) {
 				return string(chars), nil
 			},
@@ -431,9 +432,9 @@ func characters() gomme.Parser[string] {
 //
 // It distinguishes between regular characters and escape sequences.
 func character() gomme.Parser[rune] {
-	return gomme.Alternative(
+	return pcb.Alternative(
 		// normal character
-		gomme.Satisfy(func(c rune) bool {
+		pcb.Satisfy(func(c rune) bool {
 			return c != '"' && c != '\\' && c >= 0x20 && c <= 0x10FFFF
 		}),
 
@@ -470,18 +471,18 @@ func escape() gomme.Parser[rune] {
 		}
 	}
 
-	return gomme.Map1(
-		gomme.Sequence(
-			gomme.Char('\\'),
-			gomme.Alternative(
-				gomme.Char('"'),
-				gomme.Char('\\'),
-				gomme.Char('/'),
-				gomme.Char('b'),
-				gomme.Char('f'),
-				gomme.Char('n'),
-				gomme.Char('r'),
-				gomme.Char('t'),
+	return pcb.Map1(
+		pcb.Sequence(
+			pcb.Char('\\'),
+			pcb.Alternative(
+				pcb.Char('"'),
+				pcb.Char('\\'),
+				pcb.Char('/'),
+				pcb.Char('b'),
+				pcb.Char('f'),
+				pcb.Char('n'),
+				pcb.Char('r'),
+				pcb.Char('t'),
 				unicodeEscape(),
 			),
 		),
@@ -504,9 +505,9 @@ func unicodeEscape() gomme.Parser[rune] {
 		return rune(codePoint), nil
 	}
 
-	return gomme.Map1(
-		gomme.Sequence(
-			gomme.Char('u'),
+	return pcb.Map1(
+		pcb.Sequence(
+			pcb.Char('u'),
 			hex(),
 			hex(),
 			hex(),
@@ -521,7 +522,7 @@ func unicodeEscape() gomme.Parser[rune] {
 // It can parse digits ('0'-'9') as well as
 // letters ('a'-'f', 'A'-'F') used in hexadecimal numbers.
 func hex() gomme.Parser[rune] {
-	return gomme.Satisfy(func(r rune) bool {
+	return pcb.Satisfy(func(r rune) bool {
 		return ('0' <= r && r <= '9') || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')
 	})
 }
@@ -535,8 +536,8 @@ func ws() gomme.Parser[string] {
 		return string(runes), nil
 	}
 
-	return gomme.Map1(gomme.Many0(
-		gomme.Satisfy(func(r rune) bool {
+	return pcb.Map1(pcb.Many0(
+		pcb.Satisfy(func(r rune) bool {
 			return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 		}),
 	), mapFunc)

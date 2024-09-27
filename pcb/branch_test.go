@@ -1,6 +1,7 @@
-package gomme
+package pcb
 
 import (
+	"github.com/oleiade/gomme"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +11,7 @@ func TestAlternative(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -67,7 +68,7 @@ func TestAlternative(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := NewFromString(tc.input)
+			state := gomme.NewFromString(tc.input)
 			newState, gotResult := tc.args.p(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
@@ -88,7 +89,7 @@ func TestAlternative(t *testing.T) {
 
 func BenchmarkAlternative(b *testing.B) {
 	p := Alternative(Digit1(), Alpha1())
-	input := NewFromString("123")
+	input := gomme.NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
 		_, _ = p(input)

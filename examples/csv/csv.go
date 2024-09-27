@@ -7,19 +7,22 @@
 // [RFC4180]: https://tools.ietf.org/html/rfc4180
 package csv
 
-import "github.com/oleiade/gomme"
+import (
+	"github.com/oleiade/gomme"
+	"github.com/oleiade/gomme/pcb"
+)
 
 func ParseCSV(input string) ([][]string, error) {
-	parser := gomme.Separated1(
-		gomme.Separated1(
-			gomme.Alternative(
-				gomme.Alphanumeric1(),
-				gomme.Delimited(gomme.Char('"'), gomme.Alphanumeric1(), gomme.Char('"')),
+	parser := pcb.Separated1(
+		pcb.Separated1(
+			pcb.Alternative(
+				pcb.Alphanumeric1(),
+				pcb.Delimited(pcb.Char('"'), pcb.Alphanumeric1(), pcb.Char('"')),
 			),
-			gomme.Char(','),
+			pcb.Char(','),
 			false,
 		),
-		gomme.CRLF(),
+		pcb.CRLF(),
 		false,
 	)
 

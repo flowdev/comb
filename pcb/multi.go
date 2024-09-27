@@ -1,12 +1,15 @@
-package gomme
+package pcb
 
-import "math"
+import (
+	"github.com/oleiade/gomme"
+	"math"
+)
 
 // Count runs the provided parser `count` times.
 //
 // If the provided parser cannot be successfully applied `count` times, the operation
 // fails and the Result will contain an error.
-func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
+func Count[Output any](parse gomme.Parser[Output], count uint) gomme.Parser[[]Output] {
 	return ManyMN(parse, count, count)
 }
 
@@ -15,8 +18,8 @@ func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
 //
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
-func ManyMN[Output any](parse Parser[Output], atLeast, atMost uint) Parser[[]Output] {
-	return func(input State) (State, []Output) {
+func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.Parser[[]Output] {
+	return func(input gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, min(32, atMost))
 		remaining := input
 		count := uint(0)
@@ -51,7 +54,7 @@ func ManyMN[Output any](parse Parser[Output], atLeast, atMost uint) Parser[[]Out
 // Note that Many0 will succeed even if the parser fails to match at all. It will
 // however fail if the provided parser accepts empty inputs (such as `Digit0`, or
 // `Alpha0`) in order to prevent infinite loops.
-func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
+func Many0[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 	return ManyMN(parse, 0, math.MaxUint)
 }
 
@@ -61,7 +64,7 @@ func Many0[Output any](parse Parser[Output]) Parser[[]Output] {
 //
 // Note that Many1 will fail if the provided parser accepts empty
 // inputs (such as `Digit0`, or `Alpha0`) in order to prevent infinite loops.
-func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
+func Many1[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 	return ManyMN(parse, 1, math.MaxUint)
 }
 
@@ -74,14 +77,14 @@ func Many1[Output any](parse Parser[Output]) Parser[[]Output] {
 //
 // The parser will fail if both parsers together accepted an empty input
 // in order to prevent infinite loops.
-func SeparatedMN[Output any, S Separator](
-	parse Parser[Output], separator Parser[S],
+func SeparatedMN[Output any, S gomme.Separator](
+	parse gomme.Parser[Output], separator gomme.Parser[S],
 	atLeast, atMost uint,
 	parseSeparatorAtEnd bool,
-) Parser[[]Output] {
+) gomme.Parser[[]Output] {
 	parseMany := ManyMN(Preceded(separator, parse), max(atLeast, 1)-1, atMost-1)
 
-	return func(state State) (State, []Output) {
+	return func(state gomme.State) (gomme.State, []Output) {
 		if atMost == 0 {
 			return state, []Output{}
 		}
@@ -126,10 +129,10 @@ func SeparatedMN[Output any, S Separator](
 //
 // The parser will fail if the both parsers together accepted an empty input
 // in order to prevent infinite loops.
-func Separated0[Output any, S Separator](
-	parse Parser[Output], separator Parser[S],
+func Separated0[Output any, S gomme.Separator](
+	parse gomme.Parser[Output], separator gomme.Parser[S],
 	parseSeparatorAtEnd bool,
-) Parser[[]Output] {
+) gomme.Parser[[]Output] {
 	return SeparatedMN(parse, separator, 0, math.MaxUint, parseSeparatorAtEnd)
 }
 
@@ -141,9 +144,9 @@ func Separated0[Output any, S Separator](
 // Because the `SeparatedList1` is really looking to produce a list of elements resulting
 // from the provided main parser, it will succeed even if the separator parser fails to
 // match at all.
-func Separated1[Output any, S Separator](
-	parse Parser[Output], separator Parser[S],
+func Separated1[Output any, S gomme.Separator](
+	parse gomme.Parser[Output], separator gomme.Parser[S],
 	parseSeparatorAtEnd bool,
-) Parser[[]Output] {
+) gomme.Parser[[]Output] {
 	return SeparatedMN(parse, separator, 1, math.MaxUint, parseSeparatorAtEnd)
 }

@@ -7,6 +7,7 @@ package redis
 import (
 	"errors"
 	"fmt"
+	"github.com/oleiade/gomme/pcb"
 	"strconv"
 	"strings"
 
@@ -29,7 +30,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		return RESPMessage{}, fmt.Errorf("malformed message %s; reason: %w", input, ErrInvalidSuffix)
 	}
 
-	parser := gomme.Alternative(
+	parser := pcb.Alternative(
 		SimpleString(),
 		Error(),
 		Integer(),
@@ -124,9 +125,9 @@ func SimpleString() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return gomme.Preceded(
-		gomme.String(string(SimpleStringKind)),
-		gomme.Map1(gomme.UntilString("\r\n"), mapFn),
+	return pcb.Preceded(
+		pcb.String(string(SimpleStringKind)),
+		pcb.Map1(pcb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -160,9 +161,9 @@ func Error() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return gomme.Preceded(
-		gomme.String(string(ErrorKind)),
-		gomme.Map1(gomme.UntilString("\r\n"), mapFn),
+	return pcb.Preceded(
+		pcb.String(string(ErrorKind)),
+		pcb.Map1(pcb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -196,9 +197,9 @@ func Integer() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return gomme.Preceded(
-		gomme.String(string(IntegerKind)),
-		gomme.Map1(gomme.UntilString("\r\n"), mapFn),
+	return pcb.Preceded(
+		pcb.String(string(IntegerKind)),
+		pcb.Map1(pcb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -249,10 +250,10 @@ func BulkString() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return gomme.Map2(
-		sizePrefix(gomme.String(string(BulkStringKind))),
-		gomme.Optional(
-			gomme.UntilString("\r\n"),
+	return pcb.Map2(
+		sizePrefix(pcb.String(string(BulkStringKind))),
+		pcb.Optional(
+			pcb.UntilString("\r\n"),
 		),
 		mapFn,
 	)
@@ -299,10 +300,10 @@ func Array() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return gomme.Map2(
-		sizePrefix(gomme.String(string(ArrayKind))),
-		gomme.Many0(
-			gomme.Alternative(
+	return pcb.Map2(
+		sizePrefix(pcb.String(string(ArrayKind))),
+		pcb.Many0(
+			pcb.Alternative(
 				SimpleString(),
 				Error(),
 				Integer(),
@@ -314,10 +315,10 @@ func Array() gomme.Parser[RESPMessage] {
 }
 
 func sizePrefix(prefix gomme.Parser[string]) gomme.Parser[int64] {
-	return gomme.Delimited(
+	return pcb.Delimited(
 		prefix,
-		gomme.Int64(),
-		gomme.CRLF(),
+		pcb.Int64(),
+		pcb.CRLF(),
 	)
 }
 

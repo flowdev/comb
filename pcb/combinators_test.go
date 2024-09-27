@@ -1,7 +1,8 @@
-package gomme
+package pcb
 
 import (
 	"errors"
+	"github.com/oleiade/gomme"
 	"strconv"
 	"testing"
 )
@@ -10,7 +11,7 @@ func TestOptional(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -57,7 +58,7 @@ func TestOptional(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -76,7 +77,7 @@ func TestOptional(t *testing.T) {
 
 func BenchmarkOptional(b *testing.B) {
 	p := Optional(CRLF())
-	input := NewFromString("\r\n123")
+	input := gomme.NewFromString("\r\n123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -88,7 +89,7 @@ func TestPeek(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -125,7 +126,7 @@ func TestPeek(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -144,7 +145,7 @@ func TestPeek(t *testing.T) {
 
 func BenchmarkPeek(b *testing.B) {
 	p := Peek(Alpha1())
-	input := NewFromString("abcd;")
+	input := gomme.NewFromString("abcd;")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -156,7 +157,7 @@ func TestRecognize(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[[]byte]
+		p gomme.Parser[[]byte]
 	}
 	testCases := []struct {
 		name          string
@@ -215,7 +216,7 @@ func TestRecognize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -234,7 +235,7 @@ func TestRecognize(t *testing.T) {
 
 func BenchmarkRecognize(b *testing.B) {
 	p := Recognize(Map2(Digit1(), Alpha1(), pairMapFunc))
-	input := NewFromString("123abc")
+	input := gomme.NewFromString("123abc")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -246,7 +247,7 @@ func TestAssign(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[int]
+		p gomme.Parser[int]
 	}
 	testCases := []struct {
 		name          string
@@ -283,7 +284,7 @@ func TestAssign(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -302,7 +303,7 @@ func TestAssign(t *testing.T) {
 
 func BenchmarkAssign(b *testing.B) {
 	p := Assign(1234, Alpha1())
-	input := NewFromString("abcd")
+	input := gomme.NewFromString("abcd")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -314,7 +315,7 @@ func TestMap1(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		parser Parser[int]
+		parser gomme.Parser[int]
 	}
 	testCases := []struct {
 		name          string
@@ -383,7 +384,7 @@ func TestMap1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.parser(NewFromString(tc.input))
+			newState, gotResult := tc.args.parser(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -404,7 +405,7 @@ func BenchmarkMap1(b *testing.B) {
 		i, _ := strconv.Atoi(digit)
 		return i, nil
 	})
-	input := NewFromString("123abc\r\n")
+	input := gomme.NewFromString("123abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -421,7 +422,7 @@ func TestMap2(t *testing.T) {
 	}
 
 	type args struct {
-		parser Parser[TestStruct]
+		parser gomme.Parser[TestStruct]
 	}
 	testCases := []struct {
 		name          string
@@ -490,7 +491,7 @@ func TestMap2(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.parser(NewFromString(tc.input))
+			newState, gotResult := tc.args.parser(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -516,7 +517,7 @@ func BenchmarkMap2(b *testing.B) {
 		first, _ := strconv.Atoi(digit)
 		return TestStruct{Foo: first, Bar: alpha}, nil
 	})
-	input := NewFromString("1abc\r\n")
+	input := gomme.NewFromString("1abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -1,14 +1,16 @@
-package gomme
+package pcb
+
+import "github.com/oleiade/gomme"
 
 // Alternative tests a list of parsers in order, one by one, until one
 // succeeds.
 //
 // If none of the parsers succeed, this combinator produces an error Result.
-func Alternative[Output any](parsers ...Parser[Output]) Parser[Output] {
+func Alternative[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
 	if len(parsers) == 0 {
 		panic("Alternative(missing parsers)")
 	}
-	return func(state State) (State, Output) {
+	return func(state gomme.State) (gomme.State, Output) {
 		var zeroOutput Output
 
 		bestState := state
@@ -22,7 +24,7 @@ func Alternative[Output any](parsers ...Parser[Output]) Parser[Output] {
 			if i == 0 {
 				bestState = newState
 			} else {
-				bestState = BetterOf(bestState, newState)
+				bestState = gomme.BetterOf(bestState, newState)
 			}
 		}
 

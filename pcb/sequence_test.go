@@ -1,6 +1,7 @@
-package gomme
+package pcb
 
 import (
+	"github.com/oleiade/gomme"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -9,7 +10,7 @@ func TestDelimited(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -76,7 +77,7 @@ func TestDelimited(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -95,7 +96,7 @@ func TestDelimited(t *testing.T) {
 
 func BenchmarkDelimited(b *testing.B) {
 	parser := Delimited(Char('+'), Digit1(), CRLF())
-	input := NewFromString("+1\r\n")
+	input := gomme.NewFromString("+1\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -107,7 +108,7 @@ func TestPreceded(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -164,7 +165,7 @@ func TestPreceded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -183,7 +184,7 @@ func TestPreceded(t *testing.T) {
 
 func BenchmarkPreceded(b *testing.B) {
 	parser := Preceded(Char('+'), Digit1())
-	input := NewFromString("+123")
+	input := gomme.NewFromString("+123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -195,7 +196,7 @@ func TestSequence(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[[]string]
+		p gomme.Parser[[]string]
 	}
 	testCases := []struct {
 		name          string
@@ -262,7 +263,7 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -283,7 +284,7 @@ func TestSequence(t *testing.T) {
 
 func BenchmarkSequence(b *testing.B) {
 	parser := Sequence(Digit1(), Alpha0(), Digit1())
-	input := NewFromString("123A45")
+	input := gomme.NewFromString("123A45")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -295,7 +296,7 @@ func TestTerminated(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -352,7 +353,7 @@ func TestTerminated(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -371,7 +372,7 @@ func TestTerminated(t *testing.T) {
 
 func BenchmarkTerminated(b *testing.B) {
 	parser := Terminated(Digit1(), Char('+'))
-	input := NewFromString("123+")
+	input := gomme.NewFromString("123+")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

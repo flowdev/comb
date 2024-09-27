@@ -3,6 +3,7 @@
 package hexcolor
 
 import (
+	"github.com/oleiade/gomme/pcb"
 	"strconv"
 
 	"github.com/oleiade/gomme"
@@ -18,10 +19,10 @@ type RGBColor struct {
 // ParseRGBColor creates a new RGBColor from a hexadecimal color string.
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
-	parser := gomme.Preceded(
-		gomme.Char('#'),
-		gomme.Map1(
-			gomme.Count(HexColorComponent(), 3),
+	parser := pcb.Preceded(
+		pcb.Char('#'),
+		pcb.Map1(
+			pcb.Count(HexColorComponent(), 3),
 			func(components []uint8) (RGBColor, error) {
 				return RGBColor{components[0], components[1], components[2]}, nil
 			},
@@ -39,8 +40,8 @@ func ParseRGBColor(input string) (RGBColor, error) {
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
 func HexColorComponent() gomme.Parser[uint8] {
-	return gomme.Map1(
-		gomme.SatisfyMN(2, 2, gomme.IsHexDigit),
+	return pcb.Map1(
+		pcb.SatisfyMN(2, 2, pcb.IsHexDigit),
 		fromHex,
 	)
 }
