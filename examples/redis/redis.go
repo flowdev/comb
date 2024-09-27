@@ -13,7 +13,7 @@ import (
 	"github.com/oleiade/gomme"
 )
 
-// ParseRESPMESSAGE parses a Redis' [RESP protocol] message.
+// ParseRESPMessage parses a Redis' [RESP protocol] message.
 //
 // [RESP protocol]: https://redis.io/docs/reference/protocol-spec/
 func ParseRESPMessage(input string) (RESPMessage, error) {
@@ -37,9 +37,9 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		Array(),
 	)
 
-	newState, output := parser(gomme.NewInputFromString(input))
+	newState, output := parser(gomme.NewFromString(input))
 	if newState.Failed() {
-		return RESPMessage{}, result.Err
+		return RESPMessage{}, newState
 	}
 
 	return output, nil
@@ -111,23 +111,22 @@ type SimpleStringMessage struct {
 // Once parsed, the content of the simple string is available in the
 // simpleString field of the result's RESPMessage.
 func SimpleString() gomme.Parser[RESPMessage] {
-	mapFn := func(message []byte) (RESPMessage, error) {
-		smessage := string(message)
-		if strings.ContainsAny(smessage, "\r\n") {
+	mapFn := func(message string) (RESPMessage, error) {
+		if strings.ContainsAny(message, "\r\n") {
 			return RESPMessage{}, fmt.Errorf("malformed simple string: %s", message)
 		}
 
 		return RESPMessage{
 			Kind: SimpleStringKind,
 			SimpleString: &SimpleStringMessage{
-				Content: smessage,
+				Content: message,
 			},
 		}, nil
 	}
 
 	return gomme.Preceded(
 		gomme.String(string(SimpleStringKind)),
-		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
+		gomme.Map1(gomme.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -147,9 +146,8 @@ type ErrorStringMessage struct {
 // The error message is available in the Error field of the result's
 // RESPMessage.
 func Error() gomme.Parser[RESPMessage] {
-	mapFn := func(message []byte) (RESPMessage, error) {
-		smessage := string(message)
-		if strings.ContainsAny(smessage, "\r\n") {
+	mapFn := func(message string) (RESPMessage, error) {
+		if strings.ContainsAny(message, "\r\n") {
 			return RESPMessage{}, fmt.Errorf("malformed error string: %s", message)
 		}
 
@@ -157,14 +155,14 @@ func Error() gomme.Parser[RESPMessage] {
 			Kind: ErrorKind,
 			Error: &ErrorStringMessage{
 				Kind:    "ERR",
-				Message: smessage,
+				Message: message,
 			},
 		}, nil
 	}
 
 	return gomme.Preceded(
-		gomme.String(string((ErrorKind))),
-		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
+		gomme.String(string(ErrorKind)),
+		gomme.Map1(gomme.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -184,8 +182,8 @@ type IntegerMessage struct {
 // The integer value is available in the IntegerMessage field of the result's
 // RESPMessage.
 func Integer() gomme.Parser[RESPMessage] {
-	mapFn := func(message []byte) (RESPMessage, error) {
-		value, err := strconv.Atoi(string(message))
+	mapFn := func(message string) (RESPMessage, error) {
+		value, err := strconv.Atoi(message)
 		if err != nil {
 			return RESPMessage{}, err
 		}
@@ -200,7 +198,7 @@ func Integer() gomme.Parser[RESPMessage] {
 
 	return gomme.Preceded(
 		gomme.String(string(IntegerKind)),
-		gomme.Map1(gomme.TakeUntil(gomme.CRLF()), mapFn),
+		gomme.Map1(gomme.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -220,7 +218,7 @@ type BulkStringMessage struct {
 // The bulk string's data is available in the BulkString field of the result's
 // RESPMessage.
 func BulkString() gomme.Parser[RESPMessage] {
-	mapFn := func(length int64, message []byte) (RESPMessage, error) {
+	mapFn := func(length int64, message string) (RESPMessage, error) {
 		if length < 0 {
 			if length < -1 {
 				return RESPMessage{}, fmt.Errorf(
@@ -239,14 +237,14 @@ func BulkString() gomme.Parser[RESPMessage] {
 		} else if int64(len(message)) != length {
 			return RESPMessage{}, fmt.Errorf(
 				"malformed bulkstring: declared message size %d, and actual size differ %d; message: %q",
-				length, len(message), string(message),
+				length, len(message), message,
 			)
 		}
 
 		return RESPMessage{
 			Kind: BulkStringKind,
 			BulkString: &BulkStringMessage{
-				Data: message,
+				Data: []byte(message),
 			},
 		}, nil
 	}
@@ -254,7 +252,7 @@ func BulkString() gomme.Parser[RESPMessage] {
 	return gomme.Map2(
 		sizePrefix(gomme.String(string(BulkStringKind))),
 		gomme.Optional(
-			gomme.TakeUntil(gomme.CRLF()),
+			gomme.UntilString("\r\n"),
 		),
 		mapFn,
 	)

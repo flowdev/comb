@@ -196,7 +196,7 @@ func TestParseRESPMessage(t *testing.T) {
 			want: RESPMessage{
 				Kind: BulkStringKind,
 				BulkString: &BulkStringMessage{
-					Data: nil,
+					Data: []byte{},
 				},
 			},
 			wantErr: false,
@@ -436,7 +436,7 @@ func BenchmarkParseMessage(b *testing.B) {
 		b.Run(fmt.Sprintf("%s_with_size_%s", tt.kind, tt.size), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				//nolint:errcheck,gosec
-				ParseRESPMessage(tt.data)
+				_, _ = ParseRESPMessage(tt.data)
 			}
 		})
 	}
@@ -542,8 +542,7 @@ func arrayProducer(arraySize, messageSize int) string {
 	)
 }
 
-var seededRand *rand.Rand = rand.New(
-	rand.NewSource(time.Now().UnixNano()))
+var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 const alnumCharset = "abcdefghijklmnopqrstuvwxyz" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

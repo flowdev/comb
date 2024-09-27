@@ -60,6 +60,23 @@ func String(token string) Parser[string] {
 	}
 }
 
+// UntilString parses until it finds a token in the input, and returns
+// the part of the input that preceded the token.
+// If found the parser moves beyond the stop string.
+// If the token could not be found, the parser returns an error result.
+func UntilString(stop string) Parser[string] {
+	return func(state State) (State, string) {
+		input := state.CurrentString()
+		i := strings.Index(input, stop)
+		if i == -1 {
+			return state.AddError(fmt.Sprintf("%q", stop)), ""
+		}
+
+		newState := state.MoveBy(uint(i + len(stop)))
+		return newState, input[:i]
+	}
+}
+
 // SatisfyMN returns the longest input subset that matches the predicate,
 // within the boundaries of `atLeast` <= number of runes found <= `atMost`.
 //
@@ -95,6 +112,7 @@ func SatisfyMN(atLeast, atMost uint, predicate func(rune) bool) Parser[string] {
 			}
 
 			current = current.MoveBy(uint(size))
+			count++
 		}
 
 		return current, state.StringTo(current)

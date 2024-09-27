@@ -19,7 +19,7 @@ type RGBColor struct {
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
 	parser := gomme.Preceded(
-		gomme.String("#"),
+		gomme.Char('#'),
 		gomme.Map1(
 			gomme.Count(HexColorComponent(), 3),
 			func(components []uint8) (RGBColor, error) {
@@ -28,9 +28,9 @@ func ParseRGBColor(input string) (RGBColor, error) {
 		),
 	)
 
-	newState, output := parser(gomme.NewInputFromString(input))
+	newState, output := parser(gomme.NewFromString(input))
 	if newState.Failed() {
-		return RGBColor{}, result.Err
+		return RGBColor{}, newState
 	}
 
 	return output, nil
@@ -39,17 +39,15 @@ func ParseRGBColor(input string) (RGBColor, error) {
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
 func HexColorComponent() gomme.Parser[uint8] {
-	return func(input gomme.State) gomme.Result[uint8] {
-		return gomme.Map1(
-			gomme.SatisfyMN(2, 2, gomme.IsHexDigit),
-			fromHex,
-		)(input)
-	}
+	return gomme.Map1(
+		gomme.SatisfyMN(2, 2, gomme.IsHexDigit),
+		fromHex,
+	)
 }
 
 // fromHex converts a two digits hexadecimal number to its decimal value.
-func fromHex(input []byte) (uint8, error) {
-	res, err := strconv.ParseUint(string(input), 16, 8)
+func fromHex(input string) (uint8, error) {
+	res, err := strconv.ParseUint(input, 16, 8)
 	if err != nil {
 		return 0, err
 	}

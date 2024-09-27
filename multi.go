@@ -17,7 +17,7 @@ func Count[Output any](parse Parser[Output], count uint) Parser[[]Output] {
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func ManyMN[Output any](parse Parser[Output], atLeast, atMost uint) Parser[[]Output] {
 	return func(input State) (State, []Output) {
-		outputs := make([]Output, min(32, atMost))
+		outputs := make([]Output, 0, min(32, atMost))
 		remaining := input
 		count := uint(0)
 		for {
@@ -79,7 +79,7 @@ func SeparatedMN[Output any, S Separator](
 	atLeast, atMost uint,
 	parseSeparatorAtEnd bool,
 ) Parser[[]Output] {
-	parseMany := ManyMN(Preceded(separator, parse), max(atLeast-1, 0), atMost-1)
+	parseMany := ManyMN(Preceded(separator, parse), max(atLeast, 1)-1, atMost-1)
 
 	return func(state State) (State, []Output) {
 		if atMost == 0 {
@@ -87,6 +87,7 @@ func SeparatedMN[Output any, S Separator](
 		}
 
 		firstState, firstOutput := parse(state)
+		firstMoved := firstState.Moved(state)
 		if firstState.Failed() {
 			if atLeast > 0 {
 				return state.Failure(firstState), []Output{}
@@ -101,15 +102,16 @@ func SeparatedMN[Output any, S Separator](
 
 		if parseSeparatorAtEnd {
 			separatorState, _ := separator(newState)
-			if !newState.Failed() {
+			if !separatorState.Failed() {
 				newState = separatorState
 			}
 		}
 
 		finalOutputs := make([]Output, 0, len(outputs)+1)
-		finalOutputs = append(finalOutputs, firstOutput)
-		finalOutputs = append(finalOutputs, outputs...)
-		return newState, finalOutputs
+		if firstMoved {
+			finalOutputs = append(finalOutputs, firstOutput)
+		}
+		return newState, append(finalOutputs, outputs...)
 	}
 }
 

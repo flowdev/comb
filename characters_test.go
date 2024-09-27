@@ -3,6 +3,7 @@ package gomme
 import (
 	"testing"
 	"unicode"
+	"unicode/utf8"
 )
 
 func TestChar(t *testing.T) {
@@ -37,7 +38,7 @@ func TestChar(t *testing.T) {
 			parser:        Char('a'),
 			input:         "123",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "123",
 		},
 		{
@@ -45,7 +46,7 @@ func TestChar(t *testing.T) {
 			parser:        Char('a'),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 	}
@@ -56,16 +57,16 @@ func TestChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -75,79 +76,10 @@ func TestChar(t *testing.T) {
 
 func BenchmarkChar(b *testing.B) {
 	parser := Char('a')
-	input := NewInputFromString("a")
+	input := NewFromString("a")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
-	}
-}
-
-func TestAnyChar(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name          string
-		parser        Parser[rune]
-		input         string
-		wantErr       bool
-		wantOutput    rune
-		wantRemaining string
-	}{
-		{
-			name:          "parsing any char from single entry input should succeed",
-			parser:        AnyChar(),
-			input:         "a",
-			wantErr:       false,
-			wantOutput:    'a',
-			wantRemaining: "",
-		},
-		{
-			name:          "parsing valid any char from longer input should succeed",
-			parser:        AnyChar(),
-			input:         "abc",
-			wantErr:       false,
-			wantOutput:    'a',
-			wantRemaining: "bc",
-		},
-		{
-			name:          "parsing any char from empty input should fail",
-			parser:        AnyChar(),
-			input:         "",
-			wantErr:       true,
-			wantOutput:    rune(0),
-			wantRemaining: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
-			}
-
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %#v, want output %#v", gotResult.Output, tc.wantOutput)
-			}
-
-			remainingString := gotResult.Remaining.CurrentString()
-			if remainingString != tc.wantRemaining {
-				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
-			}
-		})
-	}
-}
-
-func BenchmarkAnyChar(b *testing.B) {
-	parser := AnyChar()
-	input := NewInputFromString("a")
-
-	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -210,16 +142,16 @@ func TestAlpha0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -229,10 +161,10 @@ func TestAlpha0(t *testing.T) {
 
 func BenchmarkAlpha0(b *testing.B) {
 	parser := Alpha0()
-	input := NewInputFromString("abc")
+	input := NewFromString("abc")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -303,16 +235,16 @@ func TestAlpha1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -322,10 +254,10 @@ func TestAlpha1(t *testing.T) {
 
 func BenchmarkAlpha1(b *testing.B) {
 	parser := Alpha1()
-	input := NewInputFromString("abc")
+	input := NewFromString("abc")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -388,16 +320,16 @@ func TestDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -407,10 +339,10 @@ func TestDigit0(t *testing.T) {
 
 func BenchmarkDigit0(b *testing.B) {
 	parser := Digit0()
-	input := NewInputFromString("123")
+	input := NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -481,16 +413,16 @@ func TestDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -500,10 +432,10 @@ func TestDigit1(t *testing.T) {
 
 func BenchmarkDigit1(b *testing.B) {
 	parser := Digit1()
-	input := NewInputFromString("123")
+	input := NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -566,16 +498,16 @@ func TestHexDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -585,10 +517,10 @@ func TestHexDigit0(t *testing.T) {
 
 func BenchmarkHexDigit0(b *testing.B) {
 	parser := HexDigit0()
-	input := NewInputFromString("1f3")
+	input := NewFromString("1f3")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -659,16 +591,16 @@ func TestHexDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -678,10 +610,10 @@ func TestHexDigit1(t *testing.T) {
 
 func BenchmarkHexDigit1(b *testing.B) {
 	parser := HexDigit1()
-	input := NewInputFromString("1f3")
+	input := NewFromString("1f3")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -784,16 +716,16 @@ func TestWhitespace0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -804,11 +736,11 @@ func TestWhitespace0(t *testing.T) {
 func BenchmarkWhitespace0(b *testing.B) {
 	b.ReportAllocs()
 	parser := Whitespace0()
-	input := NewInputFromString(" \t\n\r")
+	input := NewFromString(" \t\n\r")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -911,16 +843,16 @@ func TestWhitespace1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -930,13 +862,13 @@ func TestWhitespace1(t *testing.T) {
 
 func BenchmarkWhitespace1(b *testing.B) {
 	b.ReportAllocs()
-	input := NewInputFromString(" \t\n\r")
+	input := NewFromString(" \t\n\r")
 
 	parser := Whitespace1()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -992,7 +924,7 @@ func TestAlphanumeric0(t *testing.T) {
 			wantRemaining: "",
 		},
 		{
-			name:          "parsing alph chars until terminating char should succeed",
+			name:          "parsing alpha chars until terminating char should succeed",
 			parser:        Alphanumeric0(),
 			input:         "abc$%^",
 			wantErr:       false,
@@ -1039,16 +971,16 @@ func TestAlphanumeric0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1058,10 +990,10 @@ func TestAlphanumeric0(t *testing.T) {
 
 func BenchmarkAlphanumeric0(b *testing.B) {
 	parser := Alphanumeric0()
-	input := NewInputFromString("a1b2c3")
+	input := NewFromString("a1b2c3")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1172,16 +1104,16 @@ func TestAlphanumeric1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1191,10 +1123,10 @@ func TestAlphanumeric1(t *testing.T) {
 
 func BenchmarkAlphanumeric1(b *testing.B) {
 	parser := Alphanumeric1()
-	input := NewInputFromString("a1b2c3")
+	input := NewFromString("a1b2c3")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1214,7 +1146,7 @@ func TestLF(t *testing.T) {
 			parser:        LF(),
 			input:         "\n",
 			wantErr:       false,
-			wantOutput:    rune('\n'),
+			wantOutput:    '\n',
 			wantRemaining: "",
 		},
 		{
@@ -1222,7 +1154,7 @@ func TestLF(t *testing.T) {
 			parser:        LF(),
 			input:         "\nabc",
 			wantErr:       false,
-			wantOutput:    rune('\n'),
+			wantOutput:    '\n',
 			wantRemaining: "abc",
 		},
 		{
@@ -1230,7 +1162,7 @@ func TestLF(t *testing.T) {
 			parser:        LF(),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 		{
@@ -1238,7 +1170,7 @@ func TestLF(t *testing.T) {
 			parser:        LF(),
 			input:         "1",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "1",
 		},
 		{
@@ -1246,7 +1178,7 @@ func TestLF(t *testing.T) {
 			parser:        LF(),
 			input:         "123",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "123",
 		},
 	}
@@ -1257,16 +1189,16 @@ func TestLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1276,10 +1208,10 @@ func TestLF(t *testing.T) {
 
 func BenchmarkLF(b *testing.B) {
 	parser := LF()
-	input := NewInputFromString("\n")
+	input := NewFromString("\n")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1299,7 +1231,7 @@ func TestCR(t *testing.T) {
 			parser:        CR(),
 			input:         "\r",
 			wantErr:       false,
-			wantOutput:    rune('\r'),
+			wantOutput:    '\r',
 			wantRemaining: "",
 		},
 		{
@@ -1307,7 +1239,7 @@ func TestCR(t *testing.T) {
 			parser:        CR(),
 			input:         "\rabc",
 			wantErr:       false,
-			wantOutput:    rune('\r'),
+			wantOutput:    '\r',
 			wantRemaining: "abc",
 		},
 		{
@@ -1315,7 +1247,7 @@ func TestCR(t *testing.T) {
 			parser:        CR(),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 		{
@@ -1323,7 +1255,7 @@ func TestCR(t *testing.T) {
 			parser:        CR(),
 			input:         "1",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "1",
 		},
 		{
@@ -1331,7 +1263,7 @@ func TestCR(t *testing.T) {
 			parser:        CR(),
 			input:         "123",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "123",
 		},
 	}
@@ -1342,16 +1274,16 @@ func TestCR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1361,10 +1293,10 @@ func TestCR(t *testing.T) {
 
 func BenchmarkCR(b *testing.B) {
 	parser := CR()
-	input := NewInputFromString("\r")
+	input := NewFromString("\r")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1435,16 +1367,16 @@ func TestCRLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1454,10 +1386,10 @@ func TestCRLF(t *testing.T) {
 
 func BenchmarkCRLF(b *testing.B) {
 	parser := CRLF()
-	input := NewInputFromString("\r\n")
+	input := NewFromString("\r\n")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1485,7 +1417,7 @@ func TestOneOf(t *testing.T) {
 			parser:        OneOf('a', '1', '+'),
 			input:         "b",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "b",
 		},
 		{
@@ -1493,7 +1425,7 @@ func TestOneOf(t *testing.T) {
 			parser:        OneOf('a', '1', '+'),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 	}
@@ -1504,16 +1436,16 @@ func TestOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1523,10 +1455,10 @@ func TestOneOf(t *testing.T) {
 
 func BenchmarkOneOf(b *testing.B) {
 	parser := OneOf('a', '1', '+')
-	input := NewInputFromString("+")
+	input := NewFromString("+")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1562,7 +1494,7 @@ func TestSatisfy(t *testing.T) {
 			parser:        Satisfy(unicode.IsLetter),
 			input:         "1",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "1",
 		},
 		{
@@ -1570,7 +1502,7 @@ func TestSatisfy(t *testing.T) {
 			parser:        Satisfy(unicode.IsLetter),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 	}
@@ -1581,16 +1513,16 @@ func TestSatisfy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1600,10 +1532,10 @@ func TestSatisfy(t *testing.T) {
 
 func BenchmarkSatisfy(b *testing.B) {
 	parser := Satisfy(unicode.IsLetter)
-	input := NewInputFromString("a")
+	input := NewFromString("a")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1623,7 +1555,7 @@ func TestSpace(t *testing.T) {
 			parser:        Space(),
 			input:         " ",
 			wantErr:       false,
-			wantOutput:    rune(' '),
+			wantOutput:    ' ',
 			wantRemaining: "",
 		},
 		{
@@ -1631,7 +1563,7 @@ func TestSpace(t *testing.T) {
 			parser:        Space(),
 			input:         " abc",
 			wantErr:       false,
-			wantOutput:    rune(' '),
+			wantOutput:    ' ',
 			wantRemaining: "abc",
 		},
 		{
@@ -1639,7 +1571,7 @@ func TestSpace(t *testing.T) {
 			parser:        Space(),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 		{
@@ -1647,7 +1579,7 @@ func TestSpace(t *testing.T) {
 			parser:        Space(),
 			input:         "1",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "1",
 		},
 		{
@@ -1655,7 +1587,7 @@ func TestSpace(t *testing.T) {
 			parser:        Space(),
 			input:         "123",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "123",
 		},
 	}
@@ -1666,16 +1598,16 @@ func TestSpace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1685,10 +1617,10 @@ func TestSpace(t *testing.T) {
 
 func BenchmarkSpace(b *testing.B) {
 	parser := Space()
-	input := NewInputFromString(" ")
+	input := NewFromString(" ")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1708,7 +1640,7 @@ func TestTab(t *testing.T) {
 			parser:        Tab(),
 			input:         "\t",
 			wantErr:       false,
-			wantOutput:    rune('\t'),
+			wantOutput:    '\t',
 			wantRemaining: "",
 		},
 		{
@@ -1716,7 +1648,7 @@ func TestTab(t *testing.T) {
 			parser:        Tab(),
 			input:         "\tabc",
 			wantErr:       false,
-			wantOutput:    rune('\t'),
+			wantOutput:    '\t',
 			wantRemaining: "abc",
 		},
 		{
@@ -1724,7 +1656,7 @@ func TestTab(t *testing.T) {
 			parser:        Tab(),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "",
 		},
 		{
@@ -1732,7 +1664,7 @@ func TestTab(t *testing.T) {
 			parser:        Tab(),
 			input:         "1",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "1",
 		},
 		{
@@ -1740,7 +1672,7 @@ func TestTab(t *testing.T) {
 			parser:        Tab(),
 			input:         "123",
 			wantErr:       true,
-			wantOutput:    rune(0),
+			wantOutput:    utf8.RuneError,
 			wantRemaining: "123",
 		},
 	}
@@ -1751,16 +1683,16 @@ func TestTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1770,10 +1702,10 @@ func TestTab(t *testing.T) {
 
 func BenchmarkTab(b *testing.B) {
 	parser := Tab()
-	input := NewInputFromString("\t")
+	input := NewFromString("\t")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1813,7 +1745,7 @@ func TestInt64(t *testing.T) {
 			wantRemaining: "abc",
 		},
 		{
-			name:          "parsing negative integer should succeed",
+			name:          "parsing negative integer prefix should succeed",
 			parser:        Int64(),
 			input:         "-123abc",
 			wantErr:       false,
@@ -1844,16 +1776,16 @@ func TestInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1863,10 +1795,10 @@ func TestInt64(t *testing.T) {
 
 func BenchmarkInt64(b *testing.B) {
 	parser := Int64()
-	input := NewInputFromString("123")
+	input := NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -1937,16 +1869,16 @@ func TestInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -1956,10 +1888,10 @@ func TestInt8(t *testing.T) {
 
 func BenchmarkInt8(b *testing.B) {
 	parser := Int8()
-	input := NewInputFromString("123")
+	input := NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -2014,16 +1946,16 @@ func TestUInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -2033,10 +1965,10 @@ func TestUInt8(t *testing.T) {
 
 func BenchmarkUInt8(b *testing.B) {
 	parser := UInt8()
-	input := NewInputFromString("253")
+	input := NewFromString("253")
 
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -2083,15 +2015,15 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if string(gotResult.Output) != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", string(gotResult.Output), tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -2101,10 +2033,118 @@ func TestToken(t *testing.T) {
 
 func BenchmarkToken(b *testing.B) {
 	parser := String("Bonjour")
-	input := NewInputFromString("Bonjour tout le monde")
+	input := NewFromString("Bonjour tout le monde")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
+	}
+}
+
+func TestSatisfyMN(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		p Parser[string]
+	}
+	testCases := []struct {
+		name          string
+		args          args
+		input         string
+		wantErr       bool
+		wantOutput    string
+		wantRemaining string
+	}{
+		{
+			name:  "parsing input with enough characters and partially matching predicated should succeed",
+			input: "latin123",
+			args: args{
+				p: SatisfyMN(3, 6, unicode.IsLetter),
+			},
+			wantErr:       false,
+			wantOutput:    "latin",
+			wantRemaining: "123",
+		},
+		{
+			name:  "parsing input longer than atLeast and atMost should succeed",
+			input: "lengthy",
+			args: args{
+				p: SatisfyMN(3, 6, unicode.IsLetter),
+			},
+			wantErr:       false,
+			wantOutput:    "length",
+			wantRemaining: "y",
+		},
+		{
+			name:  "parsing input longer than atLeast and shorter than atMost should succeed",
+			input: "latin",
+			args: args{
+				p: SatisfyMN(3, 6, unicode.IsLetter),
+			},
+			wantErr:       false,
+			wantOutput:    "latin",
+			wantRemaining: "",
+		},
+		{
+			name:  "parsing empty input should fail",
+			input: "",
+			args: args{
+				p: SatisfyMN(3, 6, unicode.IsLetter),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "",
+		},
+		{
+			name:  "parsing too short input should fail",
+			input: "ed",
+			args: args{
+				p: SatisfyMN(3, 6, unicode.IsLetter),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "ed",
+		},
+		{
+			name:  "parsing with non-matching predicate should fail",
+			input: "12345",
+			args: args{
+				p: SatisfyMN(3, 6, unicode.IsLetter),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "12345",
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+			}
+
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+			}
+
+			remainingString := newState.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkSatisfyMN(b *testing.B) {
+	p := SatisfyMN(3, 6, IsDigit)
+	input := NewFromString("13579")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = p(input)
 	}
 }

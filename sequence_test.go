@@ -76,16 +76,16 @@ func TestDelimited(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -95,11 +95,11 @@ func TestDelimited(t *testing.T) {
 
 func BenchmarkDelimited(b *testing.B) {
 	parser := Delimited(Char('+'), Digit1(), CRLF())
-	input := NewInputFromString("+1\r\n")
+	input := NewFromString("+1\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -164,16 +164,16 @@ func TestPreceded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -183,11 +183,11 @@ func TestPreceded(t *testing.T) {
 
 func BenchmarkPreceded(b *testing.B) {
 	parser := Preceded(Char('+'), Digit1())
-	input := NewInputFromString("+123")
+	input := NewFromString("+123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -262,18 +262,18 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
 			// testify makes it easier comparing slices
 			assert.Equal(t,
-				tc.wantOutput, gotResult.Output,
-				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
+				tc.wantOutput, gotResult,
+				"got output %v, want output %v", gotResult, tc.wantOutput,
 			)
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -283,11 +283,11 @@ func TestSequence(t *testing.T) {
 
 func BenchmarkSequence(b *testing.B) {
 	parser := Sequence(Digit1(), Alpha0(), Digit1())
-	input := NewInputFromString("123")
+	input := NewFromString("123A45")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }
 
@@ -352,16 +352,16 @@ func TestTerminated(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -371,10 +371,10 @@ func TestTerminated(t *testing.T) {
 
 func BenchmarkTerminated(b *testing.B) {
 	parser := Terminated(Digit1(), Char('+'))
-	input := NewInputFromString("123+")
+	input := NewFromString("123+")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser(input)
+		_, _ = parser(input)
 	}
 }

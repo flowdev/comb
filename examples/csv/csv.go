@@ -10,8 +10,8 @@ package csv
 import "github.com/oleiade/gomme"
 
 func ParseCSV(input string) ([][]string, error) {
-	parser := gomme.SeparatedList1(
-		gomme.SeparatedList1(
+	parser := gomme.Separated1(
+		gomme.Separated1(
 			gomme.Alternative(
 				gomme.Alphanumeric1(),
 				gomme.Delimited(gomme.Char('"'), gomme.Alphanumeric1(), gomme.Char('"')),
@@ -23,9 +23,9 @@ func ParseCSV(input string) ([][]string, error) {
 		false,
 	)
 
-	newState, output := parser(gomme.NewInputFromString(input))
+	newState, output := parser(gomme.NewFromString(input))
 	if newState.Failed() {
-		return nil, result.Err
+		return nil, newState
 	}
 
 	return output, nil

@@ -46,13 +46,13 @@ type State struct {
 	Messages        []Message
 }
 
-// NewInputFromString creates a new input data structure suitable for parsing.
-func NewInputFromString(input string) State {
+// NewFromString creates a new input data structure suitable for parsing.
+func NewFromString(input string) State {
 	return State{input: Input{bytes: []byte(input)}}
 }
 
-// NewInputFromBytes creates a new input data structure suitable for parsing.
-func NewInputFromBytes(input []byte) State {
+// NewFromBytes creates a new input data structure suitable for parsing.
+func NewFromBytes(input []byte) State {
 	return State{input: Input{bytes: input}}
 }
 
@@ -105,7 +105,7 @@ func (st State) ReachedPointOfNoReturn() State {
 }
 
 func (st State) NoWayBack() bool {
-	return st.pointOfNoReturn >= st.input.pos
+	return st.pointOfNoReturn > st.input.pos
 }
 
 //func (st State) PointOfNoReturn() uint {

@@ -67,20 +67,20 @@ func TestAlternative(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			input := NewInputFromString(tc.input)
-			gotResult := tc.args.p(input)
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			state := NewFromString(tc.input)
+			newState, gotResult := tc.args.p(state)
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
 			// testify makes it easier comparing slices
 			assert.Equal(t,
-				tc.wantOutput, gotResult.Output,
-				"got output %v, want output %v", gotResult.Output, tc.wantOutput,
+				tc.wantOutput, gotResult,
+				"got output %v, want output %v", gotResult, tc.wantOutput,
 			)
 
-			if gotResult.Remaining.CurrentString() != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", gotResult.Remaining, tc.wantRemaining)
+			if newState.CurrentString() != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", newState.CurrentString(), tc.wantRemaining)
 			}
 		})
 	}
@@ -88,9 +88,9 @@ func TestAlternative(t *testing.T) {
 
 func BenchmarkAlternative(b *testing.B) {
 	p := Alternative(Digit1(), Alpha1())
-	input := NewInputFromString("123")
+	input := NewFromString("123")
 
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }

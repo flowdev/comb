@@ -57,16 +57,16 @@ func TestOptional(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %v, want remaining %v", remainingString, tc.wantRemaining)
 			}
@@ -76,11 +76,11 @@ func TestOptional(t *testing.T) {
 
 func BenchmarkOptional(b *testing.B) {
 	p := Optional(CRLF())
-	input := NewInputFromString("\r\n123")
+	input := NewFromString("\r\n123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }
 
@@ -125,16 +125,16 @@ func TestPeek(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -144,11 +144,11 @@ func TestPeek(t *testing.T) {
 
 func BenchmarkPeek(b *testing.B) {
 	p := Peek(Alpha1())
-	input := NewInputFromString("abcd;")
+	input := NewFromString("abcd;")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }
 
@@ -215,16 +215,16 @@ func TestRecognize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if string(gotResult.Output) != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", string(gotResult.Output), tc.wantOutput)
+			if string(gotResult) != tc.wantOutput {
+				t.Errorf("got output %v, want output %v", string(gotResult), tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -234,11 +234,11 @@ func TestRecognize(t *testing.T) {
 
 func BenchmarkRecognize(b *testing.B) {
 	p := Recognize(Map2(Digit1(), Alpha1(), pairMapFunc))
-	input := NewInputFromString("123abc")
+	input := NewFromString("123abc")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }
 
@@ -283,16 +283,16 @@ func TestAssign(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.p(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.p(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
 			}
 
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -302,82 +302,77 @@ func TestAssign(t *testing.T) {
 
 func BenchmarkAssign(b *testing.B) {
 	p := Assign(1234, Alpha1())
-	input := NewInputFromString("abcd")
+	input := NewFromString("abcd")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }
 
 func TestMap1(t *testing.T) {
 	t.Parallel()
 
-	type TestStruct struct {
-		Foo int
-		Bar string
-	}
-
 	type args struct {
-		parser Parser[TestStruct]
+		parser Parser[int]
 	}
 	testCases := []struct {
 		name          string
 		input         string
 		args          args
 		wantErr       bool
-		wantOutput    TestStruct
+		wantOutput    int
 		wantRemaining string
 	}{
 		{
 			name:  "matching parser should succeed",
 			input: "1abc\r\n",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
-					left, _ := strconv.Atoi(digit)
-					return TestStruct{Foo: left, Bar: string(alpha)}, nil
+				Map1(Digit1(), func(digit string) (int, error) {
+					i, _ := strconv.Atoi(digit)
+					return i, nil
 				}),
 			},
 			wantErr:       false,
-			wantOutput:    TestStruct{Foo: 1, Bar: "abc"},
-			wantRemaining: "",
+			wantOutput:    1,
+			wantRemaining: "abc\r\n",
 		},
 		{
 			name:  "failing parser should fail",
 			input: "abc\r\n",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
-					left, _ := strconv.Atoi(digit)
-					return TestStruct{Foo: left, Bar: string(alpha)}, nil
+				Map1(Digit1(), func(digit string) (int, error) {
+					i, _ := strconv.Atoi(digit)
+					return i, nil
 				}),
 			},
 			wantErr:       true,
-			wantOutput:    TestStruct{},
+			wantOutput:    0,
 			wantRemaining: "abc\r\n",
 		},
 		{
 			name:  "failing mapper should fail",
 			input: "1abc\r\n",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
-					return TestStruct{}, errors.New("unexpected error")
+				Map1(Digit1(), func(digit string) (int, error) {
+					return 0, errors.New("unexpected error")
 				}),
 			},
 			wantErr:       true,
-			wantOutput:    TestStruct{},
+			wantOutput:    0,
 			wantRemaining: "1abc\r\n",
 		},
 		{
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
-					left, _ := strconv.Atoi(digit)
-					return TestStruct{Foo: left, Bar: string(alpha)}, nil
+				Map1(Digit1(), func(digit string) (int, error) {
+					i, _ := strconv.Atoi(digit)
+					return i, nil
 				}),
 			},
 			wantErr:       true,
-			wantOutput:    TestStruct{},
+			wantOutput:    0,
 			wantRemaining: "",
 		},
 	}
@@ -388,15 +383,15 @@ func TestMap1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %#v, want output %#v", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %#v, want output %#v", gotResult, tc.wantOutput)
 			}
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -405,20 +400,15 @@ func TestMap1(t *testing.T) {
 }
 
 func BenchmarkMap1(b *testing.B) {
-	type TestStruct struct {
-		Foo int
-		Bar string
-	}
-
-	p := Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
-		left, _ := strconv.Atoi(digit)
-		return TestStruct{Foo: left, Bar: string(alpha)}, nil
+	p := Map1(Digit1(), func(digit string) (int, error) {
+		i, _ := strconv.Atoi(digit)
+		return i, nil
 	})
-	input := NewInputFromString("1abc\r\n")
+	input := NewFromString("123abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }
 
@@ -445,22 +435,22 @@ func TestMap2(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "1abc\r\n",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+				Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
 					left, _ := strconv.Atoi(digit)
-					return TestStruct{Foo: left, Bar: string(alpha)}, nil
+					return TestStruct{Foo: left, Bar: alpha}, nil
 				}),
 			},
 			wantErr:       false,
 			wantOutput:    TestStruct{Foo: 1, Bar: "abc"},
-			wantRemaining: "",
+			wantRemaining: "\r\n",
 		},
 		{
 			name:  "failing parser should fail",
 			input: "abc\r\n",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+				Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
 					left, _ := strconv.Atoi(digit)
-					return TestStruct{Foo: left, Bar: string(alpha)}, nil
+					return TestStruct{Foo: left, Bar: alpha}, nil
 				}),
 			},
 			wantErr:       true,
@@ -471,7 +461,7 @@ func TestMap2(t *testing.T) {
 			name:  "failing mapper should fail",
 			input: "1abc\r\n",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+				Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
 					return TestStruct{}, errors.New("unexpected error")
 				}),
 			},
@@ -483,9 +473,9 @@ func TestMap2(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				Map2(Digit1(), TakeUntil(CRLF()), func(digit string, alpha []byte) (TestStruct, error) {
+				Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
 					left, _ := strconv.Atoi(digit)
-					return TestStruct{Foo: left, Bar: string(alpha)}, nil
+					return TestStruct{Foo: left, Bar: alpha}, nil
 				}),
 			},
 			wantErr:       true,
@@ -500,15 +490,15 @@ func TestMap2(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult := tc.args.parser(NewInputFromString(tc.input))
-			if (gotResult.Err != nil) != tc.wantErr {
-				t.Errorf("got error %v, want error %v", gotResult.Err, tc.wantErr)
+			newState, gotResult := tc.args.parser(NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
-			if gotResult.Output != tc.wantOutput {
-				t.Errorf("got output %#v, want output %#v", gotResult.Output, tc.wantOutput)
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %#v, want output %#v", gotResult, tc.wantOutput)
 			}
-			remainingString := gotResult.Remaining.CurrentString()
+			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
 				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
@@ -522,18 +512,18 @@ func BenchmarkMap2(b *testing.B) {
 		Bar string
 	}
 
-	p := Map2(Digit1(), TakeUntil(CRLF()), func(s string, bs []byte) (TestStruct, error) {
-		first, _ := strconv.Atoi(s)
-		return TestStruct{Foo: first, Bar: string(bs)}, nil
+	p := Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
+		first, _ := strconv.Atoi(digit)
+		return TestStruct{Foo: first, Bar: alpha}, nil
 	})
-	input := NewInputFromString("1abc\r\n")
+	input := NewFromString("1abc\r\n")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p(input)
+		_, _ = p(input)
 	}
 }
 
-func pairMapFunc(a string, b string) ([]byte, error) {
-	return nil, nil
+func pairMapFunc(_ string, _ string) (string, error) {
+	return "", nil
 }

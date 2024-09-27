@@ -17,10 +17,9 @@ func Preceded[OP, O any](prefix Parser[OP], parse Parser[O]) Parser[O] {
 	})
 }
 
-// Sequence applies a sequence of parsers and returns either a
-// slice of results or an error if any parser fails.
-// All parsers in the sequence have to produce the same result type.
-// Use one of the Map* parsers for different result types.
+// Sequence applies a sequence of parsers of the same type and
+// returns either a slice of results or an error if any parser fails.
+// Use one of the Map* parsers for differently typed parsers.
 func Sequence[O any](parsers ...Parser[O]) Parser[[]O] {
 	return func(state State) (State, []O) {
 		outputs := make([]O, 0, len(parsers))
