@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // Parser defines the type of a generic Parser function
@@ -41,7 +42,7 @@ type Input struct {
 // It consists of the text itself and the position in the input where it happened.
 type pcbError struct {
 	text      string
-	line, col int
+	line, col int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
 	srcLine   string
 }
 
@@ -173,7 +174,7 @@ func (st State) Failed() bool {
 
 func (st State) where(pos int) (line, col int, srcLine string) {
 	if len(st.input.bytes) == 0 {
-		return 1, 1, ""
+		return 1, 0, ""
 	}
 	if pos > st.input.prevNl { // pos is ahead of prevNL => search forward
 		return st.whereForward(pos, st.input.line, st.input.prevNl)
@@ -222,9 +223,9 @@ func (st State) whereBackward(pos, lineNum, nextNl int) (line, col int, srcLine 
 }
 func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, col int, srcLine string, stop bool) {
 	if prevNl < pos && pos <= nextNl {
-		return lineNum, pos - prevNl, string(st.input.bytes[prevNl+1 : nextNl]), true
+		return lineNum, pos - prevNl - 1, string(st.input.bytes[prevNl+1 : nextNl]), true
 	}
-	return 0, 0, "", false
+	return 1, 0, "", false
 }
 
 // Error returns a human readable error string.
@@ -235,10 +236,12 @@ func (st State) Error() string {
 		fullMsg.WriteString("expected ")
 		fullMsg.WriteString(pcbErr.text)
 
-		srcLine.WriteString(pcbErr.srcLine[:pcbErr.col-1]) // columns for the user start at 1
+		lineStart := pcbErr.srcLine[:pcbErr.col]
+		srcLine.WriteString(lineStart)
 		srcLine.WriteRune(0x25B6)
-		srcLine.WriteString(pcbErr.srcLine[pcbErr.col-1:]) // columns for the user start at 1
-		fullMsg.WriteString(fmt.Sprintf(" [%d, %d]: %q\n", pcbErr.line, pcbErr.col, srcLine.String()))
+		srcLine.WriteString(pcbErr.srcLine[pcbErr.col:])
+		fullMsg.WriteString(fmt.Sprintf(" [%d, %d]: %q\n",
+			pcbErr.line, utf8.RuneCountInString(lineStart)+1, srcLine.String())) // columns for the user start at 1
 	}
 
 	return fullMsg.String()
