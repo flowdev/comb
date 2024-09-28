@@ -1798,7 +1798,7 @@ func TestInt64(t *testing.T) {
 			}
 
 			if gotResult != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+				t.Errorf("got output %d, want output %d", gotResult, tc.wantOutput)
 			}
 
 			remainingString := newState.CurrentString()
@@ -1892,7 +1892,7 @@ func TestInt8(t *testing.T) {
 			}
 
 			if gotResult != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+				t.Errorf("got output %d, want output %d", gotResult, tc.wantOutput)
 			}
 
 			remainingString := newState.CurrentString()
@@ -1970,7 +1970,7 @@ func TestUInt8(t *testing.T) {
 			}
 
 			if gotResult != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+				t.Errorf("got output %d, want output %d", gotResult, tc.wantOutput)
 			}
 
 			remainingString := newState.CurrentString()

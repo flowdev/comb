@@ -21,6 +21,7 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 
 // Peek tries to apply the provided parser without consuming any input.
 // It effectively allows to look ahead in the input.
+// NoWayBack isn't honored here because we aren't officially parsing anything.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	return func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse(state)
