@@ -235,9 +235,9 @@ func (st State) Error() string {
 		fullMsg.WriteString("expected ")
 		fullMsg.WriteString(pcbErr.text)
 
-		srcLine.WriteString(pcbErr.srcLine[:pcbErr.col])
+		srcLine.WriteString(pcbErr.srcLine[:pcbErr.col-1]) // columns for the user start at 1
 		srcLine.WriteRune(0x25B6)
-		srcLine.WriteString(pcbErr.srcLine[pcbErr.col:])
+		srcLine.WriteString(pcbErr.srcLine[pcbErr.col-1:]) // columns for the user start at 1
 		fullMsg.WriteString(fmt.Sprintf(" [%d, %d]: %q\n", pcbErr.line, pcbErr.col, srcLine.String()))
 	}
 
