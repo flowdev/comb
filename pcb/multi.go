@@ -1,6 +1,7 @@
 package pcb
 
 import (
+	"fmt"
 	"github.com/oleiade/gomme"
 	"math"
 )
@@ -19,6 +20,8 @@ func Count[Output any](parse gomme.Parser[Output], count uint) gomme.Parser[[]Ou
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.Parser[[]Output] {
+	expected := "ManyMN"
+
 	return func(input gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, min(32, atMost))
 		remaining := input
@@ -29,7 +32,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 			}
 			newState, output := parse(remaining)
 			if newState.Failed() {
-				if count < atLeast {
+				if count < atLeast || newState.NoWayBack() {
 					return input.Failure(newState), []Output{}
 				}
 				return remaining, outputs
@@ -38,7 +41,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
 			if !newState.Moved(remaining) {
-				return input.AddError("(got empty element)"), []Output{}
+				return input.AddError(fmt.Sprintf("%s (got empty element)", expected)), []Output{}
 			}
 
 			outputs = append(outputs, output)
@@ -92,7 +95,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 		firstState, firstOutput := parse(state)
 		firstMoved := firstState.Moved(state)
 		if firstState.Failed() {
-			if atLeast > 0 {
+			if atLeast > 0 || firstState.NoWayBack() {
 				return state.Failure(firstState), []Output{}
 			}
 			return state, []Output{} // still success

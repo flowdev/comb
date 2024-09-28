@@ -21,7 +21,7 @@ type RGBColor struct {
 func ParseRGBColor(input string) (RGBColor, error) {
 	parser := pcb.Preceded(
 		pcb.Char('#'),
-		pcb.Map1(
+		pcb.Map(
 			pcb.Count(HexColorComponent(), 3),
 			func(components []uint8) (RGBColor, error) {
 				return RGBColor{components[0], components[1], components[2]}, nil
@@ -40,7 +40,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
 func HexColorComponent() gomme.Parser[uint8] {
-	return pcb.Map1(
+	return pcb.Map(
 		pcb.SatisfyMN(2, 2, pcb.IsHexDigit),
 		fromHex,
 	)

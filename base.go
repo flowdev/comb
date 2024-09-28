@@ -1,3 +1,8 @@
+// Package gomme implements a parser combinator library.
+// It provides a toolkit for developers to build reliable, fast, flexible, and easy-to-develop and maintain parsers
+// for both textual and binary formats. It extensively uses the recent introduction of Generics in the Go programming
+// language to offer flexibility in how combinators can be mixed and matched to produce the desired output while
+// providing as much compile-time type safety as possible.
 package gomme
 
 import (
@@ -6,13 +11,17 @@ import (
 	"strings"
 )
 
+// Parser defines the type of a generic Parser function
+// A few rules should be followed to prevent unexpected behaviour:
+//   - A parser that errors must add an error
+//   - A parser that errors should not change position of the states input
+//   - A parser that consumed some input should advance with state.MoveBy()
+type Parser[Output any] func(State) (State, Output)
+
 // Separator is a generic type for separators (byte, rune, []byte or string)
 type Separator interface {
 	~rune | ~byte | ~string | ~[]byte
 }
-
-// Parser defines the type of a generic Parser function
-type Parser[Output any] func(input State) (State, Output)
 
 // Input is the input data for all the parsers.
 // It can be either UTF-8 encoded text (a.k.a. string) or raw bytes.
@@ -25,11 +34,11 @@ type Input struct {
 	pos   uint // position in the sequence a.k.a. the *byte* index
 }
 
-// Message is an (error) message from the parser.
-// It consists of the Text itself and the position in the input where it happened.
-type Message struct {
-	Text string
-	Pos  uint
+// pcbError is an error message from the parser.
+// It consists of the text itself and the position in the input where it happened.
+type pcbError struct {
+	text      string
+	line, col uint
 }
 
 func ZeroOf[T any]() T {
@@ -43,15 +52,16 @@ func ZeroOf[T any]() T {
 type State struct {
 	input           Input
 	pointOfNoReturn uint // mark set by the NoWayBack parser
-	Messages        []Message
+	Messages        []pcbError
 }
 
-// NewFromString creates a new input data structure suitable for parsing.
+// NewFromString creates a new parser state from the input data.
 func NewFromString(input string) State {
 	return State{input: Input{bytes: []byte(input)}}
 }
 
-// NewFromBytes creates a new input data structure suitable for parsing.
+// NewFromBytes creates a new parser state from the input data.
+// This is useful for binary or mixed binary/text parsers.
 func NewFromBytes(input []byte) State {
 	return State{input: Input{bytes: input}}
 }
@@ -99,8 +109,8 @@ func (st State) Moved(other State) bool {
 	return st.input.pos != other.input.pos
 }
 
-func (st State) ReachedPointOfNoReturn() State {
-	st.pointOfNoReturn = st.input.pos
+func (st State) SignalNoWayBack() State {
+	st.pointOfNoReturn = max(st.pointOfNoReturn, st.input.pos+1)
 	return st
 }
 
@@ -108,19 +118,10 @@ func (st State) NoWayBack() bool {
 	return st.pointOfNoReturn > st.input.pos
 }
 
-//func (st State) PointOfNoReturn() uint {
-//	return st.pointOfNoReturn
-//}
-
-func (st State) Clean() State {
-	st.Messages = make([]Message, 0, 16)
-	return st
-}
-
-// Success return the State advanced to the position of
+// Success return the State with NoWayBack saved from
 // the subState.
 func (st State) Success(subState State) State {
-	st.input.pos = subState.input.pos
+	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
 	return st
 }
 
@@ -130,8 +131,12 @@ func (st State) Failure(subState State) State {
 	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
 
 	st.Messages = append(st.Messages, subState.Messages...)
-	slices.SortFunc(st.Messages, func(a, b Message) int { // always keep them sorted
-		return cmp.Compare(a.Pos, b.Pos)
+	slices.SortFunc(st.Messages, func(a, b pcbError) int { // always keep them sorted
+		i := cmp.Compare(a.line, b.line)
+		if i != 0 {
+			return i
+		}
+		return cmp.Compare(a.col, b.col)
 	})
 
 	return st
@@ -143,20 +148,17 @@ func (st State) Failed() bool {
 }
 
 // AddError adds the messages to this state at the current position.
-func (st State) AddError(messages ...string) State {
-	ms := make([]Message, len(messages))
-	for i, msg := range messages {
-		ms[i] = Message{Text: msg, Pos: st.input.pos}
-	}
-
-	return st.Failure(State{Messages: ms})
+func (st State) AddError(message string) State {
+	return st.Failure(State{Messages: []pcbError{{text: message, line: st.input.pos}}})
 }
 
 // Error returns a human readable error string.
 func (st State) Error() string {
 	fullMsg := strings.Builder{}
 	for _, message := range st.Messages {
-		fullMsg.WriteString(message.Text)
+		fullMsg.WriteString("expected ")
+		fullMsg.WriteString(message.text)
+		fullMsg.WriteString("[line, column]: source line")
 		fullMsg.WriteRune('\n')
 	}
 

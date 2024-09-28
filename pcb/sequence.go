@@ -21,7 +21,7 @@ func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 
 // Sequence applies a sequence of parsers of the same type and
 // returns either a slice of results or an error if any parser fails.
-// Use one of the Map* parsers for differently typed parsers.
+// Use one of the MapX parsers for differently typed parsers.
 func Sequence[O any](parsers ...gomme.Parser[O]) gomme.Parser[[]O] {
 	return func(state gomme.State) (gomme.State, []O) {
 		outputs := make([]O, 0, len(parsers))

@@ -311,7 +311,7 @@ func BenchmarkAssign(b *testing.B) {
 	}
 }
 
-func TestMap1(t *testing.T) {
+func TestMap(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
@@ -329,7 +329,7 @@ func TestMap1(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "1abc\r\n",
 			args: args{
-				Map1(Digit1(), func(digit string) (int, error) {
+				Map(Digit1(), func(digit string) (int, error) {
 					i, _ := strconv.Atoi(digit)
 					return i, nil
 				}),
@@ -342,7 +342,7 @@ func TestMap1(t *testing.T) {
 			name:  "failing parser should fail",
 			input: "abc\r\n",
 			args: args{
-				Map1(Digit1(), func(digit string) (int, error) {
+				Map(Digit1(), func(digit string) (int, error) {
 					i, _ := strconv.Atoi(digit)
 					return i, nil
 				}),
@@ -355,7 +355,7 @@ func TestMap1(t *testing.T) {
 			name:  "failing mapper should fail",
 			input: "1abc\r\n",
 			args: args{
-				Map1(Digit1(), func(digit string) (int, error) {
+				Map(Digit1(), func(digit string) (int, error) {
 					return 0, errors.New("unexpected error")
 				}),
 			},
@@ -367,7 +367,7 @@ func TestMap1(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				Map1(Digit1(), func(digit string) (int, error) {
+				Map(Digit1(), func(digit string) (int, error) {
 					i, _ := strconv.Atoi(digit)
 					return i, nil
 				}),
@@ -401,7 +401,7 @@ func TestMap1(t *testing.T) {
 }
 
 func BenchmarkMap1(b *testing.B) {
-	p := Map1(Digit1(), func(digit string) (int, error) {
+	p := Map(Digit1(), func(digit string) (int, error) {
 		i, _ := strconv.Atoi(digit)
 		return i, nil
 	})

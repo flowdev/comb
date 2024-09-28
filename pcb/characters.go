@@ -30,17 +30,17 @@ func Char(char rune) gomme.Parser[rune] {
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
-func Satisfy(predicate func(rune) bool) gomme.Parser[rune] {
+func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 	return func(state gomme.State) (gomme.State, rune) {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.AddError(fmt.Sprintf("%s (at EOF)", "Satisfy")), utf8.RuneError
+				return state.AddError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
 			}
-			return state.AddError(fmt.Sprintf("%s (got UTF-8 error)", "Satisfy")), utf8.RuneError
+			return state.AddError(fmt.Sprintf("%s (got UTF-8 error)", expected)), utf8.RuneError
 		}
 		if !predicate(r) {
-			return state.AddError(fmt.Sprintf("%s (got %q)", "Satisfy", r)), utf8.RuneError
+			return state.AddError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
 		}
 
 		return state.MoveBy(uint(size)), r
@@ -70,7 +70,7 @@ func UntilString(stop string) gomme.Parser[string] {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state.AddError(fmt.Sprintf("%q", stop)), ""
+			return state.AddError(fmt.Sprintf("... %q", stop)), ""
 		}
 
 		newState := state.MoveBy(uint(i + len(stop)))
@@ -212,7 +212,9 @@ func CRLF() gomme.Parser[string] {
 
 // OneOf parses a single character from the given set of characters.
 func OneOf(collection ...rune) gomme.Parser[rune] {
-	return Satisfy(func(r rune) bool {
+	expected := fmt.Sprintf("one of %q", collection)
+
+	return Satisfy(expected, func(r rune) bool {
 		for _, c := range collection {
 			if r == c {
 				return true

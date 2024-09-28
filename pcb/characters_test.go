@@ -79,6 +79,7 @@ func BenchmarkChar(b *testing.B) {
 	parser := Char('a')
 	input := gomme.NewFromString("a")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -164,6 +165,7 @@ func BenchmarkAlpha0(b *testing.B) {
 	parser := Alpha0()
 	input := gomme.NewFromString("abc")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -257,6 +259,7 @@ func BenchmarkAlpha1(b *testing.B) {
 	parser := Alpha1()
 	input := gomme.NewFromString("abc")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -342,6 +345,7 @@ func BenchmarkDigit0(b *testing.B) {
 	parser := Digit0()
 	input := gomme.NewFromString("123")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -435,6 +439,7 @@ func BenchmarkDigit1(b *testing.B) {
 	parser := Digit1()
 	input := gomme.NewFromString("123")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -520,6 +525,7 @@ func BenchmarkHexDigit0(b *testing.B) {
 	parser := HexDigit0()
 	input := gomme.NewFromString("1f3")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -613,6 +619,7 @@ func BenchmarkHexDigit1(b *testing.B) {
 	parser := HexDigit1()
 	input := gomme.NewFromString("1f3")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -864,7 +871,6 @@ func TestWhitespace1(t *testing.T) {
 func BenchmarkWhitespace1(b *testing.B) {
 	b.ReportAllocs()
 	input := gomme.NewFromString(" \t\n\r")
-
 	parser := Whitespace1()
 
 	b.ResetTimer()
@@ -993,6 +999,7 @@ func BenchmarkAlphanumeric0(b *testing.B) {
 	parser := Alphanumeric0()
 	input := gomme.NewFromString("a1b2c3")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1126,6 +1133,7 @@ func BenchmarkAlphanumeric1(b *testing.B) {
 	parser := Alphanumeric1()
 	input := gomme.NewFromString("a1b2c3")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1211,6 +1219,7 @@ func BenchmarkLF(b *testing.B) {
 	parser := LF()
 	input := gomme.NewFromString("\n")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1296,6 +1305,7 @@ func BenchmarkCR(b *testing.B) {
 	parser := CR()
 	input := gomme.NewFromString("\r")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1389,6 +1399,7 @@ func BenchmarkCRLF(b *testing.B) {
 	parser := CRLF()
 	input := gomme.NewFromString("\r\n")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1458,6 +1469,7 @@ func BenchmarkOneOf(b *testing.B) {
 	parser := OneOf('a', '1', '+')
 	input := gomme.NewFromString("+")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1476,7 +1488,7 @@ func TestSatisfy(t *testing.T) {
 	}{
 		{
 			name:          "parsing single alpha char satisfying constraint should succeed",
-			parser:        Satisfy(unicode.IsLetter),
+			parser:        Satisfy("letter", unicode.IsLetter),
 			input:         "a",
 			wantErr:       false,
 			wantOutput:    'a',
@@ -1484,7 +1496,7 @@ func TestSatisfy(t *testing.T) {
 		},
 		{
 			name:          "parsing alpha char satisfying constraint from mixed input should succeed",
-			parser:        Satisfy(unicode.IsLetter),
+			parser:        Satisfy("letter", unicode.IsLetter),
 			input:         "a1",
 			wantErr:       false,
 			wantOutput:    'a',
@@ -1492,7 +1504,7 @@ func TestSatisfy(t *testing.T) {
 		},
 		{
 			name:          "parsing char not satisfying constraint should succeed",
-			parser:        Satisfy(unicode.IsLetter),
+			parser:        Satisfy("letter", unicode.IsLetter),
 			input:         "1",
 			wantErr:       true,
 			wantOutput:    utf8.RuneError,
@@ -1500,7 +1512,7 @@ func TestSatisfy(t *testing.T) {
 		},
 		{
 			name:          "parsing empty input should succeed",
-			parser:        Satisfy(unicode.IsLetter),
+			parser:        Satisfy("letter", unicode.IsLetter),
 			input:         "",
 			wantErr:       true,
 			wantOutput:    utf8.RuneError,
@@ -1532,9 +1544,10 @@ func TestSatisfy(t *testing.T) {
 }
 
 func BenchmarkSatisfy(b *testing.B) {
-	parser := Satisfy(unicode.IsLetter)
+	parser := Satisfy("letter", unicode.IsLetter)
 	input := gomme.NewFromString("a")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1620,6 +1633,7 @@ func BenchmarkSpace(b *testing.B) {
 	parser := Space()
 	input := gomme.NewFromString(" ")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1705,6 +1719,7 @@ func BenchmarkTab(b *testing.B) {
 	parser := Tab()
 	input := gomme.NewFromString("\t")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1798,6 +1813,7 @@ func BenchmarkInt64(b *testing.B) {
 	parser := Int64()
 	input := gomme.NewFromString("123")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1891,6 +1907,7 @@ func BenchmarkInt8(b *testing.B) {
 	parser := Int8()
 	input := gomme.NewFromString("123")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}
@@ -1968,6 +1985,7 @@ func BenchmarkUInt8(b *testing.B) {
 	parser := UInt8()
 	input := gomme.NewFromString("253")
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = parser(input)
 	}

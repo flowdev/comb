@@ -127,7 +127,7 @@ func SimpleString() gomme.Parser[RESPMessage] {
 
 	return pcb.Preceded(
 		pcb.String(string(SimpleStringKind)),
-		pcb.Map1(pcb.UntilString("\r\n"), mapFn),
+		pcb.Map(pcb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -163,7 +163,7 @@ func Error() gomme.Parser[RESPMessage] {
 
 	return pcb.Preceded(
 		pcb.String(string(ErrorKind)),
-		pcb.Map1(pcb.UntilString("\r\n"), mapFn),
+		pcb.Map(pcb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -199,7 +199,7 @@ func Integer() gomme.Parser[RESPMessage] {
 
 	return pcb.Preceded(
 		pcb.String(string(IntegerKind)),
-		pcb.Map1(pcb.UntilString("\r\n"), mapFn),
+		pcb.Map(pcb.UntilString("\r\n"), mapFn),
 	)
 }
 
