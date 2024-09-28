@@ -41,7 +41,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 // which is a two digit hexadecimal number.
 func HexColorComponent() gomme.Parser[uint8] {
 	return pcb.Map(
-		pcb.SatisfyMN(2, 2, pcb.IsHexDigit),
+		pcb.SatisfyMN("hex digit", 2, 2, pcb.IsHexDigit),
 		fromHex,
 	)
 }

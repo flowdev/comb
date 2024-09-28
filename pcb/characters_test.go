@@ -2078,7 +2078,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing input with enough characters and partially matching predicated should succeed",
 			input: "latin123",
 			args: args{
-				p: SatisfyMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -2088,7 +2088,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and atMost should succeed",
 			input: "lengthy",
 			args: args{
-				p: SatisfyMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "length",
@@ -2098,7 +2098,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and shorter than atMost should succeed",
 			input: "latin",
 			args: args{
-				p: SatisfyMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -2108,7 +2108,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing empty input should fail",
 			input: "",
 			args: args{
-				p: SatisfyMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -2118,7 +2118,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing too short input should fail",
 			input: "ed",
 			args: args{
-				p: SatisfyMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -2128,7 +2128,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing with non-matching predicate should fail",
 			input: "12345",
 			args: args{
-				p: SatisfyMN(3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -2159,7 +2159,7 @@ func TestSatisfyMN(t *testing.T) {
 }
 
 func BenchmarkSatisfyMN(b *testing.B) {
-	p := SatisfyMN(3, 6, IsDigit)
+	p := SatisfyMN("letter", 3, 6, IsDigit)
 	input := gomme.NewFromString("13579")
 
 	b.ResetTimer()
