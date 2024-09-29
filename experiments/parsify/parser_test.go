@@ -15,7 +15,7 @@ func TestDelimitedByChar(t *testing.T) {
 		{
 			name:          "normal parser without Parsify",
 			basicParser:   pcb.Char('{'),
-			complexParser: pcb.Delimited(pcb.Char('{'), pcb.UntilString("STOP"), pcb.Char('}')),
+			complexParser: pcb.Delimited(Char('{'), UntilString("STOP"), Char('}')),
 		}, {
 			name:          "normal parser with Parsify",
 			basicParser:   Char('{'),
