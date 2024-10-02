@@ -26,10 +26,5 @@ func ParseCSV(input string) ([][]string, error) {
 		false,
 	)
 
-	newState, output := parser(gomme.NewFromString(input))
-	if newState.Failed() {
-		return nil, newState
-	}
-
-	return output, nil
+	return gomme.RunOnString(input, parser)
 }

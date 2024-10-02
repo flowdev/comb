@@ -15,3 +15,7 @@
 # vendor/
 
 examples/redis/testdata
+/.idea/.gitignore
+/.idea/modules.xml
+/.idea/parcomb.iml
+/.idea/vcs.xml

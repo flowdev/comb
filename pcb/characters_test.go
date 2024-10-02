@@ -58,7 +58,7 @@ func TestChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -81,7 +81,7 @@ func BenchmarkChar(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -144,7 +144,7 @@ func TestAlpha0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -167,7 +167,7 @@ func BenchmarkAlpha0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -238,7 +238,7 @@ func TestAlpha1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -261,7 +261,7 @@ func BenchmarkAlpha1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -324,7 +324,7 @@ func TestDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -347,7 +347,7 @@ func BenchmarkDigit0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -418,7 +418,7 @@ func TestDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -441,7 +441,7 @@ func BenchmarkDigit1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -504,7 +504,7 @@ func TestHexDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -527,7 +527,7 @@ func BenchmarkHexDigit0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -598,7 +598,7 @@ func TestHexDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -621,7 +621,7 @@ func BenchmarkHexDigit1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -724,7 +724,7 @@ func TestWhitespace0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -748,7 +748,7 @@ func BenchmarkWhitespace0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -851,7 +851,7 @@ func TestWhitespace1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -875,7 +875,7 @@ func BenchmarkWhitespace1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -978,7 +978,7 @@ func TestAlphanumeric0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1001,7 +1001,7 @@ func BenchmarkAlphanumeric0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1112,7 +1112,7 @@ func TestAlphanumeric1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1135,7 +1135,7 @@ func BenchmarkAlphanumeric1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1198,7 +1198,7 @@ func TestLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1221,7 +1221,7 @@ func BenchmarkLF(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1284,7 +1284,7 @@ func TestCR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1307,7 +1307,7 @@ func BenchmarkCR(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1378,7 +1378,7 @@ func TestCRLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1401,7 +1401,7 @@ func BenchmarkCRLF(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1448,7 +1448,7 @@ func TestOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1471,7 +1471,7 @@ func BenchmarkOneOf(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1526,7 +1526,7 @@ func TestSatisfy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1549,7 +1549,7 @@ func BenchmarkSatisfy(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1612,7 +1612,7 @@ func TestSpace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1635,7 +1635,7 @@ func BenchmarkSpace(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1698,7 +1698,7 @@ func TestTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1721,7 +1721,7 @@ func BenchmarkTab(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1792,7 +1792,7 @@ func TestInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1815,7 +1815,7 @@ func BenchmarkInt64(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1886,7 +1886,7 @@ func TestInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1909,7 +1909,7 @@ func BenchmarkInt8(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -1964,7 +1964,7 @@ func TestUInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1987,7 +1987,7 @@ func BenchmarkUInt8(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -2034,7 +2034,7 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -2056,7 +2056,7 @@ func BenchmarkToken(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -2078,7 +2078,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing input with enough characters and partially matching predicated should succeed",
 			input: "latin123",
 			args: args{
-				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 6, 3, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -2088,7 +2088,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and atMost should succeed",
 			input: "lengthy",
 			args: args{
-				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 6, 3, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "length",
@@ -2098,7 +2098,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing input longer than atLeast and shorter than atMost should succeed",
 			input: "latin",
 			args: args{
-				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 6, 3, unicode.IsLetter),
 			},
 			wantErr:       false,
 			wantOutput:    "latin",
@@ -2108,7 +2108,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing empty input should fail",
 			input: "",
 			args: args{
-				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 6, 3, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -2118,7 +2118,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing too short input should fail",
 			input: "ed",
 			args: args{
-				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 6, 3, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -2128,7 +2128,7 @@ func TestSatisfyMN(t *testing.T) {
 			name:  "parsing with non-matching predicate should fail",
 			input: "12345",
 			args: args{
-				p: SatisfyMN("letter", 3, 6, unicode.IsLetter),
+				p: SatisfyMN("letter", 6, 3, unicode.IsLetter),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -2141,7 +2141,7 @@ func TestSatisfyMN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -2159,11 +2159,11 @@ func TestSatisfyMN(t *testing.T) {
 }
 
 func BenchmarkSatisfyMN(b *testing.B) {
-	p := SatisfyMN("letter", 3, 6, IsDigit)
+	p := SatisfyMN("letter", 6, 3, IsDigit)
 	input := gomme.NewFromString("13579")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }

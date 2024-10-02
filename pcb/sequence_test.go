@@ -77,7 +77,7 @@ func TestDelimited(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -100,7 +100,7 @@ func BenchmarkDelimited(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestPreceded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -188,7 +188,7 @@ func BenchmarkPreceded(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -263,7 +263,7 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -288,7 +288,7 @@ func BenchmarkSequence(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }
 
@@ -353,7 +353,7 @@ func TestTerminated(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -376,6 +376,6 @@ func BenchmarkTerminated(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(input)
+		_, _ = parser.It(input)
 	}
 }

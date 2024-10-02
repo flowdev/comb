@@ -1,17 +1,21 @@
 package pcb
 
-import "github.com/oleiade/gomme"
+import (
+	"github.com/oleiade/gomme"
+)
 
 // NoWayBack applies a child parser and marks the state with NoWayBack if successful.
 func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	return func(state gomme.State) (gomme.State, Output) {
-		newState, output := parse(state)
+	newParse := func(state gomme.State) (gomme.State, Output) {
+		newState, output := parse.It(state)
 		if newState.Failed() {
 			return newState, output
 		}
 
 		return newState.SignalNoWayBack(), output
 	}
+
+	return gomme.NewParser[Output]("NoWayBack", parse.AvgConsumption, newParse)
 }
 
 // Alternative tests a list of parsers in order, one by one,
@@ -23,12 +27,23 @@ func Alternative[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Outpu
 	if len(parsers) == 0 {
 		panic("Alternative(missing parsers)")
 	}
+	count := 0
+	sum := 0
 
-	return func(state gomme.State) (gomme.State, Output) {
+	avgConsumption := func() uint {
+		if count == 0 {
+			return gomme.DefaultConsumption
+		}
+		return uint((sum + count/2) / count)
+	}
+
+	newParse := func(state gomme.State) (gomme.State, Output) {
 		bestState := state
 		for i, parse := range parsers {
-			newState, output := parse(state)
+			newState, output := parse.It(state)
 			if !newState.Failed() {
+				count++
+				sum += len(state.BytesTo(newState))
 				return newState, output
 			}
 			if newState.NoWayBack() {
@@ -45,4 +60,6 @@ func Alternative[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Outpu
 
 		return state.Failure(bestState), gomme.ZeroOf[Output]()
 	}
+
+	return gomme.NewParser[Output]("Alternative", avgConsumption, newParse)
 }

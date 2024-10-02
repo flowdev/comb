@@ -22,26 +22,40 @@ func Count[Output any](parse gomme.Parser[Output], count uint) gomme.Parser[[]Ou
 func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.Parser[[]Output] {
 	expected := "ManyMN"
 
-	return func(input gomme.State) (gomme.State, []Output) {
+	consumptionCount := uint(0)
+	consumptionSum := uint(0)
+
+	avgConsumption := func() uint {
+		if consumptionCount == 0 {
+			return gomme.DefaultConsumption
+		}
+		return (consumptionSum + consumptionCount/2) / consumptionCount
+	}
+
+	parseMany := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, min(32, atMost))
-		remaining := input
+		remaining := state
 		count := uint(0)
 		for {
 			if count >= atMost {
+				consumptionCount++
+				consumptionSum += uint(len(state.BytesTo(remaining)))
 				return remaining, outputs
 			}
-			newState, output := parse(remaining)
+			newState, output := parse.It(remaining)
 			if newState.Failed() {
 				if count < atLeast || newState.NoWayBack() {
-					return input.Failure(newState), []Output{}
+					return state.Failure(newState), []Output{}
 				}
+				consumptionCount++
+				consumptionSum += uint(len(state.BytesTo(remaining)))
 				return remaining, outputs
 			}
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
 			if !newState.Moved(remaining) {
-				return input.AddError(fmt.Sprintf("%s (got empty element)", expected)), []Output{}
+				return state.AddError(fmt.Sprintf("%s (got empty element)", expected)), []Output{}
 			}
 
 			outputs = append(outputs, output)
@@ -49,6 +63,8 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 			count++
 		}
 	}
+
+	return gomme.NewParser[[]Output]("ManyMN", avgConsumption, parseMany)
 }
 
 // Many0 applies a parser repeatedly until it fails, and returns a slice of all
@@ -87,38 +103,54 @@ func SeparatedMN[Output any, S gomme.Separator](
 ) gomme.Parser[[]Output] {
 	parseMany := ManyMN(Preceded(separator, parse), max(atLeast, 1)-1, atMost-1)
 
-	return func(state gomme.State) (gomme.State, []Output) {
+	consumptionCount := uint(0)
+	consumptionSum := uint(0)
+
+	avgConsumption := func() uint {
+		if consumptionCount == 0 {
+			return gomme.DefaultConsumption
+		}
+		return (consumptionSum + consumptionCount/2) / consumptionCount
+	}
+
+	parseSep := func(state gomme.State) (gomme.State, []Output) {
 		if atMost == 0 {
+			consumptionCount++
 			return state, []Output{}
 		}
 
-		firstState, firstOutput := parse(state)
+		firstState, firstOutput := parse.It(state)
 		firstMoved := firstState.Moved(state)
 		if firstState.Failed() {
 			if atLeast > 0 || firstState.NoWayBack() {
 				return state.Failure(firstState), []Output{}
 			}
+			consumptionCount++
 			return state, []Output{} // still success
 		}
 
-		newState, outputs := parseMany(firstState)
+		newState, outputs := parseMany.It(firstState)
 		if newState.Failed() {
 			return state.Failure(newState), []Output{}
 		}
 
 		if parseSeparatorAtEnd {
-			separatorState, _ := separator(newState)
+			separatorState, _ := separator.It(newState)
 			if !separatorState.Failed() {
 				newState = separatorState
 			}
 		}
 
+		consumptionCount++
+		consumptionSum += uint(len(state.BytesTo(newState)))
 		finalOutputs := make([]Output, 0, len(outputs)+1)
 		if firstMoved {
 			finalOutputs = append(finalOutputs, firstOutput)
 		}
 		return newState, append(finalOutputs, outputs...)
 	}
+
+	return gomme.NewParser[[]Output]("SeperatedMN", avgConsumption, parseSep)
 }
 
 // Separated0 applies an element parser and a separator parser repeatedly in order

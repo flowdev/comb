@@ -19,7 +19,7 @@ type RGBColor struct {
 // ParseRGBColor creates a new RGBColor from a hexadecimal color string.
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
-	parser := pcb.Preceded(
+	parse := pcb.Preceded(
 		pcb.Char('#'),
 		pcb.Map(
 			pcb.Count(HexColorComponent(), 3),
@@ -29,9 +29,9 @@ func ParseRGBColor(input string) (RGBColor, error) {
 		),
 	)
 
-	newState, output := parser(gomme.NewFromString(input))
-	if newState.Failed() {
-		return RGBColor{}, newState
+	output, err := gomme.RunOnString(input, parse)
+	if err != nil {
+		return RGBColor{}, err
 	}
 
 	return output, nil

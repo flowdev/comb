@@ -66,7 +66,7 @@ func TestCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -91,7 +91,7 @@ func BenchmarkCount(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(state)
+		_, _ = parser.It(state)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestMany0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -172,7 +172,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	state := gomme.NewFromString("abcdef")
 	parser := Many0(Digit0())
 
-	newState, output := parser(state)
+	newState, output := parser.It(state)
 
 	assert.Error(t, newState)
 	assert.Empty(t, output)
@@ -185,7 +185,7 @@ func BenchmarkMany0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(state)
+		_, _ = parser.It(state)
 	}
 }
 
@@ -260,7 +260,7 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -286,7 +286,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	state := gomme.NewFromString("abcdef")
 	parser := Many1(Digit0())
 
-	newState, output := parser(state)
+	newState, output := parser.It(state)
 
 	assert.Error(t, newState)
 	assert.Empty(t, output)
@@ -299,7 +299,7 @@ func BenchmarkMany1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser(state)
+		_, _ = parser.It(state)
 	}
 }
 
@@ -394,7 +394,7 @@ func TestSeparated0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -419,7 +419,7 @@ func BenchmarkSeparated0(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		_, _ = parser(state)
+		_, _ = parser.It(state)
 	}
 }
 
@@ -494,7 +494,7 @@ func TestSeparated1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -519,6 +519,6 @@ func BenchmarkSeparated1(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		_, _ = parser(state)
+		_, _ = parser.It(state)
 	}
 }

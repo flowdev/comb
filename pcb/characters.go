@@ -13,25 +13,41 @@ import (
 // Char parses a single character and matches it with
 // a provided candidate.
 func Char(char rune) gomme.Parser[rune] {
-	return func(state gomme.State) (gomme.State, rune) {
+	expected := strconv.QuoteRune(char)
+
+	parse := func(state gomme.State) (gomme.State, rune) {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.AddError(fmt.Sprintf("%q (at EOF)", char)), utf8.RuneError
+				return state.AddError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
 			}
-			return state.AddError(fmt.Sprintf("%q (got UTF-8 error)", char)), utf8.RuneError
+			return state.AddError(fmt.Sprintf("%s (got UTF-8 error)", expected)), utf8.RuneError
 		}
 		if r != char {
-			return state.AddError(fmt.Sprintf("%q (got %q)", char, r)), utf8.RuneError
+			return state.AddError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
 		}
 
 		return state.MoveBy(uint(size)), r
 	}
+
+	return gomme.NewParser[rune](expected, gomme.ConstantConsumption(uint(utf8.RuneCountInString(string(char)))), parse)
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
+// `expected` is used in error messages to tell the user what is expected at the current position.
+// `avgConsumption` is used in error handling to choose the best path to follow.
 func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
-	return func(state gomme.State) (gomme.State, rune) {
+	count := 0
+	sum := 0
+
+	avgConsumption := func() uint {
+		if count == 0 {
+			return 2 // one rune can never be 5 bytes long
+		}
+		return uint((sum + count/2) / count)
+	}
+
+	parse := func(state gomme.State) (gomme.State, rune) {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
@@ -43,22 +59,30 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 			return state.AddError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
 		}
 
+		sum += size
+		count++
 		return state.MoveBy(uint(size)), r
 	}
+
+	return gomme.NewParser[rune](expected, avgConsumption, parse)
 }
 
 // String parses a token from the input, and returns the part of the input that
 // matched the token.
 // If the token could not be found, the parser returns an error result.
 func String(token string) gomme.Parser[string] {
-	return func(state gomme.State) (gomme.State, string) {
+	expected := strconv.Quote(token)
+
+	parse := func(state gomme.State) (gomme.State, string) {
 		if !strings.HasPrefix(state.CurrentString(), token) {
-			return state.AddError(fmt.Sprintf("%q", token)), ""
+			return state.AddError(expected), ""
 		}
 
 		newState := state.MoveBy(uint(len(token)))
-		return newState, state.StringTo(newState)
+		return newState, token
 	}
+
+	return gomme.NewParser[string](expected, gomme.ConstantConsumption(uint(len(token))), parse)
 }
 
 // UntilString parses until it finds a token in the input, and returns
@@ -66,16 +90,31 @@ func String(token string) gomme.Parser[string] {
 // If found the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
 func UntilString(stop string) gomme.Parser[string] {
-	return func(state gomme.State) (gomme.State, string) {
+	count := uint(0)
+	sum := uint(0)
+
+	avgConsumption := func() uint {
+		if count == 0 {
+			return gomme.DefaultConsumption
+		}
+		return (sum + count/2) / count
+	}
+
+	parse := func(state gomme.State) (gomme.State, string) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
 			return state.AddError(fmt.Sprintf("... %q", stop)), ""
 		}
 
-		newState := state.MoveBy(uint(i + len(stop)))
+		consumption := uint(i + len(stop))
+		sum += consumption
+		count++
+		newState := state.MoveBy(consumption)
 		return newState, input[:i]
 	}
+
+	return gomme.NewParser[string](stop, avgConsumption, parse)
 }
 
 // SatisfyMN returns the longest input subset that matches the predicate,
@@ -83,15 +122,28 @@ func UntilString(stop string) gomme.Parser[string] {
 //
 // If the provided parser is not successful or the predicate doesn't match
 // `atLeast` times, the parser fails and goes back to the start.
-func SatisfyMN(expected string, atLeast, atMost uint, predicate func(rune) bool) gomme.Parser[string] {
-	return func(state gomme.State) (gomme.State, string) {
+func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool) gomme.Parser[string] {
+	consumptionCount := 0
+	consumptionSum := 0
+
+	avgConsumption := func() uint {
+		if consumptionCount == 0 {
+			return gomme.DefaultConsumption
+		}
+		return uint((consumptionSum + consumptionCount/2) / consumptionCount)
+	}
+
+	parse := func(state gomme.State) (gomme.State, string) {
 		current := state
 		count := uint(0)
 		for atMost > count {
 			r, size := utf8.DecodeRune(current.CurrentBytes())
 			if r == utf8.RuneError {
 				if count >= atLeast {
-					return current, state.StringTo(current)
+					output := state.StringTo(current)
+					consumptionCount++
+					consumptionSum += len(output)
+					return current, output
 				}
 				if size == 0 {
 					return state.Failure(current.AddError(
@@ -105,7 +157,10 @@ func SatisfyMN(expected string, atLeast, atMost uint, predicate func(rune) bool)
 
 			if !predicate(r) {
 				if count >= atLeast {
-					return current, state.StringTo(current)
+					output := state.StringTo(current)
+					consumptionCount++
+					consumptionSum += len(output)
+					return current, output
 				}
 				return state.Failure(current.AddError(
 					fmt.Sprintf("%s (need %d, found %d, got %q)", expected, atLeast, count, r),
@@ -116,83 +171,107 @@ func SatisfyMN(expected string, atLeast, atMost uint, predicate func(rune) bool)
 			count++
 		}
 
-		return current, state.StringTo(current)
+		output := state.StringTo(current)
+		consumptionCount++
+		consumptionSum += len(output)
+		return current, output
 	}
+
+	return gomme.NewParser[string](expected, avgConsumption, parse)
 }
 
 // AlphaMN parses at least `atLeast` and at most `atMost` Unicode letters.
 func AlphaMN(atLeast, atMost uint) gomme.Parser[string] {
-	return SatisfyMN("letter", atLeast, atMost, unicode.IsLetter)
+	return SatisfyMN("letter", atMost, atLeast, unicode.IsLetter)
 }
 
 // Alpha0 parses a zero or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input is empty, or no character is found, the parser
 // returns the input as is.
 func Alpha0() gomme.Parser[string] {
-	return SatisfyMN("letter", 0, math.MaxUint, unicode.IsLetter)
+	return SatisfyMN("letter", math.MaxUint, 0, unicode.IsLetter)
 }
 
 // Alpha1 parses one or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alpha1() gomme.Parser[string] {
-	return SatisfyMN("letter", 1, math.MaxUint, unicode.IsLetter)
+	return SatisfyMN("letter", math.MaxUint, 1, unicode.IsLetter)
 }
 
 // Alphanumeric0 parses zero or more alphabetical or numerical Unicode characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Alphanumeric0() gomme.Parser[string] {
-	return SatisfyMN("letter or numeral", 0, math.MaxUint, IsAlphanumeric)
+	return SatisfyMN("letter or numeral", math.MaxUint, 0, IsAlphanumeric)
 }
 
 // Alphanumeric1 parses one or more alphabetical or numerical Unicode characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alphanumeric1() gomme.Parser[string] {
-	return SatisfyMN("letter or numeral", 1, math.MaxUint, IsAlphanumeric)
+	return SatisfyMN("letter or numeral", math.MaxUint, 1, IsAlphanumeric)
 }
 
 // Digit0 parses zero or more ASCII numerical characters: 0-9.
 // In the cases where the input is empty, or no digit character is found, the parser
 // returns the input as is.
 func Digit0() gomme.Parser[string] {
-	return SatisfyMN("digit", 0, math.MaxUint, IsDigit)
+	return SatisfyMN("digit", math.MaxUint, 0, IsDigit)
 }
 
 // Digit1 parses one or more numerical characters: 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Digit1() gomme.Parser[string] {
-	return SatisfyMN("digit", 1, math.MaxUint, IsDigit)
+	return SatisfyMN("digit", math.MaxUint, 1, IsDigit)
 }
 
 // HexDigit0 parses zero or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input is empty, or no terminating character is found, the parser
 // returns the input as is.
 func HexDigit0() gomme.Parser[string] {
-	return SatisfyMN("hexadecimal digit", 0, math.MaxUint, IsHexDigit)
+	return SatisfyMN("hexadecimal digit", math.MaxUint, 0, IsHexDigit)
 }
 
 // HexDigit1 parses one or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func HexDigit1() gomme.Parser[string] {
-	return SatisfyMN("hexadecimal digit", 1, math.MaxUint, IsHexDigit)
+	return SatisfyMN("hexadecimal digit", math.MaxUint, 1, IsHexDigit)
 }
 
 // Whitespace0 parses zero or more Unicode whitespace characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Whitespace0() gomme.Parser[string] {
-	return SatisfyMN("whitespace", 0, math.MaxUint, unicode.IsSpace)
+	return SatisfyMN("whitespace", math.MaxUint, 0, unicode.IsSpace)
 }
 
 // Whitespace1 parses one or more Unicode whitespace characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Whitespace1() gomme.Parser[string] {
-	return SatisfyMN("whitespace", 1, math.MaxUint, unicode.IsSpace)
+	return SatisfyMN("whitespace", math.MaxUint, 1, unicode.IsSpace)
+}
+
+// OneOf parses a single character from the given set of characters.
+func OneOf(collection ...rune) gomme.Parser[rune] {
+	n := len(collection)
+	if n == 0 {
+		panic("OneOf has no characters to match")
+	}
+	expected := fmt.Sprintf("one of %q", collection)
+
+	return Satisfy(expected, func(r rune) bool {
+		for _, c := range collection {
+			if r == c {
+				return true
+			}
+		}
+
+		return false
+	})
 }
 
 // LF parses a line feed `\n` character.
@@ -208,21 +287,6 @@ func CR() gomme.Parser[rune] {
 // CRLF parses the string `\r\n`.
 func CRLF() gomme.Parser[string] {
 	return String("\r\n")
-}
-
-// OneOf parses a single character from the given set of characters.
-func OneOf(collection ...rune) gomme.Parser[rune] {
-	expected := fmt.Sprintf("one of %q", collection)
-
-	return Satisfy(expected, func(r rune) bool {
-		for _, c := range collection {
-			if r == c {
-				return true
-			}
-		}
-
-		return false
-	})
 }
 
 // Space parses an ASCII space character (' ').

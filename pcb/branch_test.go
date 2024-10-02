@@ -114,7 +114,7 @@ func TestNoWayBack(t *testing.T) {
 			t.Parallel()
 
 			state := gomme.NewFromString(tc.input)
-			newState, gotResult := tc.args.p(state)
+			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -136,7 +136,7 @@ func BenchmarkNoWayBack(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
@@ -202,7 +202,7 @@ func TestAlternative(t *testing.T) {
 			t.Parallel()
 
 			state := gomme.NewFromString(tc.input)
-			newState, gotResult := tc.args.p(state)
+			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -224,6 +224,6 @@ func BenchmarkAlternative(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }

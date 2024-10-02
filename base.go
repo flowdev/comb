@@ -7,18 +7,122 @@ package gomme
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
-// Parser defines the type of a generic Parser function
+const DefaultConsumption = 5 // DefaultConsumption of 5 is to be used until we have better data
+
+// Parser defines the type of a generic Parser
 // A few rules should be followed to prevent unexpected behaviour:
-//   - A parser that errors must add an error
+//   - A parser that errors must add an error to the state
 //   - A parser that errors should not change position of the states input
-//   - A parser that consumed some input should advance with state.MoveBy()
-type Parser[Output any] func(State) (State, Output)
+//   - A parser that consumed some input must advance with state.MoveBy()
+type Parser[Output any] interface {
+	Expected() string
+	AvgConsumption() uint
+	It(state State) (State, Output)
+}
+
+type prsr[Output any] struct {
+	expected       string
+	avgConsumption func() uint
+	it             func(state State) (State, Output)
+}
+
+func (p prsr[Output]) Expected() string {
+	return p.expected
+}
+
+func (p prsr[Output]) AvgConsumption() uint {
+	return p.avgConsumption()
+}
+
+func (p prsr[Output]) It(state State) (State, Output) {
+	return p.it(state)
+}
+
+func NewParser[Output any](expected string, avgConsumption func() uint, parse func(State) (State, Output)) Parser[Output] {
+	return prsr[Output]{
+		expected:       expected,
+		avgConsumption: avgConsumption,
+		it:             parse,
+	}
+}
+
+type lazyprsr[Output any] struct {
+	once       sync.Once
+	makePrsr   func() Parser[Output]
+	cachedPrsr Parser[Output]
+}
+
+func (lp *lazyprsr[Output]) ensurePrsr() {
+	lp.cachedPrsr = lp.makePrsr()
+}
+
+func (lp *lazyprsr[Output]) Expected() string {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.Expected()
+}
+
+func (lp *lazyprsr[Output]) AvgConsumption() uint {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.AvgConsumption()
+}
+
+func (lp *lazyprsr[Output]) It(state State) (State, Output) {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.It(state)
+}
+
+func LazyParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
+	return &lazyprsr[Output]{makePrsr: makeParser}
+}
+
+func ConstantConsumption(consumption uint) func() uint {
+	return func() uint {
+		return consumption
+	}
+}
+
+// RunOnString runs a parser on text input and returns the output and error(s).
+func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
+	return run(NewFromString(input), parse)
+}
+
+// RunOnBytes runs a parser on binary input and returns the output and error(s).
+// This is useful for binary or mixed binary/text parsers.
+func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
+	return run(NewState(input), parse)
+}
+
+func run[Output any](state State, parse Parser[Output]) (Output, error) {
+	var output Output
+	var newState State
+
+	for {
+		newState, output = parse.It(state)
+		// TODO: remove the following 2 lines after real handling of errors
+		newState.oldErrors = append(newState.oldErrors, newState.newErrors...)
+		newState.newErrors = newState.newErrors[:0]
+		fmt.Println("len(newErrs)", len(newState.newErrors))
+		if !newState.Failed() {
+			break
+		}
+
+		// move from looking for errors to handling errors mode
+		newState.chooseErrorsToHandle()
+		state = newState
+	}
+
+	return output, pcbErrorsToGoErrors(newState.oldErrors)
+}
 
 // Separator is a generic type for separators (byte, rune, []byte or string)
 type Separator interface {
@@ -58,17 +162,18 @@ type State struct {
 	input           Input
 	pointOfNoReturn int        // mark set by SignalNoWayBack/NoWayBack parser
 	newErrors       []pcbError // errors that haven't been handled yet
+	curErrors       []pcbError // errors that are currently handled
+	tmpErrors       []pcbError // additional errors accompanying the curErrors
 	oldErrors       []pcbError // errors that have been handled already
 }
 
 // NewFromString creates a new parser state from the input data.
 func NewFromString(input string) State {
-	return NewFromBytes([]byte(input))
+	return NewState([]byte(input))
 }
 
-// NewFromBytes creates a new parser state from the input data.
-// This is useful for binary or mixed binary/text parsers.
-func NewFromBytes(input []byte) State {
+// NewState creates a new parser state from the input data.
+func NewState(input []byte) State {
 	return State{input: Input{bytes: input, line: 1, prevNl: -1}, pointOfNoReturn: -1}
 }
 
@@ -232,19 +337,83 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 func (st State) Error() string {
 	fullMsg := strings.Builder{}
 	for _, pcbErr := range st.newErrors {
-		srcLine := strings.Builder{}
-		fullMsg.WriteString("expected ")
-		fullMsg.WriteString(pcbErr.text)
-
-		lineStart := pcbErr.srcLine[:pcbErr.col]
-		srcLine.WriteString(lineStart)
-		srcLine.WriteRune(0x25B6)
-		srcLine.WriteString(pcbErr.srcLine[pcbErr.col:])
-		fullMsg.WriteString(fmt.Sprintf(" [%d, %d]: %q\n",
-			pcbErr.line, utf8.RuneCountInString(lineStart)+1, srcLine.String())) // columns for the user start at 1
+		fullMsg.WriteString(singleErrorMsg(pcbErr))
+		fullMsg.WriteRune('\n')
 	}
 
 	return fullMsg.String()
+}
+
+func singleErrorMsg(pcbErr pcbError) string {
+	fullMsg := strings.Builder{}
+	srcLine := strings.Builder{}
+	fullMsg.WriteString("expected ")
+	fullMsg.WriteString(pcbErr.text)
+
+	lineStart := pcbErr.srcLine[:pcbErr.col]
+	srcLine.WriteString(lineStart)
+	srcLine.WriteRune(0x25B6)
+	srcLine.WriteString(pcbErr.srcLine[pcbErr.col:])
+	fullMsg.WriteString(fmt.Sprintf(" [%d, %d]: %q",
+		pcbErr.line, utf8.RuneCountInString(lineStart)+1, srcLine.String())) // columns for the user start at 1
+
+	return fullMsg.String()
+}
+
+// ============================================================================
+// Parser accounting (for fair decisions about which parser path is best)
+//
+
+func pcbErrorsToGoErrors(pcbErrors []pcbError) error {
+	if len(pcbErrors) == 0 {
+		return nil
+	}
+
+	goErrors := make([]error, len(pcbErrors))
+	for i, pe := range pcbErrors {
+		goErrors[i] = errors.New(singleErrorMsg(pe))
+	}
+
+	return errors.Join(goErrors...)
+}
+
+func (st State) chooseErrorsToHandle() {
+	m := len(st.newErrors) - 1
+	line, col := st.newErrors[m].line, st.newErrors[m].col
+
+	for _, e := range st.newErrors { // keep the order as it is
+		if e.line == line && e.col == col {
+			st.curErrors = append(st.curErrors, e)
+		} else {
+			st.oldErrors = append(st.oldErrors, e)
+		}
+	}
+
+	clear(st.newErrors)
+}
+
+// ============================================================================
+
+// defaultConsumption is used for parsers that aren't registered in parserData
+const defaultConsumption = 5
+
+type parserData struct {
+	id             int
+	expected       string
+	avgConsumption int // in bytes
+}
+
+var parserMap map[uintptr]parserData = make(map[uintptr]parserData)
+var lastParserID uint64
+
+func NewParserID() uint64 {
+	return atomic.AddUint64(&lastParserID, 1)
+}
+func RegisterParser[Output any](parse Parser[Output], expected string, avgConsumption int) {
+	parserMap[reflect.ValueOf(parse).Pointer()] = parserData{
+		expected:       expected,
+		avgConsumption: avgConsumption,
+	}
 }
 
 // ============================================================================

@@ -58,7 +58,7 @@ func TestOptional(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -81,7 +81,7 @@ func BenchmarkOptional(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestPeek(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -149,7 +149,7 @@ func BenchmarkPeek(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
@@ -216,7 +216,7 @@ func TestRecognize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -239,7 +239,7 @@ func BenchmarkRecognize(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
@@ -284,7 +284,7 @@ func TestAssign(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -307,7 +307,7 @@ func BenchmarkAssign(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
@@ -384,7 +384,7 @@ func TestMap(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -409,7 +409,7 @@ func BenchmarkMap1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
@@ -491,7 +491,7 @@ func TestMap2(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.parser(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.parser.It(gomme.NewFromString(tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -521,7 +521,7 @@ func BenchmarkMap2(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p(input)
+		_, _ = p.It(input)
 	}
 }
 
