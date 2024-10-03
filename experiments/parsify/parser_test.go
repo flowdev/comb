@@ -2,6 +2,7 @@ package parsify
 
 import (
 	"github.com/oleiade/gomme"
+	. "github.com/oleiade/gomme/cute"
 	"github.com/oleiade/gomme/pcb"
 	"testing"
 )
@@ -16,8 +17,8 @@ func TestDelimitedByChar(t *testing.T) {
 	}{
 		{
 			name:           "normal parser without Parsify",
-			basicParser1:   pcb.Char('{'),
-			complexParser1: pcb.Delimited(pcb.Char('{'), pcb.UntilString("STOP"), pcb.Char('}')),
+			basicParser1:   C('{'),
+			complexParser1: pcb.Delimited(C('{'), pcb.UntilString("STOP"), C('}')),
 		}, {
 			name:           "normal parser with Parsify",
 			basicParser2:   Char('{'),
