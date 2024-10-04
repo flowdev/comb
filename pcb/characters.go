@@ -14,28 +14,28 @@ import (
 // a provided candidate.
 func Char(char rune) gomme.Parser[rune] {
 	expected := strconv.QuoteRune(char)
+	consumption := uint(utf8.RuneCountInString(string(char)))
 
 	parse := func(state gomme.State) (gomme.State, rune) {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.AddError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
+				return state.NewError(fmt.Sprintf("%s (at EOF)", expected), state, consumption), utf8.RuneError
 			}
-			return state.AddError(fmt.Sprintf("%s (got UTF-8 error)", expected)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%s (got UTF-8 error)", expected), state, consumption), utf8.RuneError
 		}
 		if r != char {
-			return state.AddError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%s (got %q)", expected, r), state, consumption), utf8.RuneError
 		}
 
 		return state.MoveBy(uint(size)), r
 	}
 
-	return gomme.NewParser[rune](expected, gomme.ConstantConsumption(uint(utf8.RuneCountInString(string(char)))), parse)
+	return gomme.NewParser[rune](expected, gomme.ConstantConsumption(consumption), parse)
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
 // `expected` is used in error messages to tell the user what is expected at the current position.
-// `avgConsumption` is used in error handling to choose the best path to follow.
 func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 	count := 0
 	sum := 0
@@ -51,12 +51,12 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.AddError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
+				return state.NewError(fmt.Sprintf("%s (at EOF)", expected), state, avgConsumption()), utf8.RuneError
 			}
-			return state.AddError(fmt.Sprintf("%s (got UTF-8 error)", expected)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%s (got UTF-8 error)", expected), state, avgConsumption()), utf8.RuneError
 		}
 		if !predicate(r) {
-			return state.AddError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%s (got %q)", expected, r), state, avgConsumption()), utf8.RuneError
 		}
 
 		sum += size
@@ -75,7 +75,7 @@ func String(token string) gomme.Parser[string] {
 
 	parse := func(state gomme.State) (gomme.State, string) {
 		if !strings.HasPrefix(state.CurrentString(), token) {
-			return state.AddError(expected), ""
+			return state.NewError(expected, state, uint(len(token))), ""
 		}
 
 		newState := state.MoveBy(uint(len(token)))
@@ -95,7 +95,7 @@ func UntilString(stop string) gomme.Parser[string] {
 
 	avgConsumption := func() uint {
 		if count == 0 {
-			return gomme.DefaultConsumption
+			return uint(len(stop) * 2)
 		}
 		return (sum + count/2) / count
 	}
@@ -104,7 +104,7 @@ func UntilString(stop string) gomme.Parser[string] {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state.AddError(fmt.Sprintf("... %q", stop)), ""
+			return state.NewError(fmt.Sprintf("... %q", stop), state, avgConsumption()), ""
 		}
 
 		consumption := uint(i + len(stop))
@@ -128,7 +128,7 @@ func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool)
 
 	avgConsumption := func() uint {
 		if consumptionCount == 0 {
-			return gomme.DefaultConsumption
+			return min(gomme.DefaultConsumption, atLeast)
 		}
 		return uint((consumptionSum + consumptionCount/2) / consumptionCount)
 	}
@@ -145,14 +145,17 @@ func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool)
 					consumptionSum += len(output)
 					return current, output
 				}
+				avgc := avgConsumption()
 				if size == 0 {
-					return state.Failure(current.AddError(
+					return state.NewError(
 						fmt.Sprintf("%s (need %d, found %d at EOF)", expected, atLeast, count),
-					)), ""
+						current, avgc*(atLeast-count)/atLeast,
+					), ""
 				}
-				return state.Failure(current.AddError(
+				return state.NewError(
 					fmt.Sprintf("%s (need %d, found %d, got UTF-8 error)", expected, atLeast, count),
-				)), ""
+					current, avgc*(atLeast-count)/atLeast,
+				), ""
 			}
 
 			if !predicate(r) {
@@ -162,9 +165,11 @@ func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool)
 					consumptionSum += len(output)
 					return current, output
 				}
-				return state.Failure(current.AddError(
+				avgc := avgConsumption()
+				return state.NewError(
 					fmt.Sprintf("%s (need %d, found %d, got %q)", expected, atLeast, count, r),
-				)), ""
+					current, avgc*(atLeast-count)/atLeast,
+				), ""
 			}
 
 			current = current.MoveBy(uint(size))

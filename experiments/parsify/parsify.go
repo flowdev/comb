@@ -3,6 +3,7 @@ package parsify
 import (
 	"fmt"
 	"github.com/oleiade/gomme"
+	"strconv"
 	"unicode/utf8"
 )
 
@@ -28,16 +29,18 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 		if op, ok := ip.(Output); ok { // Output == rune
 			iruneErr := interface{}(utf8.RuneError)
 			oruneErr, _ := iruneErr.(Output)
+			expected := strconv.QuoteRune(ap)
+			consumption := uint(utf8.RuneCountInString(string(ap)))
 			return func(state gomme.State) (gomme.State, Output) {
 				r, size := utf8.DecodeRune(state.CurrentBytes())
 				if r == utf8.RuneError {
 					if size == 0 {
-						return state.AddError(fmt.Sprintf("%q (at EOF)", ap)), oruneErr
+						return state.NewError(fmt.Sprintf("%q (at EOF)", expected), state, consumption), oruneErr
 					}
-					return state.AddError(fmt.Sprintf("%q (got UTF-8 error)", ap)), oruneErr
+					return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected), state, consumption), oruneErr
 				}
 				if r != ap {
-					return state.AddError(fmt.Sprintf("%q (got %q)", ap, r)), oruneErr
+					return state.NewError(fmt.Sprintf("%q (got %q)", expected, r), state, consumption), oruneErr
 				}
 
 				return state.MoveBy(uint(size)), op

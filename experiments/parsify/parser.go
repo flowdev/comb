@@ -46,7 +46,7 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 
 		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return state.AddError(err.Error()), gomme.ZeroOf[MO]()
+			return state.NewError(err.Error(), newState3), gomme.ZeroOf[MO]()
 		}
 
 		return newState3, mapped
@@ -57,17 +57,18 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 // a provided candidate.
 func Char(char rune) Parser[rune] {
 	expected := strconv.QuoteRune(char)
+	consumption := uint(utf8.RuneCountInString(string(char)))
 
 	return func(state gomme.State) (gomme.State, rune) {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.AddError(fmt.Sprintf("%q (at EOF)", expected)), utf8.RuneError
+				return state.NewError(fmt.Sprintf("%q (at EOF)", expected), state, consumption), utf8.RuneError
 			}
-			return state.AddError(fmt.Sprintf("%q (got UTF-8 error)", expected)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected), state, consumption), utf8.RuneError
 		}
 		if r != char {
-			return state.AddError(fmt.Sprintf("%q (got %q)", expected, r)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%q (got %q)", expected, r), state, consumption), utf8.RuneError
 		}
 
 		return state.MoveBy(uint(size)), r
@@ -78,17 +79,18 @@ func Char(char rune) Parser[rune] {
 // a provided candidate.
 func Char2[Output rune](char rune) Parser[Output] {
 	expected := strconv.QuoteRune(char)
+	consumption := uint(utf8.RuneCountInString(string(char)))
 
 	return func(state gomme.State) (gomme.State, Output) {
 		r, size := utf8.DecodeRune(state.CurrentBytes())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.AddError(fmt.Sprintf("%q (at EOF)", expected)), utf8.RuneError
+				return state.NewError(fmt.Sprintf("%q (at EOF)", expected), state, consumption), utf8.RuneError
 			}
-			return state.AddError(fmt.Sprintf("%q (got UTF-8 error)", expected)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected), state, consumption), utf8.RuneError
 		}
 		if r != char {
-			return state.AddError(fmt.Sprintf("%q (got %q)", expected, r)), utf8.RuneError
+			return state.NewError(fmt.Sprintf("%q (got %q)", expected, r), state, consumption), utf8.RuneError
 		}
 
 		return state.MoveBy(uint(size)), Output(r)
@@ -104,7 +106,7 @@ func UntilString(stop string) Parser[string] {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state.AddError(fmt.Sprintf("... %q", stop)), ""
+			return state.NewError(fmt.Sprintf("... %q", stop), state, uint(len(stop))), ""
 		}
 
 		newState := state.MoveBy(uint(i + len(stop)))

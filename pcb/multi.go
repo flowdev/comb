@@ -20,8 +20,6 @@ func Count[Output any](parse gomme.Parser[Output], count uint) gomme.Parser[[]Ou
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.Parser[[]Output] {
-	expected := "ManyMN"
-
 	consumptionCount := uint(0)
 	consumptionSum := uint(0)
 
@@ -43,19 +41,30 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 				return remaining, outputs
 			}
 			newState, output := parse.It(remaining)
-			if newState.Failed() {
-				if count < atLeast || newState.NoWayBack() {
-					return state.Failure(newState), []Output{}
+			if newState.Failed() && newState.NoWayBack() {
+				newState, output = gomme.HandleAllErrors(remaining.Failure(newState), parse) // this will force it through
+			} else if newState.Failed() {
+				if count < atLeast {
+					// TODO: In error handling mode Insert we should "insert" missing results to reach atLeast
+					// TODO: Think this case better through
+					newState, output = gomme.HandleCurError(remaining.Failure(newState), parse)
+					if newState.Failed() {
+						return state.Failure(newState), []Output{}
+					}
+				} else {
+					consumptionCount++
+					consumptionSum += uint(len(state.BytesTo(remaining)))
+					return remaining, outputs
 				}
-				consumptionCount++
-				consumptionSum += uint(len(state.BytesTo(remaining)))
-				return remaining, outputs
 			}
 
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
 			if !newState.Moved(remaining) {
-				return state.AddError(fmt.Sprintf("%s (got empty element)", expected)), []Output{}
+				avgc := avgConsumption()
+				return state.NewError(fmt.Sprintf("%s (found empty element)", parse.Expected()),
+					remaining, avgc*(atLeast-count)/atLeast,
+				), []Output{}
 			}
 
 			outputs = append(outputs, output)
@@ -121,8 +130,15 @@ func SeparatedMN[Output any, S gomme.Separator](
 
 		firstState, firstOutput := parse.It(state)
 		firstMoved := firstState.Moved(state)
-		if firstState.Failed() {
-			if atLeast > 0 || firstState.NoWayBack() {
+		if firstState.Failed() && firstState.NoWayBack() {
+			firstState, firstOutput = gomme.HandleAllErrors(state.Failure(firstState), parse) // this will force it through
+		} else if firstState.Failed() {
+			if atLeast > 0 {
+				// TODO: Is this correct? Not in handle error mode "Insert"!
+				firstState, firstOutput = gomme.HandleCurError(state.Failure(firstState), parse)
+				if firstState.Failed() {
+					return state.Failure(firstState), []Output{}
+				}
 				return state.Failure(firstState), []Output{}
 			}
 			consumptionCount++
@@ -131,7 +147,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 
 		newState, outputs := parseMany.It(firstState)
 		if newState.Failed() {
-			return state.Failure(newState), []Output{}
+			return state.Failure(newState), []Output{} // parseMany handled errors already
 		}
 
 		if parseSeparatorAtEnd {

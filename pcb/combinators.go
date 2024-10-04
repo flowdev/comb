@@ -15,7 +15,7 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		newState, output := parse.It(state)
 		if newState.Failed() {
 			if newState.NoWayBack() {
-				return state.Failure(newState), gomme.ZeroOf[Output]()
+				return gomme.HandleAllErrors(state.Failure(newState), parse) // this will force it through
 			}
 			return state.Success(newState), gomme.ZeroOf[Output]()
 		}
@@ -28,12 +28,17 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // Peek tries to apply the provided parser without consuming any input.
 // It effectively allows to look ahead in the input.
 // NoWayBack isn't honored here because we aren't officially parsing anything.
+//
+// ATTENTION:
+//
+//	This is the ONLY parser having a parser as input that doesn't try to fix errors at all.
+//	The user has to do it himself or let the next combining parser up the call stack do it.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
 		if newState.Failed() {
-			// avoid NoWayBack because we only peek; error message doesn't matter anyway
-			return state.AddError("Peek"), output
+			// avoid NoWayBack because we only peek; error message and consumption don't matter anyway
+			return state.NewError("Peek", state, parse.AvgConsumption()), output
 		}
 
 		return state, output
@@ -44,14 +49,18 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // Recognize returns the consumed input (instead of the original parsers output)
 // as the produced value when the provided parser succeeds.
 //
-// Note: Using this parser is a code smell as it effectively removes type safety.
+// Note:
 //
-//	Rather use one of the Map* functions instead.
+//	Using this parser is a code smell as it effectively removes type safety.
+//	Rather use one of the MapX functions instead.
 func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 	recParse := func(state gomme.State) (gomme.State, []byte) {
 		newState, _ := parse.It(state)
 		if newState.Failed() {
-			return newState, []byte{}
+			newState, _ = gomme.HandleCurError(state.Failure(newState), parse)
+			if newState.Failed() {
+				return state.Failure(newState), []byte{}
+			}
 		}
 
 		return newState, state.BytesTo(newState)
@@ -62,10 +71,13 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
 func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) gomme.Parser[Output1] {
-	asgnParse := func(input gomme.State) (gomme.State, Output1) {
-		newState, _ := parse.It(input)
+	asgnParse := func(state gomme.State) (gomme.State, Output1) {
+		newState, _ := parse.It(state)
 		if newState.Failed() {
-			return newState, gomme.ZeroOf[Output1]()
+			newState, _ = gomme.HandleCurError(state.Failure(newState), parse)
+			if newState.Failed() {
+				return state.Failure(newState), gomme.ZeroOf[Output1]()
+			}
 		}
 
 		return newState, value
@@ -80,12 +92,15 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState, output := parse.It(state)
 		if newState.Failed() {
-			return state.Failure(newState), gomme.ZeroOf[MO]()
+			newState, output = gomme.HandleCurError(state.Failure(newState), parse)
+			if newState.Failed() {
+				return state.Failure(newState), gomme.ZeroOf[MO]()
+			}
 		}
 
 		mapped, err := fn(output)
 		if err != nil {
-			return state.AddError(fmt.Sprintf("%s (%v)", parse.Expected(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", parse.Expected(), err.Error()), newState), gomme.ZeroOf[MO]()
 		}
 
 		return newState, mapped
@@ -111,17 +126,23 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.Failure(newState1), gomme.ZeroOf[MO]()
+			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			if newState1.Failed() {
+				return state.Failure(newState1), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.Failure(newState2), gomme.ZeroOf[MO]()
+			newState2, output2 = gomme.HandleCurError(state.Failure(newState2), parse2)
+			if newState2.Failed() {
+				return state.Failure(newState2), gomme.ZeroOf[MO]()
+			}
 		}
 
 		mapped, err := fn(output1, output2)
 		if err != nil {
-			return state.AddError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState2), gomme.ZeroOf[MO]()
 		}
 
 		return newState2, mapped
@@ -150,22 +171,31 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.Failure(newState1), gomme.ZeroOf[MO]()
+			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			if newState1.Failed() {
+				return state.Failure(newState1), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.Failure(newState2), gomme.ZeroOf[MO]()
+			newState2, output2 = gomme.HandleCurError(newState1.Failure(newState2), parse2)
+			if newState2.Failed() {
+				return state.Failure(newState2), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			return state.Failure(newState3), gomme.ZeroOf[MO]()
+			newState3, output3 = gomme.HandleCurError(newState2.Failure(newState3), parse3)
+			if newState3.Failed() {
+				return state.Failure(newState3), gomme.ZeroOf[MO]()
+			}
 		}
 
 		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return state.AddError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState3), gomme.ZeroOf[MO]()
 		}
 
 		return newState3, mapped
@@ -197,27 +227,39 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.Failure(newState1), gomme.ZeroOf[MO]()
+			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			if newState1.Failed() {
+				return state.Failure(newState1), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.Failure(newState2), gomme.ZeroOf[MO]()
+			newState2, output2 = gomme.HandleCurError(newState1.Failure(newState2), parse2)
+			if newState2.Failed() {
+				return state.Failure(newState2), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			return state.Failure(newState3), gomme.ZeroOf[MO]()
+			newState3, output3 = gomme.HandleCurError(newState2.Failure(newState3), parse3)
+			if newState3.Failed() {
+				return state.Failure(newState3), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState4, output4 := parse4.It(newState3)
 		if newState4.Failed() {
-			return state.Failure(newState4), gomme.ZeroOf[MO]()
+			newState4, output4 = gomme.HandleCurError(newState3.Failure(newState4), parse4)
+			if newState4.Failed() {
+				return state.Failure(newState4), gomme.ZeroOf[MO]()
+			}
 		}
 
 		mapped, err := fn(output1, output2, output3, output4)
 		if err != nil {
-			return state.AddError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState4), gomme.ZeroOf[MO]()
 		}
 
 		return newState4, mapped
@@ -251,32 +293,47 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.Failure(newState1), gomme.ZeroOf[MO]()
+			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			if newState1.Failed() {
+				return state.Failure(newState1), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.Failure(newState2), gomme.ZeroOf[MO]()
+			newState2, output2 = gomme.HandleCurError(newState1.Failure(newState2), parse2)
+			if newState2.Failed() {
+				return state.Failure(newState2), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			return state.Failure(newState3), gomme.ZeroOf[MO]()
+			newState3, output3 = gomme.HandleCurError(newState2.Failure(newState3), parse3)
+			if newState3.Failed() {
+				return state.Failure(newState3), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState4, output4 := parse4.It(newState3)
 		if newState4.Failed() {
-			return state.Failure(newState4), gomme.ZeroOf[MO]()
+			newState4, output4 = gomme.HandleCurError(newState3.Failure(newState4), parse4)
+			if newState4.Failed() {
+				return state.Failure(newState4), gomme.ZeroOf[MO]()
+			}
 		}
 
 		newState5, output5 := parse5.It(newState4)
 		if newState5.Failed() {
-			return state.Failure(newState5), gomme.ZeroOf[MO]()
+			newState5, output5 = gomme.HandleCurError(newState4.Failure(newState5), parse5)
+			if newState5.Failed() {
+				return state.Failure(newState5), gomme.ZeroOf[MO]()
+			}
 		}
 
 		mapped, err := fn(output1, output2, output3, output4, output5)
 		if err != nil {
-			return state.AddError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState5), gomme.ZeroOf[MO]()
 		}
 
 		return newState5, mapped

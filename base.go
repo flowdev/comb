@@ -9,15 +9,22 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"unicode/utf8"
 )
 
 const DefaultConsumption = 5 // DefaultConsumption of 5 is to be used until we have better data
+
+type errorHandlingMode int
+
+const (
+	errHandleModeNone errorHandlingMode = iota
+	errHandleModeDelete
+	errHandleModeInsert
+	errHandleModeUpdate
+)
 
 // Parser defines the type of a generic Parser
 // A few rules should be followed to prevent unexpected behaviour:
@@ -103,25 +110,11 @@ func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) 
 }
 
 func run[Output any](state State, parse Parser[Output]) (Output, error) {
-	var output Output
-	var newState State
-
-	for {
-		newState, output = parse.It(state)
-		// TODO: remove the following 2 lines after real handling of errors
-		newState.oldErrors = append(newState.oldErrors, newState.newErrors...)
-		newState.newErrors = newState.newErrors[:0]
-		fmt.Println("len(newErrs)", len(newState.newErrors))
-		if !newState.Failed() {
-			break
-		}
-
-		// move from looking for errors to handling errors mode
-		newState.chooseErrorsToHandle()
-		state = newState
+	newState, output := HandleAllErrors(state, parse)
+	if len(newState.oldErrors) == 0 {
+		return output, nil
 	}
-
-	return output, pcbErrorsToGoErrors(newState.oldErrors)
+	return ZeroOf[Output](), pcbErrorsToGoErrors(newState.oldErrors)
 }
 
 // Separator is a generic type for separators (byte, rune, []byte or string)
@@ -145,9 +138,10 @@ type Input struct {
 // pcbError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
 type pcbError struct {
-	text      string
-	line, col int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
-	srcLine   string
+	text        string
+	line, col   int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
+	srcLine     string
+	consumption int // consumption if the parser had been successful
 }
 
 func ZeroOf[T any]() T {
@@ -160,11 +154,13 @@ func ZeroOf[T any]() T {
 // and a collection of error messages.
 type State struct {
 	input           Input
-	pointOfNoReturn int        // mark set by SignalNoWayBack/NoWayBack parser
-	newErrors       []pcbError // errors that haven't been handled yet
-	curErrors       []pcbError // errors that are currently handled
-	tmpErrors       []pcbError // additional errors accompanying the curErrors
-	oldErrors       []pcbError // errors that have been handled already
+	pointOfNoReturn int               // mark set by SignalNoWayBack/NoWayBack parser
+	newError        *pcbError         // error that haven't been handled yet
+	curMode         errorHandlingMode // one of: none, delete, insert, update
+	curError        *pcbError         // error that is currently handled
+	curConsumption  int               // the consumption of the currently handled error (or even more)
+	curDeletion     int               // number of bytes the update error handling should "delete"
+	oldErrors       []pcbError        // errors that have been handled already
 }
 
 // NewFromString creates a new parser state from the input data.
@@ -242,35 +238,41 @@ func (st State) Success(subState State) State {
 	return st
 }
 
-// Failure return the State with errors kept from
+// Failure returns the State with the error and the pointOfNoReturn kept from
 // the subState.
 func (st State) Failure(subState State) State {
 	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
 
-	st.newErrors = append(st.newErrors, subState.newErrors...)
-	slices.SortFunc(st.newErrors, func(a, b pcbError) int { // always keep them sorted
-		i := cmp.Compare(a.line, b.line)
-		if i != 0 {
-			return i
-		}
-		return cmp.Compare(a.col, b.col)
-	})
+	if subState.newError != nil {
+		st.newError = subState.newError
+	}
 
 	return st
 }
 
-// AddError adds the messages to this state at the current position.
-func (st State) AddError(message string) State {
+// NewError sets an error with the messages in this state at the current position.
+// `newState` is the State most advanced in the input (can be the same as this State).
+// `futureConsumption` is the input consumption of necessary future parsers.
+func (st State) NewError(message string, newState State, futureConsumption ...uint) State {
 	line, col, srcLine := st.where(st.input.pos)
 
-	return st.Failure(State{newErrors: []pcbError{
-		{text: message, line: line, col: col, srcLine: srcLine},
+	return st.Failure(State{newError: &pcbError{
+		text: message, line: line, col: col, srcLine: srcLine, consumption: st.consumption(newState, futureConsumption),
 	}, pointOfNoReturn: -1})
+}
+func (st State) consumption(newState State, futureConsumption []uint) int {
+	consumption := newState.input.pos - st.input.pos
+
+	for _, fc := range futureConsumption {
+		consumption += int(fc)
+	}
+
+	return consumption
 }
 
 // Failed returns whether this state is in a failed state or not.
 func (st State) Failed() bool {
-	return len(st.newErrors) > 0
+	return st.newError != nil
 }
 
 // ============================================================================
@@ -335,9 +337,25 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 
 // Error returns a human readable error string.
 func (st State) Error() string {
+	slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
+		i := cmp.Compare(a.line, b.line)
+		if i != 0 {
+			return i
+		}
+		return cmp.Compare(a.col, b.col)
+	})
+
 	fullMsg := strings.Builder{}
-	for _, pcbErr := range st.newErrors {
+	for _, pcbErr := range st.oldErrors {
 		fullMsg.WriteString(singleErrorMsg(pcbErr))
+		fullMsg.WriteRune('\n')
+	}
+	if st.curError != nil {
+		fullMsg.WriteString(singleErrorMsg(*st.curError))
+		fullMsg.WriteRune('\n')
+	}
+	if st.newError != nil {
+		fullMsg.WriteString(singleErrorMsg(*st.newError))
 		fullMsg.WriteRune('\n')
 	}
 
@@ -377,43 +395,97 @@ func pcbErrorsToGoErrors(pcbErrors []pcbError) error {
 	return errors.Join(goErrors...)
 }
 
-func (st State) chooseErrorsToHandle() {
-	m := len(st.newErrors) - 1
-	line, col := st.newErrors[m].line, st.newErrors[m].col
+func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Output) {
+	var output Output
+	var newState State
 
-	for _, e := range st.newErrors { // keep the order as it is
-		if e.line == line && e.col == col {
-			st.curErrors = append(st.curErrors, e)
+	curState := state
+	for {
+		if !curState.Failed() {
+			newState, output = parse.It(curState)
+			if !newState.Failed() {
+				newState.curError = nil
+				break
+			}
 		} else {
-			st.oldErrors = append(st.oldErrors, e)
+			newState = curState
 		}
+
+		if !newState.handlingNewError() {
+			newState.curMode = errHandleModeNone
+		}
+
+		switch newState.curMode {
+		case errHandleModeNone: // if no err handling yet -> start handling & delete single bytes
+			newState.oldErrors = append(newState.oldErrors, *newState.newError)
+			newState.curError = newState.newError
+			newState.curMode = errHandleModeDelete
+		case errHandleModeDelete: // if deleted single bytes -> insert good input
+			newState.curMode = errHandleModeInsert
+		case errHandleModeInsert: // if inserted good input -> delete + insert good input
+			newState.curDeletion = 1
+			newState.curMode = errHandleModeUpdate
+		case errHandleModeUpdate: // if updated input -> delete a bit more or try all again just harder
+			if newState.curDeletion < newState.curConsumption {
+				newState.curDeletion++
+			} else {
+				newState = state
+				oldConsumption := curState.curConsumption
+				newState.curConsumption = min(curState.curConsumption+curState.curError.consumption,
+					len(newState.input.bytes)-newState.input.pos)
+				if newState.curConsumption <= oldConsumption { // we have already reached the end!!!
+					newState.curError = nil
+					break
+				}
+				newState.curDeletion = 0
+				newState.curMode = errHandleModeDelete
+			}
+		}
+
+		// let's try again
+		newState.newError = nil
+		curState = newState
 	}
 
-	clear(st.newErrors)
+	newState.newError = nil
+	newState.curError = nil
+	newState.curMode = errHandleModeNone
+	newState.curConsumption = 0
+	newState.curDeletion = 0
+	return newState, output
 }
 
-// ============================================================================
-
-// defaultConsumption is used for parsers that aren't registered in parserData
-const defaultConsumption = 5
-
-type parserData struct {
-	id             int
-	expected       string
-	avgConsumption int // in bytes
-}
-
-var parserMap map[uintptr]parserData = make(map[uintptr]parserData)
-var lastParserID uint64
-
-func NewParserID() uint64 {
-	return atomic.AddUint64(&lastParserID, 1)
-}
-func RegisterParser[Output any](parse Parser[Output], expected string, avgConsumption int) {
-	parserMap[reflect.ValueOf(parse).Pointer()] = parserData{
-		expected:       expected,
-		avgConsumption: avgConsumption,
+func HandleCurError[Output any](state State, parse Parser[Output]) (State, Output) {
+	if !state.handlingNewError() {
+		return state, ZeroOf[Output]()
 	}
+
+	switch state.curMode {
+	case errHandleModeDelete: // try byte-wise deletion of input first
+		var tryState State
+		for i := 1; i <= state.curConsumption; i++ {
+			tryState = state.MoveBy(uint(i))
+			newState, output := parse.It(tryState)
+			if !newState.handlingNewError() {
+				return newState, output
+			}
+		}
+	case errHandleModeInsert: // imitate insertion of correct input by ignoring the error
+		state.newError = nil
+		return state, ZeroOf[Output]()
+	case errHandleModeUpdate: // insert (ignore the error) + delete (move ahead)
+		state.newError = nil
+		return state.MoveBy(uint(state.curDeletion)), ZeroOf[Output]()
+	}
+
+	return state, ZeroOf[Output]()
+}
+
+func (st State) handlingNewError() bool {
+	if st.curError == nil || st.newError == nil {
+		return false
+	}
+	return *st.curError == *st.newError
 }
 
 // ============================================================================
