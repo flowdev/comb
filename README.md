@@ -6,7 +6,7 @@
     <a href="https://github.com/oleiade/gomme/actions/workflows/go.yml"><img src="https://github.com/oleiade/gomme/actions/workflows/go.yml/badge.svg" alt="Build Status"></a>
     <a href="https://pkg.go.dev/github.com/oleiade/gomme#pkg-types"><img src="https://pkg.go.dev/badge/github.com/oleiade/gomme#pkg-types.svg" alt="Go Documentation"></a>
     <a href="https://goreportcard.com/report/github.com/oleiade/gomme"><img src="https://goreportcard.com/badge/github.com/oleiade/gomme" alt="Go Report Card"></a>
-    <a href="https://img.shields.io/github/go-mod/go-version/oleiade/gomme" alt="Go Version">
+    <a href="https://img.shields.io/github/go-mod/go-version/oleiade/gomme" alt="Go Version"></a>
 </p>
 
 Gomme is a library that simplifies building parsers in Go.

@@ -139,6 +139,7 @@ type Input struct {
 // It consists of the text itself and the position in the input where it happened.
 type pcbError struct {
 	text        string
+	pos         int // pos is the byte index in the input (state.input.pos)
 	line, col   int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
 	srcLine     string
 	consumption int // consumption if the parser had been successful
@@ -216,8 +217,7 @@ func (st State) MoveBy(countBytes uint) State {
 	lastNlPos := strings.LastIndexByte(moveText, '\n') // this is Unicode safe!!!
 	if lastNlPos >= 0 {
 		st.input.prevNl += lastNlPos + 1 // this works even if '\n' wasn't found at all
-		nlCount := strings.Count(moveText, "\n")
-		st.input.line += nlCount
+		st.input.line += strings.Count(moveText, "\n")
 	}
 
 	return st
@@ -257,7 +257,10 @@ func (st State) NewError(message string, newState State, futureConsumption ...ui
 	line, col, srcLine := st.where(st.input.pos)
 
 	return st.Failure(State{newError: &pcbError{
-		text: message, line: line, col: col, srcLine: srcLine, consumption: st.consumption(newState, futureConsumption),
+		text: message,
+		pos:  st.input.pos, line: line, col: col,
+		srcLine:     srcLine,
+		consumption: st.consumption(newState, futureConsumption),
 	}, pointOfNoReturn: -1})
 }
 func (st State) consumption(newState State, futureConsumption []uint) int {
@@ -463,12 +466,22 @@ func HandleCurError[Output any](state State, parse Parser[Output]) (State, Outpu
 	switch state.curMode {
 	case errHandleModeDelete: // try byte-wise deletion of input first
 		var tryState State
+		errOffset := state.curError.pos - state.input.pos // this should be 0, but misbehaving parsers...
+
 		for i := 1; i <= state.curConsumption; i++ {
 			tryState = state.MoveBy(uint(i))
 			newState, output := parse.It(tryState)
-			if !newState.handlingNewError() {
+			// It will always be a new error because the position has changed.
+			// But if this is called by the first combining parser,
+			// the position won't change beyond the `tryState` if it fails directly.
+			if !newState.Failed() || len(tryState.BytesTo(newState)) > errOffset {
 				return newState, output
 			}
+			// we failed again without really moving
+			newState.oldErrors = append(newState.oldErrors, *newState.newError)
+			newState.curError = newState.newError
+			state.newError = nil
+			tryState = newState
 		}
 	case errHandleModeInsert: // imitate insertion of correct input by ignoring the error
 		state.newError = nil
@@ -476,6 +489,8 @@ func HandleCurError[Output any](state State, parse Parser[Output]) (State, Outpu
 	case errHandleModeUpdate: // insert (ignore the error) + delete (move ahead)
 		state.newError = nil
 		return state.MoveBy(uint(state.curDeletion)), ZeroOf[Output]()
+	default:
+		// intentionally do nothing
 	}
 
 	return state, ZeroOf[Output]()
