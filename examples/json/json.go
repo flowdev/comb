@@ -24,7 +24,7 @@ func init() {
 }
 
 func main() {
-	output, err := gomme.RunOnString(testJSON, valuep)
+	output, err := gomme.RunOnString(0, testJSON, valuep)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
@@ -60,7 +60,7 @@ type (
 // parseValue is a parser that attempts to parse different types of
 // JSON values (object, array, string, etc.).
 func parseValue() gomme.Parser[JSONValue] {
-	return pcb.Alternative(
+	return pcb.FirstSuccessfulOf(
 		objectp,
 		arrayp,
 		stringp,
@@ -104,7 +104,7 @@ func parseArray() gomme.Parser[JSONValue] {
 	return pcb.Map(
 		pcb.Delimited[rune, []JSONValue, rune](
 			pcb.Char('['),
-			pcb.Alternative(
+			pcb.FirstSuccessfulOf(
 				elements,
 				pcb.Map(ws, func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
 			),
@@ -293,7 +293,7 @@ var pstring = stringParser()
 //
 // It handles negative and positive integers including zero.
 func integerParser() gomme.Parser[int] {
-	return pcb.Alternative(
+	return pcb.FirstSuccessfulOf(
 		// "-" onenine digits
 		pcb.Preceded(
 			pcb.Char('-'),
@@ -351,7 +351,7 @@ var digits = digitsParser()
 //
 // It distinguishes between '0' and non-zero digits.
 func digitParser() gomme.Parser[rune] {
-	return pcb.Alternative(
+	return pcb.FirstSuccessfulOf(
 		pcb.Char('0'),
 		onenine,
 	)
@@ -361,7 +361,7 @@ var digit = digitParser()
 
 // onenine creates a parser for digits from 1 to 9.
 func onenineParser() gomme.Parser[rune] {
-	return pcb.OneOf('1', '2', '3', '4', '5', '6', '7', '8', '9')
+	return pcb.OneOfRunes('1', '2', '3', '4', '5', '6', '7', '8', '9')
 }
 
 var onenine = onenineParser()
@@ -400,7 +400,7 @@ var exponent = exponentParser()
 // It can parse both positive ('+') and negative ('-') signs.
 func signParser() gomme.Parser[string] {
 	return pcb.Optional(
-		pcb.Alternative(
+		pcb.FirstSuccessfulOf(
 			pcb.String("-"),
 			pcb.String("+"),
 		),
@@ -429,10 +429,10 @@ var characters = charactersParser()
 //
 // It distinguishes between regular characters and escape sequences.
 func characterParser() gomme.Parser[rune] {
-	return pcb.Alternative(
+	return pcb.FirstSuccessfulOf(
 		pcb.Satisfy("normal character", func(c rune) bool {
 			return c != '"' && c != '\\' && c >= 0x20 && c <= 0x10FFFF
-		}),
+		}, nil),
 
 		// escape
 		escape,
@@ -472,8 +472,8 @@ func escapeParser() gomme.Parser[rune] {
 	return pcb.Map(
 		pcb.Sequence(
 			pcb.Char('\\'),
-			pcb.Alternative(
-				pcb.OneOf('"', '\\', '/', 'b', 'f', 'n', 'r', 't'),
+			pcb.FirstSuccessfulOf(
+				pcb.OneOfRunes('"', '\\', '/', 'b', 'f', 'n', 'r', 't'),
 				unicodeEscape,
 			),
 		),
@@ -519,7 +519,7 @@ var unicodeEscape = unicodeEscapeParser()
 func hexParser() gomme.Parser[rune] {
 	return pcb.Satisfy("hex digit", func(r rune) bool {
 		return ('0' <= r && r <= '9') || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')
-	})
+	}, nil)
 }
 
 var hex = hexParser()
@@ -534,7 +534,7 @@ func wsParser() gomme.Parser[string] {
 	}
 
 	return pcb.Map(pcb.Many0(
-		pcb.OneOf(' ', '\t', '\n', '\r'),
+		pcb.OneOfRunes(' ', '\t', '\n', '\r'),
 	), mapFunc)
 }
 

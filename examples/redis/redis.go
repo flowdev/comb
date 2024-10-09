@@ -30,7 +30,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		return RESPMessage{}, fmt.Errorf("malformed message %s; reason: %w", input, ErrInvalidSuffix)
 	}
 
-	parser := pcb.Alternative(
+	parser := pcb.FirstSuccessfulOf(
 		SimpleString(),
 		Error(),
 		Integer(),
@@ -38,7 +38,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		Array(),
 	)
 
-	return gomme.RunOnString(input, parser)
+	return gomme.RunOnString(0, input, parser)
 }
 
 // ErrMessageTooShort is returned when a message is too short to be valid.
@@ -298,7 +298,7 @@ func Array() gomme.Parser[RESPMessage] {
 	return pcb.Map2(
 		sizePrefix(pcb.String(string(ArrayKind))),
 		pcb.Many0(
-			pcb.Alternative(
+			pcb.FirstSuccessfulOf(
 				SimpleString(),
 				Error(),
 				Integer(),

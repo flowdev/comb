@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-const DefaultConsumption = 5 // DefaultConsumption of 5 is to be used until we have better data
+const DefaultMaxDel = 3 // DefaultMaxDel of 3 is rather conservative but good enough in real life
 
 type ParsingMode int
 
@@ -28,14 +28,17 @@ const (
 	ParsingModePlay
 )
 
-// Recoverer is a simplified parser that can consume input and returns the number
-// of bytes consumed as output.
-// A Recoverer is used for recovering from an error in the input by moving forward
-// to the next safe spot (point of no return / NoWayBack parser).
-// This will be used by the NoWayBack parser if it's sub-parser provides a recoverer.
+// Recoverer is a simplified parser that only returns the number of bytes
+// to reach a safe state.
+// If it can't recover it should return -1.
+//
+// A Recoverer is used for recovering from an error in the input.
+// It helps to move forward to the next safe spot
+// (point of no return / NoWayBack parser).
+// A Recoverer will be used by the NoWayBack parser if it's sub-parser provides it.
 // Otherwise, NoWayBack will have to try the sub-parser until it succeeds moving
-// forward 1 byte at a time.
-type Recoverer func(state State) (State, int)
+// forward 1 byte at a time. :(
+type Recoverer func(state State) int
 
 // Parser defines the type of a generic Parser
 // A few rules should be followed to prevent unexpected behaviour:
@@ -44,22 +47,22 @@ type Recoverer func(state State) (State, int)
 //   - A parser that consumed some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	Expected() string
-	AvgConsumption() uint
 	It(state State) (State, Output)
+	Recoverer() Recoverer
 }
 
 type prsr[Output any] struct {
-	expected       string
-	avgConsumption func() uint
-	it             func(state State) (State, Output)
+	expected  string
+	it        func(state State) (State, Output)
+	recoverer Recoverer
 }
 
 // NewParser is THE way to create parsers.
-func NewParser[Output any](expected string, avgConsumption func() uint, parse func(State) (State, Output)) Parser[Output] {
+func NewParser[Output any](expected string, parse func(State) (State, Output), recover Recoverer) Parser[Output] {
 	return prsr[Output]{
-		expected:       expected,
-		avgConsumption: avgConsumption,
-		it:             parse,
+		expected:  expected,
+		it:        parse,
+		recoverer: recover,
 	}
 }
 
@@ -67,12 +70,12 @@ func (p prsr[Output]) Expected() string {
 	return p.expected
 }
 
-func (p prsr[Output]) AvgConsumption() uint {
-	return p.avgConsumption()
-}
-
 func (p prsr[Output]) It(state State) (State, Output) {
 	return p.it(state)
+}
+
+func (p prsr[Output]) Recoverer() Recoverer {
+	return p.recoverer
 }
 
 type lazyprsr[Output any] struct {
@@ -96,31 +99,25 @@ func (lp *lazyprsr[Output]) Expected() string {
 	return lp.cachedPrsr.Expected()
 }
 
-func (lp *lazyprsr[Output]) AvgConsumption() uint {
-	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.AvgConsumption()
-}
-
 func (lp *lazyprsr[Output]) It(state State) (State, Output) {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.It(state)
 }
 
-func ConstantConsumption(consumption uint) func() uint {
-	return func() uint {
-		return consumption
-	}
+func (lp *lazyprsr[Output]) Recoverer() Recoverer {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.Recoverer()
 }
 
 // RunOnString runs a parser on text input and returns the output and error(s).
-func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	return run(NewFromString(input), parse)
+func RunOnString[Output any](maxDel int, input string, parse Parser[Output]) (Output, error) {
+	return run(NewFromString(maxDel, input), parse)
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
-func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	return run(NewState(input), parse)
+func RunOnBytes[Output any](maxDel int, input []byte, parse Parser[Output]) (Output, error) {
+	return run(NewState(maxDel, input), parse)
 }
 
 func run[Output any](state State, parse Parser[Output]) (Output, error) {
@@ -152,11 +149,10 @@ type Input struct {
 // pcbError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
 type pcbError struct {
-	text        string
-	pos         int // pos is the byte index in the input (state.input.pos)
-	line, col   int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
-	srcLine     string
-	consumption int // consumption if the parser had been successful
+	text      string
+	pos       int // pos is the byte index in the input (state.input.pos)
+	line, col int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
+	srcLine   string
 }
 
 func ZeroOf[T any]() T {
@@ -178,17 +174,18 @@ type updErrHand struct {
 }
 
 type errHand struct {
-	mode   ParsingMode // one of: none, delete, insert, update
-	err    *pcbError   // error that is currently handled
-	del    delErrHand  // for handling errors by "deleting" input
-	upd    updErrHand  // for handling errors by "updating" input
-	maxDel int         // the consumption of the currently handled error (or even more)
+	binary bool       // true if we should delete bytes in error recovery
+	maxDel int        // maximum number of runes or bytes that should be deleted for error recovery
+	err    *pcbError  // error that is currently handled
+	del    delErrHand // for handling errors by "deleting" input
+	upd    updErrHand // for handling errors by "updating" input
 }
 
 // State represents the current state of a parser.
 // It consists of the Input, the pointOfNoReturn mark
 // and a collection of error messages.
 type State struct {
+	mode            ParsingMode // one of: happy, error, handle, record, choose, play
 	input           Input
 	pointOfNoReturn int        // mark set by SignalNoWayBack/NoWayBack parser
 	newError        *pcbError  // error that hasn't been handled yet
@@ -197,13 +194,22 @@ type State struct {
 }
 
 // NewFromString creates a new parser state from the input data.
-func NewFromString(input string) State {
-	return NewState([]byte(input))
+func NewFromString(maxDel int, input string) State {
+	state := NewState(maxDel, []byte(input))
+	state.errHand.binary = false
+	return state
 }
 
 // NewState creates a new parser state from the input data.
-func NewState(input []byte) State {
-	return State{input: Input{bytes: input, line: 1, prevNl: -1}, pointOfNoReturn: -1}
+func NewState(maxDel int, input []byte) State {
+	if maxDel <= 0 {
+		maxDel = DefaultMaxDel
+	}
+	return State{
+		input:           Input{bytes: input, line: 1, prevNl: -1},
+		pointOfNoReturn: -1,
+		errHand:         errHand{binary: true, maxDel: maxDel},
+	}
 }
 
 // ============================================================================
@@ -281,12 +287,13 @@ func (st State) Success(subState State) State {
 	return st
 }
 
-// Failure returns the State with the error and the pointOfNoReturn kept from
+// Failure returns the State with the error, pointOfNoReturn and mode kept from
 // the subState.
 func (st State) Failure(subState State) State {
 	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
+	st.mode = subState.mode
 
-	if subState.newError != nil {
+	if subState.newError != nil { // should be true
 		st.newError = subState.newError
 	}
 
@@ -296,24 +303,40 @@ func (st State) Failure(subState State) State {
 // NewError sets an error with the messages in this state at the current position.
 // `newState` is the State most advanced in the input (can be the same as this State).
 // `futureConsumption` is the input consumption of necessary future parsers.
-func (st State) NewError(message string, newState State, futureConsumption ...uint) State {
+func (st State) NewError(message string) State {
 	line, col, srcLine := st.where(st.input.pos)
-
-	return st.Failure(State{newError: &pcbError{
+	newErr := &pcbError{
 		text: message,
 		pos:  st.input.pos, line: line, col: col,
-		srcLine:     srcLine,
-		consumption: st.consumption(newState, futureConsumption),
-	}, pointOfNoReturn: -1})
-}
-func (st State) consumption(newState State, futureConsumption []uint) int {
-	consumption := newState.input.pos - st.input.pos
-
-	for _, fc := range futureConsumption {
-		consumption += int(fc)
+		srcLine: srcLine,
 	}
 
-	return consumption
+	switch st.mode {
+	case ParsingModeHappy:
+		st.mode = ParsingModeError
+		st.newError = newErr
+	case ParsingModeError:
+		// should NOT happen but keep error furthest in the input
+		if st.newError == nil || st.newError.pos < st.input.pos {
+			st.newError = newErr
+		}
+	case ParsingModeHandle:
+		if st.handlingNewError(newErr) {
+			st.newError = nil
+			st.mode = ParsingModeRecord
+		} else {
+			if st.newError == nil || st.newError.pos < st.input.pos {
+				st.newError = newErr
+			}
+		}
+	case ParsingModeRecord:
+		// ignore error (we simulate the happy path)
+	case ParsingModeChoose:
+		// ignore error (we simulate the happy path)
+	case ParsingModePlay:
+		st.newError = newErr
+	}
+	return st
 }
 
 // Failed returns whether this state is in a failed state or not.
@@ -462,32 +485,30 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 			newState = curState
 		}
 
-		if !newState.handlingNewError() {
-			newState.errHand.mode = ParsingModeHappy
+		if !newState.handlingNewError(newState.newError) {
+			newState.mode = ParsingModeHappy
 		}
 
-		switch newState.errHand.mode {
+		switch newState.mode {
 		case ParsingModeHappy: // if no err handling yet -> start handling & delete single bytes
 			newState.oldErrors = append(newState.oldErrors, *newState.newError)
 			newState.errHand.err = newState.newError
-			newState.errHand.mode = ParsingModeError
+			newState.mode = ParsingModeError
 		case ParsingModeError: // if deleted single bytes -> insert good input and possibly delete some bytes
 			newState.errHand.upd.curDel = newState.errHand.upd.minDel
-			newState.errHand.mode = ParsingModeRecord
+			newState.mode = ParsingModeRecord
 		case ParsingModeRecord: // if updated input -> delete a bit more or try all again just harder
 			if newState.errHand.upd.curDel < newState.errHand.maxDel {
 				newState.errHand.upd.curDel++
 			} else {
 				newState = state
 				oldConsumption := curState.errHand.maxDel
-				newState.errHand.maxDel = min(curState.errHand.maxDel+curState.errHand.err.consumption,
-					len(newState.input.bytes)-newState.input.pos)
 				if newState.errHand.maxDel <= oldConsumption { // we have already reached the end!!!
 					newState.errHand.err = nil
 					break
 				}
 				newState.errHand.del.min = oldConsumption
-				newState.errHand.mode = ParsingModeError
+				newState.mode = ParsingModeError
 			}
 		}
 
@@ -498,7 +519,7 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 
 	newState.newError = nil
 	newState.errHand.err = nil
-	newState.errHand.mode = ParsingModeHappy
+	newState.mode = ParsingModeHappy
 	newState.errHand.maxDel = 0
 	newState.errHand.del = delErrHand{}
 	newState.errHand.upd = updErrHand{}
@@ -506,11 +527,11 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 }
 
 func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, Output) {
-	if !state.handlingNewError() {
+	if !state.handlingNewError(state.newError) {
 		return state, ZeroOf[Output]()
 	}
 
-	switch state.errHand.mode {
+	switch state.mode {
 	case ParsingModeError: // try byte-wise deletion of input first
 		var tryState State
 		errOffset := state.errHand.err.pos - state.input.pos // this should be 0, but misbehaving parsers...
@@ -545,11 +566,11 @@ func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, O
 	return state, ZeroOf[Output]()
 }
 
-func (st State) handlingNewError() bool {
-	if st.errHand.err == nil || st.newError == nil {
+func (st State) handlingNewError(newErr *pcbError) bool {
+	if st.errHand.err == nil || newErr == nil {
 		return false
 	}
-	return *st.errHand.err == *st.newError
+	return *st.errHand.err == *newErr
 }
 
 // ============================================================================

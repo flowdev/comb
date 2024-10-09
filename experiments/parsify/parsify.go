@@ -30,17 +30,16 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 			iruneErr := interface{}(utf8.RuneError)
 			oruneErr, _ := iruneErr.(Output)
 			expected := strconv.QuoteRune(ap)
-			consumption := uint(utf8.RuneCountInString(string(ap)))
 			return func(state gomme.State) (gomme.State, Output) {
 				r, size := utf8.DecodeRune(state.CurrentBytes())
 				if r == utf8.RuneError {
 					if size == 0 {
-						return state.NewError(fmt.Sprintf("%q (at EOF)", expected), state, consumption), oruneErr
+						return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), oruneErr
 					}
-					return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected), state, consumption), oruneErr
+					return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected)), oruneErr
 				}
 				if r != ap {
-					return state.NewError(fmt.Sprintf("%q (got %q)", expected, r), state, consumption), oruneErr
+					return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), oruneErr
 				}
 
 				return state.MoveBy(uint(size)), op

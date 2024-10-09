@@ -9,7 +9,8 @@ import (
 // Optional applies an optional child parser. Will return nil
 // if not successful.
 //
-// N.B: Optional will ignore any parsing failures and errors.
+// NOTE:
+// Optional will ignore any parsing error.
 func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	optParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
@@ -22,7 +23,7 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		return newState, output
 	}
 
-	return gomme.NewParser[Output]("Optional", parse.AvgConsumption, optParse)
+	return gomme.NewParser[Output]("Optional", optParse, Forbidden("Optional"))
 }
 
 // Peek tries to apply the provided parser without consuming any input.
@@ -33,12 +34,12 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		newState, output := parse.It(state)
 		if newState.Failed() {
 			// avoid NoWayBack because we only peek; error message and consumption don't matter anyway
-			return state.NewError("Peek", state, parse.AvgConsumption()), output
+			return state.NewError("Peek"), output
 		}
 
 		return state, output
 	}
-	return gomme.NewParser[Output]("Peek", gomme.ConstantConsumption(0), peekParse)
+	return gomme.NewParser[Output]("Peek", peekParse, Forbidden("Peek"))
 }
 
 // Not tries to apply the provided parser without consuming any input.
@@ -55,18 +56,17 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 		}
 
 		// avoid NoWayBack because we only peek; error message and consumption don't matter either
-		return state.NewError(expected, state, parse.AvgConsumption()), false
+		return state.NewError(expected), false
 	}
-	return gomme.NewParser[bool](expected, gomme.ConstantConsumption(0), parseNot)
+	return gomme.NewParser[bool](expected, parseNot, Forbidden("Not"))
 }
 
 // Recognize returns the consumed input (instead of the original parsers output)
 // as the produced value when the provided parser succeeds.
 //
 // Note:
-//
-//	Using this parser is a code smell as it effectively removes type safety.
-//	Rather use one of the MapX functions instead.
+// Using this parser is a code smell as it effectively removes type safety.
+// Rather use one of the MapX functions instead.
 func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 	recParse := func(state gomme.State) (gomme.State, []byte) {
 		newState, _ := parse.It(state)
@@ -79,7 +79,7 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 
 		return newState, state.BytesTo(newState)
 	}
-	return gomme.NewParser[[]byte]("Recognize", parse.AvgConsumption, recParse)
+	return gomme.NewParser[[]byte]("Recognize", recParse, parse.Recoverer())
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise
@@ -96,7 +96,7 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 
 		return newState, value
 	}
-	return gomme.NewParser[Output1]("Assign", parse.AvgConsumption, asgnParse)
+	return gomme.NewParser[Output1](parse.Expected(), asgnParse, parse.Recoverer())
 }
 
 // Map applies a function to the successful result of 1 parser.
@@ -114,13 +114,13 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 
 		mapped, err := fn(output)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", parse.Expected(), err.Error()), newState), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", parse.Expected(), err.Error())), gomme.ZeroOf[MO]()
 		}
 
 		return newState, mapped
 	}
 
-	return gomme.NewParser[MO](parse.Expected(), parse.AvgConsumption, mapParse)
+	return gomme.NewParser[MO](parse.Expected(), mapParse, parse.Recoverer())
 }
 
 // Map2 applies a function to the successful result of 2 parsers.
@@ -132,10 +132,6 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 	expected.WriteString(parse1.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse2.Expected())
-
-	avgConsumption := func() uint {
-		return (parse1.AvgConsumption() + parse2.AvgConsumption() + 1) / 2
-	}
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -156,13 +152,13 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 
 		mapped, err := fn(output1, output2)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState2), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
 		}
 
 		return newState2, mapped
 	}
 
-	return gomme.NewParser[MO](expected.String(), avgConsumption, mapParse)
+	return gomme.NewParser[MO](expected.String(), mapParse, nil)
 }
 
 // Map3 applies a function to the successful result of 3 parsers.
@@ -177,10 +173,6 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 	expected.WriteString(parse2.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse3.Expected())
-
-	avgConsumption := func() uint {
-		return (parse1.AvgConsumption() + parse2.AvgConsumption() + parse3.AvgConsumption() + 1) / 3
-	}
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -209,13 +201,13 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 
 		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState3), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
 		}
 
 		return newState3, mapped
 	}
 
-	return gomme.NewParser[MO](expected.String(), avgConsumption, mapParse)
+	return gomme.NewParser[MO](expected.String(), mapParse, nil)
 }
 
 // Map4 applies a function to the successful result of 4 parsers.
@@ -232,11 +224,6 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 	expected.WriteString(parse3.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse4.Expected())
-
-	avgConsumption := func() uint {
-		return (parse1.AvgConsumption() + parse2.AvgConsumption() + parse3.AvgConsumption() +
-			parse4.AvgConsumption() + 2) / 4
-	}
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -273,12 +260,12 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 
 		mapped, err := fn(output1, output2, output3, output4)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState4), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
 		}
 
 		return newState4, mapped
 	}
-	return gomme.NewParser[MO](expected.String(), avgConsumption, mapParse)
+	return gomme.NewParser[MO](expected.String(), mapParse, nil)
 }
 
 // Map5 applies a function to the successful result of 5 parsers.
@@ -298,11 +285,6 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	expected.WriteString(parse4.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse5.Expected())
-
-	avgConsumption := func() uint {
-		return (parse1.AvgConsumption() + parse2.AvgConsumption() + parse3.AvgConsumption() +
-			parse4.AvgConsumption() + parse5.AvgConsumption() + 2) / 5
-	}
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -347,10 +329,10 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		mapped, err := fn(output1, output2, output3, output4, output5)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error()), newState5), gomme.ZeroOf[MO]()
+			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
 		}
 
 		return newState5, mapped
 	}
-	return gomme.NewParser[MO](expected.String(), avgConsumption, mapParse)
+	return gomme.NewParser[MO](expected.String(), mapParse, nil)
 }

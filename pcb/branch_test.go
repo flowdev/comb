@@ -24,7 +24,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "head matching parser should succeed",
 			input: "123",
 			args: args{
-				p: Alternative(Digit1(), NoWayBack(Alpha1())),
+				p: FirstSuccessfulOf(Digit1(), NoWayBack(Alpha1())),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -34,17 +34,17 @@ func TestNoWayBack(t *testing.T) {
 			name:  "tail matching parser should succeed",
 			input: "abc",
 			args: args{
-				p: Alternative(NoWayBack(Digit1()), Alpha1()),
+				p: FirstSuccessfulOf(NoWayBack(Digit1()), Alpha1()),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
 			wantRemaining: "",
 		},
 		{
-			name:  "Alternative: tail matching parser after failing NoWayBack head parser should fail",
+			name:  "FirstSuccessfulOf: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: Alternative(Preceded(NoWayBack(String("a")), Digit1()), Alpha1()),
+				p: FirstSuccessfulOf(Preceded(NoWayBack(String("a")), Digit1()), Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -90,7 +90,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "no matching parser should fail",
 			input: "$%^*",
 			args: args{
-				p: Alternative(NoWayBack(Digit1()), NoWayBack(Alpha1())),
+				p: FirstSuccessfulOf(NoWayBack(Digit1()), NoWayBack(Alpha1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -100,7 +100,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Alternative(NoWayBack(Digit1()), NoWayBack(Alpha1())),
+				p: FirstSuccessfulOf(NoWayBack(Digit1()), NoWayBack(Alpha1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -158,7 +158,7 @@ func TestAlternative(t *testing.T) {
 			name:  "head matching parser should succeed",
 			input: "123",
 			args: args{
-				p: Alternative(Digit1(), Alpha0()),
+				p: FirstSuccessfulOf(Digit1(), Alpha0()),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -168,7 +168,7 @@ func TestAlternative(t *testing.T) {
 			name:  "tail matching parser should succeed",
 			input: "abc",
 			args: args{
-				p: Alternative(Digit1(), Alpha0()),
+				p: FirstSuccessfulOf(Digit1(), Alpha0()),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
@@ -178,7 +178,7 @@ func TestAlternative(t *testing.T) {
 			name:  "no matching parser should fail",
 			input: "$%^*",
 			args: args{
-				p: Alternative(Digit1(), Alpha1()),
+				p: FirstSuccessfulOf(Digit1(), Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -188,7 +188,7 @@ func TestAlternative(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Alternative(Digit1(), Alpha1()),
+				p: FirstSuccessfulOf(Digit1(), Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -219,7 +219,7 @@ func TestAlternative(t *testing.T) {
 }
 
 func BenchmarkAlternative(b *testing.B) {
-	p := Alternative(Char('b'), Char('a'))
+	p := FirstSuccessfulOf(Char('b'), Char('a'))
 	input := gomme.NewFromString("abc")
 
 	b.ResetTimer()

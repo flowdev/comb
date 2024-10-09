@@ -23,14 +23,6 @@ func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 // returns either a slice of results or an error if any parser fails.
 // Use one of the MapX parsers for differently typed parsers.
 func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output] {
-	avgConsumption := func() uint {
-		sum := uint(0)
-		for _, p := range parsers {
-			sum += p.AvgConsumption()
-		}
-		return (sum + uint(len(parsers)/2)) / uint(len(parsers))
-	}
-
 	parseSeq := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, len(parsers))
 		remaining := state
@@ -49,7 +41,7 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 
 		return remaining, outputs
 	}
-	return gomme.NewParser[[]Output]("Sequence", avgConsumption, parseSeq)
+	return gomme.NewParser[[]Output]("Sequence", parseSeq, nil)
 }
 
 // Terminated parses a result from the main parser, it then

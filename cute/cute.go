@@ -10,7 +10,7 @@ import (
 //
 //	import . "github.com/oleiade/gomme/cute"
 //
-// So this cute function name will make your grammar look nicer.
+// This parser is a good candidate for NoWayBack and has an optimized recoverer.
 func C(char rune) gomme.Parser[rune] {
 	return pcb.Char(char)
 }
@@ -20,7 +20,53 @@ func C(char rune) gomme.Parser[rune] {
 //
 //	import . "github.com/oleiade/gomme/cute"
 //
-// So this cute function name will make your grammar look nicer.
+// This parser is a good candidate for NoWayBack and has an optimized recoverer.
 func S(token string) gomme.Parser[string] {
 	return pcb.String(token)
+}
+
+// OneOfRunes is a shortened version of `pcb.OneOfRunes`.
+// It is meant to be used without the package name with an import like:
+//
+//	import . "github.com/oleiade/gomme/cute"
+//
+// This parser is a good candidate for NoWayBack and has an optimized recoverer.
+func OneOfRunes(collection ...rune) gomme.Parser[rune] {
+	return pcb.OneOfRunes(collection...)
+
+}
+
+// OneOf is a shortened version of `pcb.OneOf`.
+// It is meant to be used without the package name with an import like:
+//
+//	import . "github.com/oleiade/gomme/cute"
+//
+// This parser is a good candidate for NoWayBack and has an optimized recoverer.
+func OneOf(collection ...string) gomme.Parser[string] {
+	return pcb.OneOf(collection...)
+
+}
+
+// NoWayBack is the shortened version of `pcb.NoWayBack`.
+// This should encourage its use because NoWayBack is the backbone of the
+// error handling mechanism.
+//
+// So please use it!
+//
+// Parsers that only accept keywords or special tokens are excellent candidates.
+// Especially `C` and `S` but also `OneOf` and `OneOfRunes` from this package.
+//
+// NoWayBack is meant to be used without the package name with an import like:
+//
+//	import . "github.com/oleiade/gomme/cute"
+func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
+	return pcb.NoWayBack[Output](parse)
+}
+
+// FirstSuccessfulOf is a shortened version of `pcb.FirstSuccessfulOf`.
+// It is meant to be used without the package name with an import like:
+//
+//	import . "github.com/oleiade/gomme/cute"
+func FirstSuccessfulOf[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
+	return pcb.FirstSuccessfulOf[Output](parsers...)
 }

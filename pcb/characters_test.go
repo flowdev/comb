@@ -1418,7 +1418,7 @@ func TestOneOf(t *testing.T) {
 	}{
 		{
 			name:          "parsing matched char should succeed",
-			parser:        OneOf('a', '1', '+'),
+			parser:        OneOfRunes('a', '1', '+'),
 			input:         "+",
 			wantErr:       false,
 			wantOutput:    '+',
@@ -1426,7 +1426,7 @@ func TestOneOf(t *testing.T) {
 		},
 		{
 			name:          "parsing input not containing any of the sought chars should fail",
-			parser:        OneOf('a', '1', '+'),
+			parser:        OneOfRunes('a', '1', '+'),
 			input:         "b",
 			wantErr:       true,
 			wantOutput:    utf8.RuneError,
@@ -1434,7 +1434,7 @@ func TestOneOf(t *testing.T) {
 		},
 		{
 			name:          "parsing empty input should fail",
-			parser:        OneOf('a', '1', '+'),
+			parser:        OneOfRunes('a', '1', '+'),
 			input:         "",
 			wantErr:       true,
 			wantOutput:    utf8.RuneError,
@@ -1466,7 +1466,7 @@ func TestOneOf(t *testing.T) {
 }
 
 func BenchmarkOneOf(b *testing.B) {
-	parser := OneOf('a', '1', '+')
+	parser := OneOfRunes('a', '1', '+')
 	input := gomme.NewFromString("+")
 
 	b.ResetTimer()

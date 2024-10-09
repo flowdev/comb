@@ -15,7 +15,7 @@ import (
 func ParseCSV(input string) ([][]string, error) {
 	parser := pcb.Separated1(
 		pcb.Separated1(
-			pcb.Alternative(
+			pcb.FirstSuccessfulOf(
 				pcb.Alphanumeric1(),
 				pcb.Delimited(pcb.Char('"'), pcb.Alphanumeric1(), pcb.Char('"')),
 			),
@@ -26,5 +26,5 @@ func ParseCSV(input string) ([][]string, error) {
 		false,
 	)
 
-	return gomme.RunOnString(input, parser)
+	return gomme.RunOnString(0, input, parser)
 }
