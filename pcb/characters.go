@@ -1,6 +1,7 @@
 package pcb
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/oleiade/gomme"
 	"math"
@@ -10,8 +11,10 @@ import (
 	"unicode/utf8"
 )
 
-// Char parses a single character and matches it with
+// Char parses a single rune and matches it with
 // a provided candidate.
+// If the rune could not be found at the current position,
+// the parser returns an error result.
 func Char(char rune) gomme.Parser[rune] {
 	expected := strconv.QuoteRune(char)
 	consumption := uint(utf8.RuneCountInString(string(char)))
@@ -32,6 +35,30 @@ func Char(char rune) gomme.Parser[rune] {
 	}
 
 	return gomme.NewParser[rune](expected, gomme.ConstantConsumption(consumption), parse)
+}
+
+// Byte parses a single byte and matches it with
+// a provided candidate.
+// If the byte could not be found at the current position,
+// the parser returns an error result.
+func Byte(char byte) gomme.Parser[byte] {
+	expected := "0x" + strconv.FormatUint(uint64(char), 16)
+	consumption := uint(utf8.RuneCountInString(string(char)))
+
+	parse := func(state gomme.State) (gomme.State, byte) {
+		buf := state.CurrentBytes()
+		if len(buf) == 0 {
+			return state.NewError(fmt.Sprintf("%s (at EOF)", expected), state, consumption), 0
+		}
+		b := buf[0]
+		if b != char {
+			return state.NewError(fmt.Sprintf("%s (got 0x%x)", expected, b), state, consumption), 0
+		}
+
+		return state.MoveBy(1), b
+	}
+
+	return gomme.NewParser[byte](expected, gomme.ConstantConsumption(consumption), parse)
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
@@ -69,7 +96,8 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 
 // String parses a token from the input, and returns the part of the input that
 // matched the token.
-// If the token could not be found, the parser returns an error result.
+// If the token could not be found at the current position,
+// the parser returns an error result.
 func String(token string) gomme.Parser[string] {
 	expected := strconv.Quote(token)
 
@@ -85,11 +113,32 @@ func String(token string) gomme.Parser[string] {
 	return gomme.NewParser[string](expected, gomme.ConstantConsumption(uint(len(token))), parse)
 }
 
+// Bytes parses a token from the input, and returns the part of the input that
+// matched the token.
+// If the token could not be found at the current position,
+// the parser returns an error result.
+func Bytes(token []byte) gomme.Parser[[]byte] {
+	expected := fmt.Sprintf("0x%x", token)
+
+	parse := func(state gomme.State) (gomme.State, []byte) {
+		if !bytes.HasPrefix(state.CurrentBytes(), token) {
+			return state.NewError(expected, state, uint(len(token))), []byte{}
+		}
+
+		newState := state.MoveBy(uint(len(token)))
+		return newState, token
+	}
+
+	return gomme.NewParser[[]byte](expected, gomme.ConstantConsumption(uint(len(token))), parse)
+}
+
 // UntilString parses until it finds a token in the input, and returns
 // the part of the input that preceded the token.
 // If found the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
+// This function panics if `stop` is empty.
 func UntilString(stop string) gomme.Parser[string] {
+	expected := fmt.Sprintf("... %q", stop)
 	count := uint(0)
 	sum := uint(0)
 
@@ -100,11 +149,15 @@ func UntilString(stop string) gomme.Parser[string] {
 		return (sum + count/2) / count
 	}
 
+	if stop == "" {
+		panic("stop is empty")
+	}
+
 	parse := func(state gomme.State) (gomme.State, string) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state.NewError(fmt.Sprintf("... %q", stop), state, avgConsumption()), ""
+			return state.NewError(expected, state, avgConsumption()), ""
 		}
 
 		consumption := uint(i + len(stop))
@@ -114,7 +167,7 @@ func UntilString(stop string) gomme.Parser[string] {
 		return newState, input[:i]
 	}
 
-	return gomme.NewParser[string](stop, avgConsumption, parse)
+	return gomme.NewParser[string](expected, avgConsumption, parse)
 }
 
 // SatisfyMN returns the longest input subset that matches the predicate,

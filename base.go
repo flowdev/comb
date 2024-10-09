@@ -17,14 +17,25 @@ import (
 
 const DefaultConsumption = 5 // DefaultConsumption of 5 is to be used until we have better data
 
-type errorHandlingMode int
+type ParsingMode int
 
 const (
-	errHandleModeNone errorHandlingMode = iota
-	errHandleModeDelete
-	errHandleModeInsert
-	errHandleModeUpdate
+	ParsingModeHappy ParsingMode = iota
+	ParsingModeError
+	ParsingModeHandle
+	ParsingModeRecord
+	ParsingModeChoose
+	ParsingModePlay
 )
+
+// Recoverer is a simplified parser that can consume input and returns the number
+// of bytes consumed as output.
+// A Recoverer is used for recovering from an error in the input by moving forward
+// to the next safe spot (point of no return / NoWayBack parser).
+// This will be used by the NoWayBack parser if it's sub-parser provides a recoverer.
+// Otherwise, NoWayBack will have to try the sub-parser until it succeeds moving
+// forward 1 byte at a time.
+type Recoverer func(state State) (State, int)
 
 // Parser defines the type of a generic Parser
 // A few rules should be followed to prevent unexpected behaviour:
@@ -43,6 +54,15 @@ type prsr[Output any] struct {
 	it             func(state State) (State, Output)
 }
 
+// NewParser is THE way to create parsers.
+func NewParser[Output any](expected string, avgConsumption func() uint, parse func(State) (State, Output)) Parser[Output] {
+	return prsr[Output]{
+		expected:       expected,
+		avgConsumption: avgConsumption,
+		it:             parse,
+	}
+}
+
 func (p prsr[Output]) Expected() string {
 	return p.expected
 }
@@ -55,18 +75,16 @@ func (p prsr[Output]) It(state State) (State, Output) {
 	return p.it(state)
 }
 
-func NewParser[Output any](expected string, avgConsumption func() uint, parse func(State) (State, Output)) Parser[Output] {
-	return prsr[Output]{
-		expected:       expected,
-		avgConsumption: avgConsumption,
-		it:             parse,
-	}
-}
-
 type lazyprsr[Output any] struct {
 	once       sync.Once
 	makePrsr   func() Parser[Output]
 	cachedPrsr Parser[Output]
+}
+
+// LazyParser just stores a function that creates the parser and evaluates the function later.
+// This allows to defer the call to NewParser() and thus to define recursive grammars.
+func LazyParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
+	return &lazyprsr[Output]{makePrsr: makeParser}
 }
 
 func (lp *lazyprsr[Output]) ensurePrsr() {
@@ -86,10 +104,6 @@ func (lp *lazyprsr[Output]) AvgConsumption() uint {
 func (lp *lazyprsr[Output]) It(state State) (State, Output) {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.It(state)
-}
-
-func LazyParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
-	return &lazyprsr[Output]{makePrsr: makeParser}
 }
 
 func ConstantConsumption(consumption uint) func() uint {
@@ -150,18 +164,36 @@ func ZeroOf[T any]() T {
 	return t
 }
 
+type delErrHand struct {
+	min     int        // minimal deletion
+	deleted int        // number of bytes that have been "deleted"
+	offset  int        // number of bytes the currently handled error happened after state.input.pos
+	errors  []pcbError // errors during handling
+}
+
+type updErrHand struct {
+	minDel int        // minimal deletion
+	curDel int        // current deletion (this value goes from minDel to maxDel)
+	errors []pcbError // errors during handling
+}
+
+type errHand struct {
+	mode   ParsingMode // one of: none, delete, insert, update
+	err    *pcbError   // error that is currently handled
+	del    delErrHand  // for handling errors by "deleting" input
+	upd    updErrHand  // for handling errors by "updating" input
+	maxDel int         // the consumption of the currently handled error (or even more)
+}
+
 // State represents the current state of a parser.
 // It consists of the Input, the pointOfNoReturn mark
 // and a collection of error messages.
 type State struct {
 	input           Input
-	pointOfNoReturn int               // mark set by SignalNoWayBack/NoWayBack parser
-	newError        *pcbError         // error that haven't been handled yet
-	curMode         errorHandlingMode // one of: none, delete, insert, update
-	curError        *pcbError         // error that is currently handled
-	curConsumption  int               // the consumption of the currently handled error (or even more)
-	curDeletion     int               // number of bytes the update error handling should "delete"
-	oldErrors       []pcbError        // errors that have been handled already
+	pointOfNoReturn int        // mark set by SignalNoWayBack/NoWayBack parser
+	newError        *pcbError  // error that hasn't been handled yet
+	errHand         errHand    // everything for error handling
+	oldErrors       []pcbError // errors that are or have been handled
 }
 
 // NewFromString creates a new parser state from the input data.
@@ -206,6 +238,17 @@ func (st State) BytesTo(remaining State) []byte {
 		return st.input.bytes[st.input.pos:]
 	}
 	return st.input.bytes[st.input.pos:remaining.input.pos]
+}
+
+func (st State) ByteCount(remaining State) int {
+	if remaining.input.pos < st.input.pos {
+		return 0 // we never go back so we don't give negative count back
+	}
+	n := len(st.input.bytes)
+	if remaining.input.pos > n {
+		return n - st.input.pos
+	}
+	return remaining.input.pos - st.input.pos
 }
 
 func (st State) MoveBy(countBytes uint) State {
@@ -282,6 +325,10 @@ func (st State) Failed() bool {
 // Produce error messages and give them back
 //
 
+func (st State) CurrentSourceLine() string {
+	return formatSrcLine(st.where(st.input.pos))
+}
+
 func (st State) where(pos int) (line, col int, srcLine string) {
 	if len(st.input.bytes) == 0 {
 		return 1, 0, ""
@@ -353,10 +400,6 @@ func (st State) Error() string {
 		fullMsg.WriteString(singleErrorMsg(pcbErr))
 		fullMsg.WriteRune('\n')
 	}
-	if st.curError != nil {
-		fullMsg.WriteString(singleErrorMsg(*st.curError))
-		fullMsg.WriteRune('\n')
-	}
 	if st.newError != nil {
 		fullMsg.WriteString(singleErrorMsg(*st.newError))
 		fullMsg.WriteRune('\n')
@@ -367,18 +410,21 @@ func (st State) Error() string {
 
 func singleErrorMsg(pcbErr pcbError) string {
 	fullMsg := strings.Builder{}
-	srcLine := strings.Builder{}
 	fullMsg.WriteString("expected ")
 	fullMsg.WriteString(pcbErr.text)
-
-	lineStart := pcbErr.srcLine[:pcbErr.col]
-	srcLine.WriteString(lineStart)
-	srcLine.WriteRune(0x25B6)
-	srcLine.WriteString(pcbErr.srcLine[pcbErr.col:])
-	fullMsg.WriteString(fmt.Sprintf(" [%d, %d]: %q",
-		pcbErr.line, utf8.RuneCountInString(lineStart)+1, srcLine.String())) // columns for the user start at 1
+	fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
 
 	return fullMsg.String()
+}
+
+func formatSrcLine(line, col int, srcLine string) string {
+	result := strings.Builder{}
+	lineStart := srcLine[:col]
+	result.WriteString(lineStart)
+	result.WriteRune(0x25B6)
+	result.WriteString(srcLine[col:])
+	return fmt.Sprintf(" [%d:%d] %q",
+		line, utf8.RuneCountInString(lineStart)+1, result.String()) // columns for the user start at 1
 }
 
 // ============================================================================
@@ -403,11 +449,13 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 	var newState State
 
 	curState := state
+	curState.errHand.del.min = 1    // we have to delete at least 1 byte to fix anything
+	curState.errHand.upd.minDel = 0 // update needn't delete anything at all => insert
 	for {
 		if !curState.Failed() {
 			newState, output = parse.It(curState)
 			if !newState.Failed() {
-				newState.curError = nil
+				newState.errHand.err = nil
 				break
 			}
 		} else {
@@ -415,33 +463,31 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 		}
 
 		if !newState.handlingNewError() {
-			newState.curMode = errHandleModeNone
+			newState.errHand.mode = ParsingModeHappy
 		}
 
-		switch newState.curMode {
-		case errHandleModeNone: // if no err handling yet -> start handling & delete single bytes
+		switch newState.errHand.mode {
+		case ParsingModeHappy: // if no err handling yet -> start handling & delete single bytes
 			newState.oldErrors = append(newState.oldErrors, *newState.newError)
-			newState.curError = newState.newError
-			newState.curMode = errHandleModeDelete
-		case errHandleModeDelete: // if deleted single bytes -> insert good input
-			newState.curMode = errHandleModeInsert
-		case errHandleModeInsert: // if inserted good input -> delete + insert good input
-			newState.curDeletion = 1
-			newState.curMode = errHandleModeUpdate
-		case errHandleModeUpdate: // if updated input -> delete a bit more or try all again just harder
-			if newState.curDeletion < newState.curConsumption {
-				newState.curDeletion++
+			newState.errHand.err = newState.newError
+			newState.errHand.mode = ParsingModeError
+		case ParsingModeError: // if deleted single bytes -> insert good input and possibly delete some bytes
+			newState.errHand.upd.curDel = newState.errHand.upd.minDel
+			newState.errHand.mode = ParsingModeRecord
+		case ParsingModeRecord: // if updated input -> delete a bit more or try all again just harder
+			if newState.errHand.upd.curDel < newState.errHand.maxDel {
+				newState.errHand.upd.curDel++
 			} else {
 				newState = state
-				oldConsumption := curState.curConsumption
-				newState.curConsumption = min(curState.curConsumption+curState.curError.consumption,
+				oldConsumption := curState.errHand.maxDel
+				newState.errHand.maxDel = min(curState.errHand.maxDel+curState.errHand.err.consumption,
 					len(newState.input.bytes)-newState.input.pos)
-				if newState.curConsumption <= oldConsumption { // we have already reached the end!!!
-					newState.curError = nil
+				if newState.errHand.maxDel <= oldConsumption { // we have already reached the end!!!
+					newState.errHand.err = nil
 					break
 				}
-				newState.curDeletion = 0
-				newState.curMode = errHandleModeDelete
+				newState.errHand.del.min = oldConsumption
+				newState.errHand.mode = ParsingModeError
 			}
 		}
 
@@ -451,44 +497,47 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 	}
 
 	newState.newError = nil
-	newState.curError = nil
-	newState.curMode = errHandleModeNone
-	newState.curConsumption = 0
-	newState.curDeletion = 0
+	newState.errHand.err = nil
+	newState.errHand.mode = ParsingModeHappy
+	newState.errHand.maxDel = 0
+	newState.errHand.del = delErrHand{}
+	newState.errHand.upd = updErrHand{}
 	return newState, output
 }
 
-func HandleCurError[Output any](state State, parse Parser[Output]) (State, Output) {
+func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, Output) {
 	if !state.handlingNewError() {
 		return state, ZeroOf[Output]()
 	}
 
-	switch state.curMode {
-	case errHandleModeDelete: // try byte-wise deletion of input first
+	switch state.errHand.mode {
+	case ParsingModeError: // try byte-wise deletion of input first
 		var tryState State
-		errOffset := state.curError.pos - state.input.pos // this should be 0, but misbehaving parsers...
+		errOffset := state.errHand.err.pos - state.input.pos // this should be 0, but misbehaving parsers...
 
-		for i := 1; i <= state.curConsumption; i++ {
+		for i := state.errHand.del.min; i <= state.errHand.maxDel; i++ {
 			tryState = state.MoveBy(uint(i))
 			newState, output := parse.It(tryState)
 			// It will always be a new error because the position has changed.
 			// But if this is called by the first combining parser,
 			// the position won't change beyond the `tryState` if it fails directly.
-			if !newState.Failed() || len(tryState.BytesTo(newState)) > errOffset {
+			if !newState.Failed() || tryState.ByteCount(newState) > errOffset {
+				newState.errHand.del.deleted = i
+				newState.errHand.del.offset = errOffset
 				return newState, output
 			}
 			// we failed again without really moving
-			newState.oldErrors = append(newState.oldErrors, *newState.newError)
-			newState.curError = newState.newError
+			newState.oldErrors = append(newState.oldErrors, *newState.newError) // TODO: ERROR ID or 100 times the same error
+			newState.errHand.err = newState.newError
 			state.newError = nil
 			tryState = newState
 		}
-	case errHandleModeInsert: // imitate insertion of correct input by ignoring the error
+	case ParsingModeHandle: // imitate insertion of correct input by ignoring the error
 		state.newError = nil
 		return state, ZeroOf[Output]()
-	case errHandleModeUpdate: // insert (ignore the error) + delete (move ahead)
+	case ParsingModeRecord: // insert (ignore the error) + delete (move ahead)
 		state.newError = nil
-		return state.MoveBy(uint(state.curDeletion)), ZeroOf[Output]()
+		return state.MoveBy(uint(state.errHand.upd.curDel)), ZeroOf[Output]()
 	default:
 		// intentionally do nothing
 	}
@@ -497,10 +546,10 @@ func HandleCurError[Output any](state State, parse Parser[Output]) (State, Outpu
 }
 
 func (st State) handlingNewError() bool {
-	if st.curError == nil || st.newError == nil {
+	if st.errHand.err == nil || st.newError == nil {
 		return false
 	}
-	return *st.curError == *st.newError
+	return *st.errHand.err == *st.newError
 }
 
 // ============================================================================

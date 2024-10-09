@@ -37,7 +37,7 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 		for _, parse := range parsers {
 			newState, output := parse.It(remaining)
 			if newState.Failed() {
-				newState, output = gomme.HandleCurError(remaining.Failure(newState), parse)
+				newState, output = gomme.HandleCurrentError(remaining.Failure(newState), parse)
 				if newState.Failed() {
 					return state.Failure(newState), gomme.ZeroOf[[]Output]()
 				}

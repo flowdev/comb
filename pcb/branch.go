@@ -43,14 +43,14 @@ func Alternative[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Outpu
 			newState, output := parse.It(state)
 			if !newState.Failed() {
 				count++
-				sum += len(state.BytesTo(newState))
+				sum += state.ByteCount(newState)
 				return newState, output
 			}
 			failState := state.Failure(newState)
 			if failState.NoWayBack() {
 				return gomme.HandleAllErrors(failState, parse) // this will force it through
 			}
-			newState, output = gomme.HandleCurError(failState, parse)
+			newState, output = gomme.HandleCurrentError(failState, parse)
 			if !newState.Failed() {
 				return newState, output
 			}

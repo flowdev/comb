@@ -28,11 +28,6 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // Peek tries to apply the provided parser without consuming any input.
 // It effectively allows to look ahead in the input.
 // NoWayBack isn't honored here because we aren't officially parsing anything.
-//
-// ATTENTION:
-//
-//	This is the ONLY parser having a parser as input that doesn't try to fix errors at all.
-//	The user has to do it himself or let the next combining parser up the call stack do it.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
@@ -46,6 +41,25 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	return gomme.NewParser[Output]("Peek", gomme.ConstantConsumption(0), peekParse)
 }
 
+// Not tries to apply the provided parser without consuming any input.
+// Not succeeds if the parser fails and succeeds if the parser fails.
+// It effectively allows to look ahead in the input.
+// The returned boolean value indicates its own success and not the given parsers.
+// NoWayBack isn't honored here because we aren't officially parsing anything.
+func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
+	expected := "not " + parse.Expected()
+	parseNot := func(state gomme.State) (gomme.State, bool) {
+		newState, _ := parse.It(state)
+		if newState.Failed() {
+			return state, true
+		}
+
+		// avoid NoWayBack because we only peek; error message and consumption don't matter either
+		return state.NewError(expected, state, parse.AvgConsumption()), false
+	}
+	return gomme.NewParser[bool](expected, gomme.ConstantConsumption(0), parseNot)
+}
+
 // Recognize returns the consumed input (instead of the original parsers output)
 // as the produced value when the provided parser succeeds.
 //
@@ -57,7 +71,7 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 	recParse := func(state gomme.State) (gomme.State, []byte) {
 		newState, _ := parse.It(state)
 		if newState.Failed() {
-			newState, _ = gomme.HandleCurError(state.Failure(newState), parse)
+			newState, _ = gomme.HandleCurrentError(state.Failure(newState), parse)
 			if newState.Failed() {
 				return state.Failure(newState), []byte{}
 			}
@@ -74,7 +88,7 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 	asgnParse := func(state gomme.State) (gomme.State, Output1) {
 		newState, _ := parse.It(state)
 		if newState.Failed() {
-			newState, _ = gomme.HandleCurError(state.Failure(newState), parse)
+			newState, _ = gomme.HandleCurrentError(state.Failure(newState), parse)
 			if newState.Failed() {
 				return state.Failure(newState), gomme.ZeroOf[Output1]()
 			}
@@ -92,7 +106,7 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState, output := parse.It(state)
 		if newState.Failed() {
-			newState, output = gomme.HandleCurError(state.Failure(newState), parse)
+			newState, output = gomme.HandleCurrentError(state.Failure(newState), parse)
 			if newState.Failed() {
 				return state.Failure(newState), gomme.ZeroOf[MO]()
 			}
@@ -126,7 +140,7 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			newState1, output1 = gomme.HandleCurrentError(state.Failure(newState1), parse1)
 			if newState1.Failed() {
 				return state.Failure(newState1), gomme.ZeroOf[MO]()
 			}
@@ -134,7 +148,7 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			newState2, output2 = gomme.HandleCurError(state.Failure(newState2), parse2)
+			newState2, output2 = gomme.HandleCurrentError(state.Failure(newState2), parse2)
 			if newState2.Failed() {
 				return state.Failure(newState2), gomme.ZeroOf[MO]()
 			}
@@ -171,7 +185,7 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			newState1, output1 = gomme.HandleCurrentError(state.Failure(newState1), parse1)
 			if newState1.Failed() {
 				return state.Failure(newState1), gomme.ZeroOf[MO]()
 			}
@@ -179,7 +193,7 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			newState2, output2 = gomme.HandleCurError(newState1.Failure(newState2), parse2)
+			newState2, output2 = gomme.HandleCurrentError(newState1.Failure(newState2), parse2)
 			if newState2.Failed() {
 				return state.Failure(newState2), gomme.ZeroOf[MO]()
 			}
@@ -187,7 +201,7 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			newState3, output3 = gomme.HandleCurError(newState2.Failure(newState3), parse3)
+			newState3, output3 = gomme.HandleCurrentError(newState2.Failure(newState3), parse3)
 			if newState3.Failed() {
 				return state.Failure(newState3), gomme.ZeroOf[MO]()
 			}
@@ -227,7 +241,7 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			newState1, output1 = gomme.HandleCurrentError(state.Failure(newState1), parse1)
 			if newState1.Failed() {
 				return state.Failure(newState1), gomme.ZeroOf[MO]()
 			}
@@ -235,7 +249,7 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			newState2, output2 = gomme.HandleCurError(newState1.Failure(newState2), parse2)
+			newState2, output2 = gomme.HandleCurrentError(newState1.Failure(newState2), parse2)
 			if newState2.Failed() {
 				return state.Failure(newState2), gomme.ZeroOf[MO]()
 			}
@@ -243,7 +257,7 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			newState3, output3 = gomme.HandleCurError(newState2.Failure(newState3), parse3)
+			newState3, output3 = gomme.HandleCurrentError(newState2.Failure(newState3), parse3)
 			if newState3.Failed() {
 				return state.Failure(newState3), gomme.ZeroOf[MO]()
 			}
@@ -251,7 +265,7 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 
 		newState4, output4 := parse4.It(newState3)
 		if newState4.Failed() {
-			newState4, output4 = gomme.HandleCurError(newState3.Failure(newState4), parse4)
+			newState4, output4 = gomme.HandleCurrentError(newState3.Failure(newState4), parse4)
 			if newState4.Failed() {
 				return state.Failure(newState4), gomme.ZeroOf[MO]()
 			}
@@ -293,7 +307,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			newState1, output1 = gomme.HandleCurError(state.Failure(newState1), parse1)
+			newState1, output1 = gomme.HandleCurrentError(state.Failure(newState1), parse1)
 			if newState1.Failed() {
 				return state.Failure(newState1), gomme.ZeroOf[MO]()
 			}
@@ -301,7 +315,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			newState2, output2 = gomme.HandleCurError(newState1.Failure(newState2), parse2)
+			newState2, output2 = gomme.HandleCurrentError(newState1.Failure(newState2), parse2)
 			if newState2.Failed() {
 				return state.Failure(newState2), gomme.ZeroOf[MO]()
 			}
@@ -309,7 +323,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			newState3, output3 = gomme.HandleCurError(newState2.Failure(newState3), parse3)
+			newState3, output3 = gomme.HandleCurrentError(newState2.Failure(newState3), parse3)
 			if newState3.Failed() {
 				return state.Failure(newState3), gomme.ZeroOf[MO]()
 			}
@@ -317,7 +331,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		newState4, output4 := parse4.It(newState3)
 		if newState4.Failed() {
-			newState4, output4 = gomme.HandleCurError(newState3.Failure(newState4), parse4)
+			newState4, output4 = gomme.HandleCurrentError(newState3.Failure(newState4), parse4)
 			if newState4.Failed() {
 				return state.Failure(newState4), gomme.ZeroOf[MO]()
 			}
@@ -325,7 +339,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		newState5, output5 := parse5.It(newState4)
 		if newState5.Failed() {
-			newState5, output5 = gomme.HandleCurError(newState4.Failure(newState5), parse5)
+			newState5, output5 = gomme.HandleCurrentError(newState4.Failure(newState5), parse5)
 			if newState5.Failed() {
 				return state.Failure(newState5), gomme.ZeroOf[MO]()
 			}

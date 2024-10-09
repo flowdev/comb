@@ -37,7 +37,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 		for {
 			if count >= atMost {
 				consumptionCount++
-				consumptionSum += uint(len(state.BytesTo(remaining)))
+				consumptionSum += uint(state.ByteCount(remaining))
 				return remaining, outputs
 			}
 			newState, output := parse.It(remaining)
@@ -47,13 +47,13 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 				if count < atLeast {
 					// TODO: In error handling mode Insert we should "insert" missing results to reach atLeast
 					// TODO: Think this case better through
-					newState, output = gomme.HandleCurError(remaining.Failure(newState), parse)
+					newState, output = gomme.HandleCurrentError(remaining.Failure(newState), parse)
 					if newState.Failed() {
 						return state.Failure(newState), []Output{}
 					}
 				} else {
 					consumptionCount++
-					consumptionSum += uint(len(state.BytesTo(remaining)))
+					consumptionSum += uint(state.ByteCount(remaining))
 					return remaining, outputs
 				}
 			}
@@ -135,7 +135,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 		} else if firstState.Failed() {
 			if atLeast > 0 {
 				// TODO: Is this correct? Not in handle error mode "Insert"!
-				firstState, firstOutput = gomme.HandleCurError(state.Failure(firstState), parse)
+				firstState, firstOutput = gomme.HandleCurrentError(state.Failure(firstState), parse)
 				if firstState.Failed() {
 					return state.Failure(firstState), []Output{}
 				}
