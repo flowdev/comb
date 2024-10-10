@@ -24,6 +24,7 @@ const (
 	ParsingModeError
 	ParsingModeHandle
 	ParsingModeRecord
+	ParsingModeCollect
 	ParsingModeChoose
 	ParsingModePlay
 )
@@ -300,42 +301,59 @@ func (st State) Failure(subState State) State {
 	return st
 }
 
-// NewError sets an error with the messages in this state at the current position.
-// `newState` is the State most advanced in the input (can be the same as this State).
-// `futureConsumption` is the input consumption of necessary future parsers.
+// NewError sets a syntax error with the message in this state at the current position.
+// For syntax errors `expected ` is prepended to the message and the usual
+// position and source line including marker are appended.
 func (st State) NewError(message string) State {
 	line, col, srcLine := st.where(st.input.pos)
-	newErr := &pcbError{
-		text: message,
+	newErr := pcbError{
+		text: "expected " + message,
 		pos:  st.input.pos, line: line, col: col,
 		srcLine: srcLine,
 	}
 
 	switch st.mode {
 	case ParsingModeHappy:
+		st.newError = &newErr
 		st.mode = ParsingModeError
-		st.newError = newErr
 	case ParsingModeError:
 		// should NOT happen but keep error furthest in the input
-		if st.newError == nil || st.newError.pos < st.input.pos {
-			st.newError = newErr
-		}
+		//if st.newError == nil || st.newError.pos < st.input.pos {
+		//	st.newError = newErr
+		//}
+
+		// programming error
+		newErr.text = "programming error: State.NewError called in mode `error`"
+		st.oldErrors = append(st.oldErrors, newErr)
 	case ParsingModeHandle:
-		if st.handlingNewError(newErr) {
-			st.newError = nil
+		if st.handlingNewError(&newErr) {
 			st.mode = ParsingModeRecord
+			st.newError = nil
 		} else {
-			if st.newError == nil || st.newError.pos < st.input.pos {
-				st.newError = newErr
-			}
+			newErr.text = "programming error: State.NewError called in mode `handle` with other error"
+			st.oldErrors = append(st.oldErrors, newErr)
 		}
-	case ParsingModeRecord:
-		// ignore error (we simulate the happy path)
-	case ParsingModeChoose:
-		// ignore error (we simulate the happy path)
-	case ParsingModePlay:
-		st.newError = newErr
+	case ParsingModeRecord, ParsingModeCollect:
+		// ignore error (we simulate the happy path) (should not happen)
+	case ParsingModeChoose, ParsingModePlay:
+		st.newError = &newErr
 	}
+	return st
+}
+
+// NewSemanticError sets a semantic error with the messages in this state at the
+// current position.
+// For semantic errors `expected ` is NOT prepended to the message but the usual
+// position and source line including marker are appended.
+func (st State) NewSemanticError(message string) State {
+	line, col, srcLine := st.where(st.input.pos)
+	err := pcbError{
+		text: message,
+		pos:  st.input.pos, line: line, col: col,
+		srcLine: srcLine,
+	}
+
+	st.oldErrors = append(st.oldErrors, err)
 	return st
 }
 
@@ -348,6 +366,9 @@ func (st State) Failed() bool {
 // Produce error messages and give them back
 //
 
+// CurrentSourceLine returns the source line corresponding to the current position
+// including [line:column] at the start and a marker at the exact error position.
+// This should be used for reporting errors that are detected later.
 func (st State) CurrentSourceLine() string {
 	return formatSrcLine(st.where(st.input.pos))
 }
@@ -411,11 +432,7 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 // Error returns a human readable error string.
 func (st State) Error() string {
 	slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
-		i := cmp.Compare(a.line, b.line)
-		if i != 0 {
-			return i
-		}
-		return cmp.Compare(a.col, b.col)
+		return cmp.Compare(a.pos, b.pos)
 	})
 
 	fullMsg := strings.Builder{}
@@ -433,7 +450,6 @@ func (st State) Error() string {
 
 func singleErrorMsg(pcbErr pcbError) string {
 	fullMsg := strings.Builder{}
-	fullMsg.WriteString("expected ")
 	fullMsg.WriteString(pcbErr.text)
 	fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
 
@@ -444,7 +460,7 @@ func formatSrcLine(line, col int, srcLine string) string {
 	result := strings.Builder{}
 	lineStart := srcLine[:col]
 	result.WriteString(lineStart)
-	result.WriteRune(0x25B6)
+	result.WriteRune(0x25B6) // easy to spot marker (▶) for exact error position
 	result.WriteString(srcLine[col:])
 	return fmt.Sprintf(" [%d:%d] %q",
 		line, utf8.RuneCountInString(lineStart)+1, result.String()) // columns for the user start at 1
@@ -570,7 +586,7 @@ func (st State) handlingNewError(newErr *pcbError) bool {
 	if st.errHand.err == nil || newErr == nil {
 		return false
 	}
-	return *st.errHand.err == *newErr
+	return st.errHand.err.pos == newErr.pos
 }
 
 // ============================================================================

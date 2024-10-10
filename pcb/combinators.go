@@ -1,7 +1,6 @@
 package pcb
 
 import (
-	"fmt"
 	"github.com/oleiade/gomme"
 	"strings"
 )
@@ -114,7 +113,7 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 
 		mapped, err := fn(output)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", parse.Expected(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewSemanticError(err.Error()), gomme.ZeroOf[MO]()
 		}
 
 		return newState, mapped
@@ -152,7 +151,7 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 
 		mapped, err := fn(output1, output2)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewSemanticError(err.Error()), gomme.ZeroOf[MO]()
 		}
 
 		return newState2, mapped
@@ -201,7 +200,7 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 
 		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewSemanticError(err.Error()), gomme.ZeroOf[MO]()
 		}
 
 		return newState3, mapped
@@ -260,7 +259,7 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 
 		mapped, err := fn(output1, output2, output3, output4)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewSemanticError(err.Error()), gomme.ZeroOf[MO]()
 		}
 
 		return newState4, mapped
@@ -329,7 +328,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		mapped, err := fn(output1, output2, output3, output4, output5)
 		if err != nil {
-			return state.NewError(fmt.Sprintf("%s (%v)", expected.String(), err.Error())), gomme.ZeroOf[MO]()
+			return state.NewSemanticError(err.Error()), gomme.ZeroOf[MO]()
 		}
 
 		return newState5, mapped
