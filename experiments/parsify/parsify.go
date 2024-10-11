@@ -42,7 +42,7 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 					return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), oruneErr
 				}
 
-				return state.MoveBy(uint(size)), op
+				return state.MoveBy(size), op
 			}
 		}
 		panic(fmt.Errorf("can't turn a rune into a parser of type `%T`", zeroOutput))

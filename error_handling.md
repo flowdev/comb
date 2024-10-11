@@ -1,20 +1,60 @@
 # Error Handling
 
-Error handling consists of error reporting and recovering from errors.
+The handling of (syntax) errors is the by far hardest part of this project.
+I had to refactor the project **three** times to get it right and
+almost made a PhD in computer science understanding all those
+scientific papers about error handling in parsers
+with their extremely concise notation that is explained nowhere
+because it is the well known standard in the field.
+Thank you, Sérgio Medeiros and Fabio Mascarenhas, for your paper
+[Syntax Error Recovery in Parsing Expression Grammars](https://dl.acm.org/doi/10.1145/3167132.3167261).
+That brought me on the right track.
+And thank you, Terence Parr and [ANTLR](https://www.antlr.org/),
+for an OpenSource parser to compare against.
+I would have switched to it if I had found the Go support of ANTLR early enough.
+
+So please take some time to understand this before making or suggesting
+any major changes.
+
+The error handling consists of error reporting and recovering from errors.
 
 ## Error Reporting
 
 Syntax errors are always reported in the form:
 > expected "token" [line:column] source line incl. marker ▶ at error position
 
-And semantic errors are always reported in the form:
+Programming errors (in one of Your parsers) are always reported in the form:
+> programming error: message [line:column] source line incl. marker ▶ at error position
+
+Semantic and miscellaneous errors are always reported in the form:
 > message [line:column] source line incl. marker ▶ at error position
 
-So errors that don't start with `expected ` are no syntax errors.
+Calculating the correct line and column of the error and setting the marker
+correctly are the hardest problems here.
+And they bring the most benefit to the user.
 
 ## Recovering From Errors
 
-For recovering from errors the parser can be in the following modes:
+For recovering from errors the parser uses a couple of modes.
+Fewer modes would only be possible by potentially much more wasted parsing.
+Because we not only have to find a safe point to recover to but also have to
+have the correct Go call stack to be able to parse correctly after recovering.
+This is a downside of all parser combinators.
+We mitigate it by recording all parsers on the way to the next safe state
+(the next `NoWayBack` parser).
+
+The `NoWayBack` parser plays a key role in error recovery.
+It is the one to conclude that an error has indeed to be handled
+(if its position is before the error),
+and it also marks the next safe state to which we want to recover to
+(if its position is behind the error).
+A `NoWayBack` parser at the exact error position isn't of help
+for that particular error.
+So please use the `NoWayBack` parser as much as reasonable for your grammar!
+It also makes the parser perform better because it keeps the backtracking
+to a minimum.
+
+These are the modes:
 
 happy:
 : Normal parsing discovering errors.
@@ -25,8 +65,9 @@ error:
 : An error was found but might be mitigated by backtracking.
 
 handle:
-: The error found has to be handled.
-  We find the exact position and parser again.
+: We now know that the error found has to be handled.
+  We find the exact position and parser again by simply parsing one more time
+  in the new mode.
 
 record:
 : The error has been found again. Now we record all parsers
@@ -34,6 +75,11 @@ record:
   safe point (`NoWayBack`).
   In general the input doesn't matter in this mode and nothing is looked at or
   consumed.
+  The **_record_** mode and friends exist so we don't have to parse from far
+  back again and again. Because we would have to find a common ancestor of
+  the erroring parser and the recovering `NoWayBack`.
+  We want to try parsing a couple of times with some input deleted and
+  the waste would add up.
 
 collect:
 : This is really a sub-mode of **_record_**.
@@ -95,12 +141,17 @@ happy:
 
 error:
 : Register programming error.
+  We must not error on the way back to the last `NoWayBack`.
 
 handle:
 : If `newError==error` then switch to `mode=record` else register programming error.
+  We must have missed either the erroring parser in `mode==happy` or
+  the error to handle just now in `mode==handle`.
 
 record:
 : Ignore call (should not happen).
+  This would just cost a bit of performance and it thus no
+  programming error to be fixed.
 
 collect:
 : Like mode **_record_**.
@@ -112,6 +163,45 @@ play:
 : Like mode **_choose_**.
 
 ### NoWayBack Parser
+
+happy:
+: Set the point of no return in the State if the sub-parser has been successful.
+  Else just return the error.
+
+error:
+: Switch to `mode=handle` and if the error came from the sub-parser, call it again,
+  else return.
+
+handle:
+: Call sub-parser to find the error again.
+  If the mode hasn't changed after the call, report a programming error because
+  this parser should be the one switching to `mode=handle` or we missed the error.
+
+record:
+: If `mode==record` at the start then this is the safe place wanted to recover to.
+  Now recover. (Switch to `mode=play`.
+  Use `Deleter` to delete 1 to `maxDel` tokens and call all recorded parsers
+  in their order.
+  If no success just do the same without calling the very first
+  recorded parser (this simulates inserting correct input).
+  If still no success use the `Recoverer` to find the next safe spot in the input.
+  Move there, switch to `mode=happy` and resume normal parsing by calling the sub-parser.
+  This has to be successful (or we record a programming error).
+  Finally advance the point of no return accordingly (like in `mode==happy`). )
+  Else just return (the sub-parser has already recorded itself).
+
+collect:
+: Signal back to the `FirstSuccessful` parser that a `NoWayBack` parser was found
+  (including the `waste`?).
+
+choose:
+: Signal the `waste` of the `Recoverer` back to the `FirstSuccessful` parser.
+
+play:
+: If `mode==play` at the start then call sub-parser.
+  (If that is successful switch to `mode=happy` and clean up the error handling.
+  Else we have to return the error.)
+  Else register programming error since this parser wouldn't have recorded itself.
 
 ### FirstSuccessful Parser
 

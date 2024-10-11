@@ -70,7 +70,7 @@ func Char(char rune) Parser[rune] {
 			return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), utf8.RuneError
 		}
 
-		return state.MoveBy(uint(size)), r
+		return state.MoveBy(size), r
 	}
 }
 
@@ -91,7 +91,7 @@ func Char2[Output rune](char rune) Parser[Output] {
 			return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), utf8.RuneError
 		}
 
-		return state.MoveBy(uint(size)), Output(r)
+		return state.MoveBy(size), Output(r)
 	}
 }
 
@@ -107,7 +107,7 @@ func UntilString(stop string) Parser[string] {
 			return state.NewError(fmt.Sprintf("... %q", stop)), ""
 		}
 
-		newState := state.MoveBy(uint(i + len(stop)))
+		newState := state.MoveBy(i + len(stop))
 		return newState, input[:i]
 	}
 }

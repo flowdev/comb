@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/oleiade/gomme"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -31,10 +32,10 @@ func Char(char rune) gomme.Parser[rune] {
 			return state.NewError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
 		}
 
-		return state.MoveBy(uint(size)), r
+		return state.MoveBy(size), r
 	}
 
-	return gomme.NewParser[rune](expected, parse, SkipTo(char))
+	return gomme.NewParser[rune](expected, parse, IndexOf(char))
 }
 
 // Byte parses a single byte and matches it with
@@ -58,7 +59,7 @@ func Byte(byt byte) gomme.Parser[byte] {
 		return state.MoveBy(1), b
 	}
 
-	return gomme.NewParser[byte](expected, parse, SkipTo(byt))
+	return gomme.NewParser[byte](expected, parse, IndexOf(byt))
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
@@ -77,7 +78,7 @@ func Satisfy(expected string, predicate func(rune) bool, recover gomme.Recoverer
 			return state.NewError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
 		}
 
-		return state.MoveBy(uint(size)), r
+		return state.MoveBy(size), r
 	}
 
 	if recover == nil {
@@ -102,11 +103,11 @@ func String(token string) gomme.Parser[string] {
 			return state.NewError(expected), ""
 		}
 
-		newState := state.MoveBy(uint(len(token)))
+		newState := state.MoveBy(len(token))
 		return newState, token
 	}
 
-	return gomme.NewParser[string](expected, parse, SkipTo(token))
+	return gomme.NewParser[string](expected, parse, IndexOf(token))
 }
 
 // Bytes parses a token from the input, and returns the part of the input that
@@ -121,11 +122,11 @@ func Bytes(token []byte) gomme.Parser[[]byte] {
 			return state.NewError(expected), []byte{}
 		}
 
-		newState := state.MoveBy(uint(len(token)))
+		newState := state.MoveBy(len(token))
 		return newState, token
 	}
 
-	return gomme.NewParser[[]byte](expected, parse, SkipTo(token))
+	return gomme.NewParser[[]byte](expected, parse, IndexOf(token))
 }
 
 // UntilString parses until it finds a token in the input, and returns
@@ -153,7 +154,7 @@ func UntilString(stop string) gomme.Parser[string] {
 			return state.NewError(expected), ""
 		}
 
-		newState := state.MoveBy(uint(i + len(stop)))
+		newState := state.MoveBy(i + len(stop))
 		return newState, input[:i]
 	}
 
@@ -202,7 +203,7 @@ func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool)
 				), ""
 			}
 
-			current = current.MoveBy(uint(size))
+			current = current.MoveBy(size)
 			count++
 		}
 
@@ -298,13 +299,7 @@ func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 	expected := fmt.Sprintf("one of %q", collection)
 
 	return Satisfy(expected, func(r rune) bool {
-		for _, c := range collection {
-			if r == c {
-				return true
-			}
-		}
-
-		return false
+		return slices.Contains(collection, r)
 	}, func(state gomme.State) int {
 		return strings.IndexAny(state.CurrentString(), string(collection))
 	})
@@ -323,14 +318,14 @@ func OneOf(collection ...string) gomme.Parser[string] {
 		input := state.CurrentString()
 		for _, token := range collection {
 			if strings.HasPrefix(input, token) {
-				return state.MoveBy(uint(len(token))), token
+				return state.MoveBy(len(token)), token
 			}
 		}
 
 		return state.NewError(expected), ""
 	}
 
-	return gomme.NewParser[string](expected, parse, SkipToOneOf(collection...))
+	return gomme.NewParser[string](expected, parse, IndexOfAny(collection...))
 }
 
 // LF parses a line feed `\n` character.

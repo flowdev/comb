@@ -15,8 +15,11 @@ import (
 	"unicode/utf8"
 )
 
-const DefaultMaxDel = 3 // DefaultMaxDel of 3 is rather conservative but good enough in real life
+// DefaultMaxDel of 3 is a compromise between speed and optimal fault tolerance
+// (ANTLR is using 1)
+const DefaultMaxDel = 3
 
+// ParsingMode is needed for error handling. See `error_handling.md` for details.
 type ParsingMode int
 
 const (
@@ -40,6 +43,14 @@ const (
 // Otherwise, NoWayBack will have to try the sub-parser until it succeeds moving
 // forward 1 byte at a time. :(
 type Recoverer func(state State) int
+
+// Deleter is a simplified parser that only moves the position in the input
+// forward. This simulates deletion of parts of the input without changing it.
+//
+// A Deleter is used for recovering from errors by `deleting` tokens in the input.
+// `count` is the number of tokens to be deleted.
+// Each Deleter implementation defines itself what a token really is.
+type Deleter func(state State, count int) State
 
 // Parser defines the type of a generic Parser
 // A few rules should be followed to prevent unexpected behaviour:
@@ -221,8 +232,8 @@ func (st State) AtEnd() bool {
 	return st.input.pos >= len(st.input.bytes)
 }
 
-func (st State) BytesRemaining() uint {
-	return uint(len(st.input.bytes) - st.input.pos)
+func (st State) BytesRemaining() int {
+	return len(st.input.bytes) - st.input.pos
 }
 
 func (st State) CurrentString() string {
@@ -258,9 +269,13 @@ func (st State) ByteCount(remaining State) int {
 	return remaining.input.pos - st.input.pos
 }
 
-func (st State) MoveBy(countBytes uint) State {
+func (st State) MoveBy(countBytes int) State {
+	if countBytes < 0 {
+		countBytes = 0
+	}
+
 	pos := st.input.pos
-	n := min(len(st.input.bytes), pos+int(countBytes))
+	n := min(len(st.input.bytes), pos+countBytes)
 	st.input.pos = n
 
 	moveText := string(st.input.bytes[pos:n])
@@ -553,7 +568,7 @@ func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, O
 		errOffset := state.errHand.err.pos - state.input.pos // this should be 0, but misbehaving parsers...
 
 		for i := state.errHand.del.min; i <= state.errHand.maxDel; i++ {
-			tryState = state.MoveBy(uint(i))
+			tryState = state.MoveBy((i))
 			newState, output := parse.It(tryState)
 			// It will always be a new error because the position has changed.
 			// But if this is called by the first combining parser,
@@ -574,7 +589,7 @@ func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, O
 		return state, ZeroOf[Output]()
 	case ParsingModeRecord: // insert (ignore the error) + delete (move ahead)
 		state.newError = nil
-		return state.MoveBy(uint(state.errHand.upd.curDel)), ZeroOf[Output]()
+		return state.MoveBy((state.errHand.upd.curDel)), ZeroOf[Output]()
 	default:
 		// intentionally do nothing
 	}
