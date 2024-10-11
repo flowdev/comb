@@ -62,8 +62,6 @@ These are the modes:
 
 ##### happy:
 Normal parsing discovering errors.
-This mode is also used for playing recorded parsers the nice way
-(after deleting some input).
 
 ##### error:
 An error was found but might be mitigated by backtracking.
@@ -81,7 +79,7 @@ In general the input doesn't matter in this mode and nothing is looked at or
 consumed.
 The **_record_** mode and friends exist so we don't have to parse from far
 back again and again. Because we would have to find a common ancestor of
-the erroring parser and the recovering `NoWayBack`.
+the erroring parser and the recovering `NoWayBack` parser.
 We want to try parsing a couple of times with some input deleted and
 the waste would add up.
 
@@ -92,13 +90,18 @@ all of its sub-parsers contain a `NoWayBack` parser.
 In general the input doesn't matter in this mode and nothing is looked at or
 consumed.
 
+This mode might not be necessary because we might add a method to the parser
+interface to know this in advance.
+
 ##### play:
 In this mode the recorded parsers are executed up to the
-first `NoWayBack` parser whose sub-parser has a successful
-`Recoverer` with minimal waste.
-This really is the 'play hard' mode where errors are ignored, and we just
-want to reach the best `NoWayBack`.
-No actual parsing is to be done in this mode and no input should be consumed.
+first `NoWayBack` parser whose sub-parser is successful.
+Or the `Recoverer` with minimal waste is found.
+
+Normal parsing should be done in this mode and input should be consumed.
+But semantics might be missing, but we try to minimize it.
+Since the whole recording is often played multiple times the semantics
+shouldn't have side effects.
 
 ##### choose:
 This is really a sub-mode of **_play_**.

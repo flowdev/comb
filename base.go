@@ -32,6 +32,14 @@ const (
 	ParsingModePlay
 )
 
+type Ternary int
+
+const (
+	TernaryNo Ternary = iota
+	TernaryMaybe
+	TernaryYes
+)
+
 // Recoverer is a simplified parser that only returns the number of bytes
 // to reach a safe state.
 // If it can't recover it should return -1.
@@ -59,23 +67,39 @@ type Deleter func(state State, count int) State
 //   - A parser that consumed some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	Expected() string
-	It(state State) (State, Output)
-	Recoverer() Recoverer
+	It(State) (State, Output)
+	MyRecoverer() Recoverer
+	ContainsNoWayBack() Ternary
+	NoWayBackRecoverer(State) int
 }
 
 type prsr[Output any] struct {
-	expected  string
-	it        func(state State) (State, Output)
-	recoverer Recoverer
+	expected           string
+	it                 func(State) (State, Output)
+	recoverer          Recoverer // will be requested only by the NoWayBack parser
+	containsNoWayBack  Ternary
+	noWayBackRecoverer Recoverer // will be requested in choose mode to find the right NoWayBack parser
 }
 
 // NewParser is THE way to create parsers.
-func NewParser[Output any](expected string, parse func(State) (State, Output), recover Recoverer) Parser[Output] {
-	return prsr[Output]{
-		expected:  expected,
-		it:        parse,
-		recoverer: recover,
+func NewParser[Output any](
+	expected string,
+	parse func(State) (State, Output),
+	recover Recoverer,
+	containsNoWayBack Ternary,
+	noWayBackRecoverer Recoverer,
+) Parser[Output] {
+	p := prsr[Output]{
+		expected:           expected,
+		it:                 parse,
+		recoverer:          recover,
+		containsNoWayBack:  containsNoWayBack,
+		noWayBackRecoverer: noWayBackRecoverer,
 	}
+	if recover == nil {
+		p.recoverer = DefaultRecoverer(p)
+	}
+	return p
 }
 
 func (p prsr[Output]) Expected() string {
@@ -86,8 +110,16 @@ func (p prsr[Output]) It(state State) (State, Output) {
 	return p.it(state)
 }
 
-func (p prsr[Output]) Recoverer() Recoverer {
+func (p prsr[Output]) MyRecoverer() Recoverer {
 	return p.recoverer
+}
+
+func (p prsr[Output]) ContainsNoWayBack() Ternary {
+	return p.containsNoWayBack
+}
+
+func (p prsr[Output]) NoWayBackRecoverer(state State) int {
+	return p.noWayBackRecoverer(state)
 }
 
 type lazyprsr[Output any] struct {
@@ -116,20 +148,30 @@ func (lp *lazyprsr[Output]) It(state State) (State, Output) {
 	return lp.cachedPrsr.It(state)
 }
 
-func (lp *lazyprsr[Output]) Recoverer() Recoverer {
+func (lp *lazyprsr[Output]) MyRecoverer() Recoverer {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.Recoverer()
+	return lp.cachedPrsr.MyRecoverer()
+}
+
+func (lp *lazyprsr[Output]) ContainsNoWayBack() Ternary {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.ContainsNoWayBack()
+}
+
+func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.NoWayBackRecoverer(state)
 }
 
 // RunOnString runs a parser on text input and returns the output and error(s).
-func RunOnString[Output any](maxDel int, input string, parse Parser[Output]) (Output, error) {
-	return run(NewFromString(maxDel, input), parse)
+func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser[Output]) (Output, error) {
+	return run(NewFromString(maxDel, del, input), parse)
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
-func RunOnBytes[Output any](maxDel int, input []byte, parse Parser[Output]) (Output, error) {
-	return run(NewState(maxDel, input), parse)
+func RunOnBytes[Output any](maxDel int, del Deleter, input []byte, parse Parser[Output]) (Output, error) {
+	return run(NewState(maxDel, del, input), parse)
 }
 
 func run[Output any](state State, parse Parser[Output]) (Output, error) {
@@ -200,22 +242,29 @@ type State struct {
 	mode            ParsingMode // one of: happy, error, handle, record, choose, play
 	input           Input
 	pointOfNoReturn int        // mark set by SignalNoWayBack/NoWayBack parser
+	deleter         Deleter    // used to get back on track in error recovery
 	newError        *pcbError  // error that hasn't been handled yet
-	errHand         errHand    // everything for error handling
+	errHand         errHand    // everything for handling one error
 	oldErrors       []pcbError // errors that are or have been handled
 }
 
 // NewFromString creates a new parser state from the input data.
-func NewFromString(maxDel int, input string) State {
-	state := NewState(maxDel, []byte(input))
+func NewFromString(maxDel int, del Deleter, input string) State {
+	if del == nil {
+		del = DefaultTextDeleter
+	}
+	state := NewState(maxDel, del, []byte(input))
 	state.errHand.binary = false
 	return state
 }
 
 // NewState creates a new parser state from the input data.
-func NewState(maxDel int, input []byte) State {
+func NewState(maxDel int, del Deleter, input []byte) State {
 	if maxDel <= 0 {
 		maxDel = DefaultMaxDel
+	}
+	if del == nil {
+		del = DefaultBinaryDeleter
 	}
 	return State{
 		input:           Input{bytes: input, line: 1, prevNl: -1},
@@ -290,6 +339,10 @@ func (st State) MoveBy(countBytes int) State {
 
 func (st State) Moved(other State) bool {
 	return st.input.pos != other.input.pos
+}
+
+func (st State) Delete(countToken int) State {
+	return st.deleter(st, countToken)
 }
 
 // ============================================================================
@@ -541,6 +594,8 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 				newState.errHand.del.min = oldConsumption
 				newState.mode = ParsingModeError
 			}
+		default:
+			// not thought through!
 		}
 
 		// let's try again
@@ -568,7 +623,7 @@ func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, O
 		errOffset := state.errHand.err.pos - state.input.pos // this should be 0, but misbehaving parsers...
 
 		for i := state.errHand.del.min; i <= state.errHand.maxDel; i++ {
-			tryState = state.MoveBy((i))
+			tryState = state.MoveBy(i)
 			newState, output := parse.It(tryState)
 			// It will always be a new error because the position has changed.
 			// But if this is called by the first combining parser,
@@ -589,7 +644,7 @@ func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, O
 		return state, ZeroOf[Output]()
 	case ParsingModeRecord: // insert (ignore the error) + delete (move ahead)
 		state.newError = nil
-		return state.MoveBy((state.errHand.upd.curDel)), ZeroOf[Output]()
+		return state.MoveBy(state.errHand.upd.curDel), ZeroOf[Output]()
 	default:
 		// intentionally do nothing
 	}

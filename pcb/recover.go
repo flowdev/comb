@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"github.com/oleiade/gomme"
 	"reflect"
-	"slices"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 )
 
 // Forbidden is the Recoverer for parsers that MUST NOT be used to recover at all.
@@ -163,47 +161,40 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 
 // BasicRecoverer recovers by trying to parse again and again and again.
 // It moves forward in the input using the Deleter one token at a time.
-func BasicRecoverer[Output any](parse gomme.Parser[Output], delete gomme.Deleter) gomme.Recoverer {
-	return func(state gomme.State) int {
-		curState := state
-		for curState.BytesRemaining() > 0 {
-			newState, _ := parse.It(curState)
-			if !newState.Failed() {
-				return state.ByteCount(curState) // return the bytes up to the successful position
-			}
-			curState = delete(curState, 1)
-		}
-		return -1 // absolut worst case! :(
-	}
+func BasicRecoverer[Output any](parse gomme.Parser[Output]) gomme.Recoverer {
+	return gomme.DefaultRecoverer(parse)
 }
 
-// CombiningRecoverer recovers by using all of its sub-Recoverers and returning the minimal waste.
-func CombiningRecoverer(recoverers ...gomme.Recoverer) gomme.Recoverer {
+// CombiningRecoverer isn't a real recoverer itself, but it helps to find
+// the best Recoverer by calling all and returning the minimal waste plus
+// the index of the best Recoverer.
+func CombiningRecoverer(recoverers []gomme.Recoverer) gomme.Recoverer {
 	return func(state gomme.State) int {
 		waste := -1
 		for _, recoverer := range recoverers {
-			switch w := recoverer(state); w {
-			case -1: // ignore
-			case 0: // it won't get better than this
+			w := recoverer(state)
+			switch {
+			case w == -1: // ignore
+			case w == 0: // it won't get better than this
 				return 0
-			default:
-				waste = min(waste, w)
+			case waste < 0 || w < waste:
+				waste = w
 			}
 		}
 		return waste
 	}
 }
 
-// ByteTokens is a Deleter that simply deletes bytes from the input.
+// ByteDeleter is a Deleter that simply deletes bytes from the input.
 // It is meant to be used for parsing binary data.
-func ByteTokens(state gomme.State, count int) gomme.State {
-	return state.MoveBy(count)
+func ByteDeleter(state gomme.State, count int) gomme.State {
+	return gomme.DefaultBinaryDeleter(state, count)
 }
 
-// RuneTypeChangeTokens is a Deleter that recognizes tokens separated by
+// RuneTypeChangeDeleter is a Deleter that recognizes tokens separated by
 // changes in the type of the runes.
 // The following types are recognized:
-//   - Alphanumeric (using IsAlphanumeric())
+//   - Alphanumeric (unicode.IsLetter() || unicode.IsNumber() || '_')
 //   - Whitespace (using unicode.IsSpace())
 //   - Parentheses ('(', '[', '{', '}', ']' and ')'
 //     (all the same runes in one token))
@@ -222,42 +213,8 @@ func ByteTokens(state gomme.State, count int) gomme.State {
 //
 // It is meant to be used for parsing text data where white space is optional.
 // This is the default Deleter for text input.
-func RuneTypeChangeTokens(state gomme.State, count int) gomme.State {
-	found := 0
-	oldTyp := rune(0)
-
-	byteCount := strings.IndexFunc(state.CurrentString(), func(r rune) bool {
-		var typ rune
-
-		switch {
-		case IsAlphanumeric(r):
-			typ = 'a'
-		case unicode.IsSpace(r):
-			typ = ' '
-		case slices.Contains([]rune{'(', '[', '{', '}', ']', ')'}, r):
-			typ = '('
-		case slices.Contains([]rune{
-			'+', '-', '*', '/', '%', '^', '=', ':', '<', '>', '~',
-			'|', '\\', ';', '.', ',', '"', '`', '\'',
-		}, r):
-			typ = '+'
-		default:
-			typ = utf8.RuneError
-		}
-
-		if typ != oldTyp {
-			if typ != ' ' && oldTyp != 0 {
-				found++
-			}
-			oldTyp = typ
-		}
-		return found == count
-	})
-
-	if byteCount < 0 {
-		return state.MoveBy(state.BytesRemaining())
-	}
-	return state.MoveBy(byteCount)
+func RuneTypeChangeDeleter(state gomme.State, count int) gomme.State {
+	return gomme.DefaultTextDeleter(state, count)
 }
 
 // SpacedTokens is a Deleter that recognizes tokens separated by

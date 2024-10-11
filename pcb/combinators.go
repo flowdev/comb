@@ -78,7 +78,7 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 
 		return newState, state.BytesTo(newState)
 	}
-	return gomme.NewParser[[]byte]("Recognize", recParse, parse.Recoverer())
+	return gomme.NewParser[[]byte]("Recognize", recParse, parse.MyRecoverer())
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise
@@ -95,7 +95,7 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 
 		return newState, value
 	}
-	return gomme.NewParser[Output1](parse.Expected(), asgnParse, parse.Recoverer())
+	return gomme.NewParser[Output1](parse.Expected(), asgnParse, parse.MyRecoverer())
 }
 
 // Map applies a function to the successful result of 1 parser.
@@ -119,7 +119,7 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 		return newState, mapped
 	}
 
-	return gomme.NewParser[MO](parse.Expected(), mapParse, parse.Recoverer())
+	return gomme.NewParser[MO](parse.Expected(), mapParse, parse.MyRecoverer())
 }
 
 // Map2 applies a function to the successful result of 2 parsers.

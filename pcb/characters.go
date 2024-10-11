@@ -397,9 +397,10 @@ func UInt8() gomme.Parser[uint8] {
 	})
 }
 
-// IsAlphanumeric returns true if the rune is an alphanumeric character.
+// IsAlphanumeric returns true if the rune is a Unicode letter,
+// a Unicode number or '_'.
 func IsAlphanumeric(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsNumber(r)
+	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_'
 }
 
 // IsDigit returns true if the rune is a digit.

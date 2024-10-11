@@ -10,9 +10,9 @@ import (
 // This way we won't have a panic at the runtime of the parser.
 func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	// call Recoverer to make a Forbidden recoverer panic during the construction phase
-	recoverer := parse.Recoverer()
+	recoverer := parse.MyRecoverer()
 	if recoverer != nil {
-		recoverer(gomme.NewState(0, []byte{}))
+		recoverer(gomme.NewState(0, ByteDeleter, []byte{}))
 	}
 
 	newParse := func(state gomme.State) (gomme.State, Output) {
@@ -24,7 +24,13 @@ func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		return newState.SignalNoWayBack(), output
 	}
 
-	return gomme.NewParser[Output]("NoWayBack", newParse, parse.Recoverer())
+	return gomme.NewParser[Output](
+		"NoWayBack",
+		newParse,
+		parse.MyRecoverer(),
+		gomme.TernaryYes, // we are the only ones to be sure
+		parse.MyRecoverer(),
+	)
 }
 
 // FirstSuccessfulOf tests a list of parsers in order, one by one,
@@ -35,6 +41,39 @@ func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 func FirstSuccessfulOf[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
 	if len(parsers) == 0 {
 		panic("pcb.FirstSuccessfulOf(missing parsers)")
+	}
+
+	//
+	// Are we a real NoWayBack parser? Yes? No? Maybe?
+	//
+	noWayBacks := 0
+	maxNoWayBacks := len(parsers)
+	for _, parser := range parsers {
+		switch parser.ContainsNoWayBack() {
+		case gomme.TernaryYes:
+			noWayBacks++
+		case gomme.TernaryMaybe:
+			noWayBacks++
+			maxNoWayBacks++
+			break // it will be a Maybe anyway
+		}
+	}
+	containingNoWayBack := gomme.TernaryNo
+	if noWayBacks >= maxNoWayBacks {
+		containingNoWayBack = gomme.TernaryYes
+	} else if noWayBacks > 0 {
+		containingNoWayBack = gomme.TernaryMaybe
+	}
+
+	//
+	// Construct our noWayBackRecoverer from the sub-parsers
+	//
+	subRecoverers := make([]gomme.Recoverer, 0, len(parsers))
+	for _, parser := range parsers {
+		switch parser.ContainsNoWayBack() {
+		case gomme.TernaryYes, gomme.TernaryMaybe:
+			subRecoverers = append(subRecoverers, parser.NoWayBackRecoverer)
+		}
 	}
 
 	newParse := func(state gomme.State) (gomme.State, Output) {
@@ -64,5 +103,11 @@ func FirstSuccessfulOf[Output any](parsers ...gomme.Parser[Output]) gomme.Parser
 		return state.Failure(bestState), gomme.ZeroOf[Output]()
 	}
 
-	return gomme.NewParser[Output]("FirstSuccessfulOf", newParse, nil)
+	return gomme.NewParser[Output](
+		"FirstSuccessfulOf",
+		newParse,
+		nil,
+		containingNoWayBack,
+		CombiningRecoverer(subRecoverers),
+	)
 }
