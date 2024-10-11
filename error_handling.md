@@ -54,9 +54,13 @@ So please use the `NoWayBack` parser as much as reasonable for your grammar!
 It also makes the parser perform better because it keeps the backtracking
 to a minimum.
 
+The following sections define the modes and their relationships in detail.
+
+### Parser Modes
+
 These are the modes:
 
-###### happy:
+##### happy:
 Normal parsing discovering errors.
 This mode is also used for playing recorded parsers the nice way
 (after deleting some input).
@@ -64,12 +68,12 @@ This mode is also used for playing recorded parsers the nice way
 ##### error:
 An error was found but might be mitigated by backtracking.
 
-#### handle:
+##### handle:
 We now know that the error found has to be handled.
 We find the exact position and parser again by simply parsing one more time
 in the new mode.
 
-### record:
+##### record:
 The error has been found again. Now we record all parsers
 on the happy path from the erroring one to the next
 safe point (`NoWayBack`).
@@ -96,7 +100,7 @@ This really is the 'play hard' mode where errors are ignored, and we just
 want to reach the best `NoWayBack`.
 No actual parsing is to be done in this mode and no input should be consumed.
 
-###### choose:
+##### choose:
 This is really a sub-mode of **_play_**.
 It's used by the `FirstSuccessful` parser to find the
 sub-parser with minimal waste by its `Recoverer`.
@@ -104,6 +108,8 @@ If multiple sub-parsers have the same minimal waste,
 the first of them will be chosen.
 As in **_play_** mode no actual parsing is to be done in this mode and
 no input should be consumed.
+
+### Relationships Between Modes
 
 The relationships between the modes are shown in the following
 state diagram.
@@ -134,138 +140,138 @@ stateDiagram-v2
 The following sections document the details what the parsers or
 methods performing the changes should do in each mode.
 
-### Method State.NewError
+### Method `State.NewError`
 
-happy:
-: Create new error and switch to `mode=error`.
+##### happy:
+Create new error and switch to `mode=error`.
 
-error:
-: Register programming error.
+##### error:
+Register programming error.
   We must not error on the way back to the last `NoWayBack`.
 
-handle:
-: If `newError==error` then switch to `mode=record` else register programming error.
-  We must have missed either the erroring parser in `mode==happy` or
-  the error to handle just now in `mode==handle`.
+##### handle:
+If `newError==error` then switch to `mode=record` else register programming error.
+We must have missed either the erroring parser in `mode==happy` or
+the error to handle just now in `mode==handle`.
 
-record:
-: Ignore call (should not happen).
-  This would just cost a bit of performance and it thus no
-  programming error to be fixed.
+##### record:
+Ignore call (should not happen).
+This would just cost a bit of performance and it thus no
+programming error to be fixed.
 
-collect:
-: Like mode **_record_**.
+##### collect:
+Like mode **_record_**.
 
-choose:
-: Create new error.
+##### choose:
+Create new error.
 
-play:
-: Like mode **_choose_**.
+##### play:
+Like mode **_choose_**.
 
-### NoWayBack Parser
+### Parser `NoWayBack`
 
-happy:
-: Set the point of no return in the State if the sub-parser has been successful.
-  Else just return the error.
+##### happy:
+Set the point of no return in the State if the sub-parser has been successful.
+Else just return the error.
 
-error:
-: Switch to `mode=handle` and if the error came from the sub-parser, call it again,
-  else return.
+##### error:
+Switch to `mode=handle` and if the error came from the sub-parser, call it again,
+else return.
 
-handle:
-: Call sub-parser to find the error again.
-  If the mode hasn't changed after the call, report a programming error because
-  this parser should be the one switching to `mode=handle` or we missed the error.
+##### handle:
+Call sub-parser to find the error again.
+If the mode hasn't changed after the call, report a programming error because
+this parser should be the one switching to `mode=handle` or we missed the error.
 
-record:
-: If `mode==record` at the start then this is the safe place wanted to recover to.
-  Now recover. (Switch to `mode=play`.
-  Use `Deleter` to delete 1 to `maxDel` tokens and call all recorded parsers
-  in their order.
-  If no success just do the same without calling the very first
-  recorded parser (this simulates inserting correct input).
-  If still no success use the `Recoverer` to find the next safe spot in the input.
-  Move there, switch to `mode=happy` and resume normal parsing by calling the sub-parser.
-  This has to be successful (or we record a programming error).
-  Finally advance the point of no return accordingly (like in `mode==happy`). )
-  Else just return (the sub-parser has already recorded itself).
+##### record:
+If `mode==record` at the start then this is the safe place wanted to recover to.
+Now recover. (Switch to `mode=play`.
+Use `Deleter` to delete 1 to `maxDel` tokens and call all recorded parsers
+in their order.
+If no success just do the same without calling the very first
+recorded parser (this simulates inserting correct input).
+If still no success use the `Recoverer` to find the next safe spot in the input.
+Move there, switch to `mode=happy` and resume normal parsing by calling the sub-parser.
+This has to be successful (or we record a programming error).
+Finally advance the point of no return accordingly (like in `mode==happy`). )
+Else just return (the sub-parser has already recorded itself).
 
-collect:
-: Signal back to the `FirstSuccessful` parser that a `NoWayBack` parser was found
-  (including the `waste`?).
+##### collect:
+Signal back to the `FirstSuccessful` parser that a `NoWayBack` parser was found
+(including the `waste`?).
 
-choose:
-: Signal the `waste` of the `Recoverer` back to the `FirstSuccessful` parser.
+##### choose:
+Signal the `waste` of the `Recoverer` back to the `FirstSuccessful` parser.
 
-play:
-: If `mode==play` at the start then call sub-parser.
-  (If that is successful switch to `mode=happy` and clean up the error handling.
-  Else we have to return the error.)
-  Else register programming error since this parser wouldn't have recoreded itself.
+##### play:
+If `mode==play` at the start then call sub-parser.
+(If that is successful switch to `mode=happy` and clean up the error handling.
+Else we have to return the error.)
+Else register programming error since this parser wouldn't have recorded itself.
 
-### FirstSuccessful Parser
+### Parser `FirstSuccessful`
 
-happy:
-: Returns result of first successful parser or after first `NoWayBack`.
+##### happy:
+Returns result of first successful parser or after first `NoWayBack`.
 
-error:
-: Register programming error.
+##### error:
+Register programming error.
 
-handle:
-: Call sub-parsers until error is found again.
+##### handle:
+Call sub-parsers until error is found again.
 
-record:
-: If `mode==record` at start then switch to `mode=collect` to find guaranteed
-  `NoWayBack` and call **all** sub-parsers to 'collect' the ones with `NoWayBack`.
-  (If they all have a `NoWayBack` then first try to play nice with removed input
-  or else switch to `mode=choose`,
-  call all sub-parsers again, choose the one with the least waste,
-  switch to `mode=record` and finally call the chosen sub-parser again.
-  Else switch back to `mode=record`, record itself and return.)
-  Else return because the right sub-parser has already recorded itself.
+##### record:
+If `mode==record` at start then switch to `mode=collect` to find guaranteed
+`NoWayBack` and call **all** sub-parsers to 'collect' the ones with `NoWayBack`.
+(If they all have a `NoWayBack` then first try to play nice with removed input
+or else switch to `mode=choose`,
+call all sub-parsers again, choose the one with the least waste,
+switch to `mode=record` and finally call the chosen sub-parser again.
+Else switch back to `mode=record`, record itself and return.)
+Else return because the right sub-parser has already recorded itself.
 
-collect:
-: If `mode==collect` at start then call **all** sub-parsers to 'collect'
-  the ones with `NoWayBack`.
-  (If they all have a `NoWayBack` then return signaling guaranteed `NoWayBack`
-  has been found.
-  Else return signaling **no** guaranteed `NoWayBack` has been found.)
-  Else register a programming error
-  (the `mode==collect` must not escape the initiating parser and its sub-parsers).
+##### collect:
+If `mode==collect` at start then call **all** sub-parsers to 'collect'
+the ones with `NoWayBack`.
+(If they all have a `NoWayBack` then return signaling guaranteed `NoWayBack`
+has been found.
+Else return signaling **no** guaranteed `NoWayBack` has been found.)
+Else register a programming error
+(the `mode==collect` must not escape the initiating parser and its sub-parsers).
 
-choose:
-: If `mode==choose` at start then call **all** sub-parsers to 'choose'
-  the first one with the least amount of waste, returning signaling
-  the minimal amount of waste found remembering the choice.
-  Else register a programming error
-  (the `mode==choose` must not escape the initiating parser and its sub-parsers).
+##### choose:
+If `mode==choose` at start then call **all** sub-parsers to 'choose'
+the first one with the least amount of waste, returning signaling
+the minimal amount of waste found remembering the choice.
+Else register a programming error
+(the `mode==choose` must not escape the initiating parser and its sub-parsers).
 
-play:
-: If `mode==play` at start then call the remembered sub-parser and expect the
-  mode changed to **_happy_** when the sub-parser returns.
-  Else register a programming error
-  (the **FirstSuccessful** parser doesn't record itself in this case).
+##### play:
+If `mode==play` at start then call the remembered sub-parser and expect the
+mode changed to **_happy_** when the sub-parser returns.
+Else register a programming error
+(the **FirstSuccessful** parser doesn't record itself in this case).
 
 ### Other Parsers
 
-happy:
-: Normal parsing potentially calling `State.NewError`.
+##### happy:
+Normal parsing potentially calling `State.NewError`.
 
-error (checked with State.Failed):
-: Backtrack returning error.
+##### error (checked with `State.Failed`):
+Backtrack returning error.
 
-handle:
-: Like mode **_happy_**.
+##### handle:
+Like mode **_happy_**.
 
-record:
-: Records itself.
+##### record:
+Records itself.
 
-collect:
-: Call sub-parser (if any) or do nothing.
+##### collect:
+Call sub-parser (if any) or do nothing.
 
-choose:
-: Like mode **_collect_**.
+##### choose:
+Like mode **_collect_**.
 
-play:
-: Call sub-parser (if any) and expect the mode changed to **_happy_** when
-  the sub-parser returns, or do nothing.
+##### play:
+Call sub-parser (if any) and expect the mode changed to **_happy_** when
+the sub-parser returns, or do nothing.
