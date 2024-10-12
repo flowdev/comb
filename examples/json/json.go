@@ -60,7 +60,7 @@ type (
 // parseValue is a parser that attempts to parse different types of
 // JSON values (object, array, string, etc.).
 func parseValue() gomme.Parser[JSONValue] {
-	return pcb.FirstSuccessfulOf(
+	return gomme.FirstSuccessful(
 		objectp,
 		arrayp,
 		stringp,
@@ -104,7 +104,7 @@ func parseArray() gomme.Parser[JSONValue] {
 	return pcb.Map(
 		pcb.Delimited[rune, []JSONValue, rune](
 			pcb.Char('['),
-			pcb.FirstSuccessfulOf(
+			gomme.FirstSuccessful(
 				elements,
 				pcb.Map(ws, func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
 			),
@@ -293,7 +293,7 @@ var pstring = stringParser()
 //
 // It handles negative and positive integers including zero.
 func integerParser() gomme.Parser[int] {
-	return pcb.FirstSuccessfulOf(
+	return gomme.FirstSuccessful(
 		// "-" onenine digits
 		pcb.Preceded(
 			pcb.Char('-'),
@@ -351,7 +351,7 @@ var digits = digitsParser()
 //
 // It distinguishes between '0' and non-zero digits.
 func digitParser() gomme.Parser[rune] {
-	return pcb.FirstSuccessfulOf(
+	return gomme.FirstSuccessful(
 		pcb.Char('0'),
 		onenine,
 	)
@@ -400,7 +400,7 @@ var exponent = exponentParser()
 // It can parse both positive ('+') and negative ('-') signs.
 func signParser() gomme.Parser[string] {
 	return pcb.Optional(
-		pcb.FirstSuccessfulOf(
+		gomme.FirstSuccessful(
 			pcb.String("-"),
 			pcb.String("+"),
 		),
@@ -429,7 +429,7 @@ var characters = charactersParser()
 //
 // It distinguishes between regular characters and escape sequences.
 func characterParser() gomme.Parser[rune] {
-	return pcb.FirstSuccessfulOf(
+	return gomme.FirstSuccessful(
 		pcb.Satisfy("normal character", func(c rune) bool {
 			return c != '"' && c != '\\' && c >= 0x20 && c <= 0x10FFFF
 		}),
@@ -472,7 +472,7 @@ func escapeParser() gomme.Parser[rune] {
 	return pcb.Map(
 		pcb.Sequence(
 			pcb.Char('\\'),
-			pcb.FirstSuccessfulOf(
+			gomme.FirstSuccessful(
 				pcb.OneOfRunes('"', '\\', '/', 'b', 'f', 'n', 'r', 't'),
 				unicodeEscape,
 			),

@@ -40,15 +40,15 @@ type Separator interface {
 }
 
 // Recoverer is a simplified parser that only returns the number of bytes
-// to reach a safe state.
+// to reach a safe state (Refuge).
 // If it can't recover it should return -1.
 //
 // A Recoverer is used for recovering from an error in the input.
-// It helps to move forward to the next safe spot
-// (point of no return / NoWayBack parser).
-// A Recoverer will be used by the NoWayBack parser if it's sub-parser provides it.
-// Otherwise, NoWayBack will have to try the sub-parser until it succeeds moving
-// forward 1 byte at a time. :(
+// It helps to move forward to the next safe spot (Refuge).
+// A Recoverer will be used by the Refuge or NoWayBack parser if it's sub-parser
+// provides it.
+// Otherwise, Refuge will have to try the sub-parser until it succeeds moving
+// forward 1 token at a time. :(
 type Recoverer func(state State) int
 
 // Deleter is a simplified parser that only moves the position in the input
@@ -73,16 +73,16 @@ type Parser[Output any] interface {
 	It(State) (State, Output)
 	MyRecoverer() Recoverer
 	SwapMyRecoverer(Recoverer) Parser[Output]
-	ContainsNoWayBack() Ternary
-	NoWayBackRecoverer(State) int
+	ContainsRefuge() Ternary
+	RefugeRecoverer(State) int
 }
 
 type prsr[Output any] struct {
-	expected           string
-	it                 func(State) (State, Output)
-	recoverer          Recoverer // will be requested only by the NoWayBack parser
-	containsNoWayBack  Ternary
-	noWayBackRecoverer Recoverer // will be requested in choose mode to find the right NoWayBack parser
+	expected        string
+	it              func(State) (State, Output)
+	recoverer       Recoverer // will be requested only by the NoWayBack parser
+	containsRefuge  Ternary
+	refugeRecoverer Recoverer // will be requested in choose mode to find the right NoWayBack parser
 }
 
 // NewParser is THE way to create parsers.
@@ -90,15 +90,15 @@ func NewParser[Output any](
 	expected string,
 	parse func(State) (State, Output),
 	recover Recoverer,
-	containsNoWayBack Ternary,
-	noWayBackRecoverer Recoverer,
+	containsRefuge Ternary,
+	refugeRecoverer Recoverer,
 ) Parser[Output] {
 	p := prsr[Output]{
-		expected:           expected,
-		it:                 parse,
-		recoverer:          recover,
-		containsNoWayBack:  containsNoWayBack,
-		noWayBackRecoverer: noWayBackRecoverer,
+		expected:        expected,
+		it:              parse,
+		recoverer:       recover,
+		containsRefuge:  containsRefuge,
+		refugeRecoverer: refugeRecoverer,
 	}
 	if recover == nil {
 		p.recoverer = DefaultRecoverer(p)
@@ -120,20 +120,20 @@ func (p prsr[Output]) MyRecoverer() Recoverer {
 
 func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
 	return prsr[Output]{ // make it concurrency safe without locking
-		expected:           p.expected,
-		it:                 p.it,
-		recoverer:          p.recoverer,
-		containsNoWayBack:  p.containsNoWayBack,
-		noWayBackRecoverer: p.noWayBackRecoverer,
+		expected:        p.expected,
+		it:              p.it,
+		recoverer:       p.recoverer,
+		containsRefuge:  p.containsRefuge,
+		refugeRecoverer: p.refugeRecoverer,
 	}
 }
 
-func (p prsr[Output]) ContainsNoWayBack() Ternary {
-	return p.containsNoWayBack
+func (p prsr[Output]) ContainsRefuge() Ternary {
+	return p.containsRefuge
 }
 
-func (p prsr[Output]) NoWayBackRecoverer(state State) int {
-	return p.noWayBackRecoverer(state)
+func (p prsr[Output]) RefugeRecoverer(state State) int {
+	return p.refugeRecoverer(state)
 }
 
 type lazyprsr[Output any] struct {
@@ -152,7 +152,7 @@ func LazyParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
 func (lp *lazyprsr[Output]) ensurePrsr() {
 	lp.cachedPrsr = lp.makePrsr()
 	if lp.newRecoverer != nil {
-		lp.cachedPrsr.SwapMyRecoverer(lp.newRecoverer)
+		lp.cachedPrsr = lp.cachedPrsr.SwapMyRecoverer(lp.newRecoverer)
 		lp.newRecoverer = nil
 	}
 }
@@ -184,14 +184,14 @@ func (lp *lazyprsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Outpu
 	return lp.cachedPrsr.SwapMyRecoverer(newRecoverer)
 }
 
-func (lp *lazyprsr[Output]) ContainsNoWayBack() Ternary {
+func (lp *lazyprsr[Output]) ContainsRefuge() Ternary {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.ContainsNoWayBack()
+	return lp.cachedPrsr.ContainsRefuge()
 }
 
-func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
+func (lp *lazyprsr[Output]) RefugeRecoverer(state State) int {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.NoWayBackRecoverer(state)
+	return lp.cachedPrsr.RefugeRecoverer(state)
 }
 
 // ============================================================================

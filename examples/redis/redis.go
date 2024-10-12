@@ -30,7 +30,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		return RESPMessage{}, fmt.Errorf("malformed message %s; reason: %w", input, ErrInvalidSuffix)
 	}
 
-	parser := pcb.FirstSuccessfulOf(
+	parser := gomme.FirstSuccessful(
 		SimpleString(),
 		Error(),
 		Integer(),
@@ -298,7 +298,7 @@ func Array() gomme.Parser[RESPMessage] {
 	return pcb.Map2(
 		sizePrefix(pcb.String(string(ArrayKind))),
 		pcb.Many0(
-			pcb.FirstSuccessfulOf(
+			gomme.FirstSuccessful(
 				SimpleString(),
 				Error(),
 				Integer(),

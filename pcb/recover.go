@@ -165,26 +165,6 @@ func BasicRecovererFunc[Output any](parse func(gomme.State) (gomme.State, Output
 	return gomme.DefaultRecovererFunc(parse)
 }
 
-// CombiningRecoverer isn't a real recoverer itself, but it helps to find
-// the best Recoverer by calling all and returning the minimal waste plus
-// the index of the best Recoverer.
-func CombiningRecoverer(recoverers ...gomme.Recoverer) gomme.Recoverer {
-	return func(state gomme.State) int {
-		waste := -1
-		for _, recoverer := range recoverers {
-			w := recoverer(state)
-			switch {
-			case w == -1: // ignore
-			case w == 0: // it won't get better than this
-				return 0
-			case waste < 0 || w < waste:
-				waste = w
-			}
-		}
-		return waste
-	}
-}
-
 // ByteDeleter is a Deleter that simply deletes bytes from the input.
 // It is meant to be used for parsing binary data.
 func ByteDeleter(state gomme.State, count int) gomme.State {

@@ -60,9 +60,9 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 	containsNoWayBack := gomme.TernaryNo
 	if atLeast > 0 {
 		recoverer = BasicRecovererFunc(parseMany)
-		containsNoWayBack = parse.ContainsNoWayBack()
+		containsNoWayBack = parse.ContainsRefuge()
 	}
-	return gomme.NewParser[[]Output]("ManyMN", parseMany, recoverer, containsNoWayBack, parse.NoWayBackRecoverer)
+	return gomme.NewParser[[]Output]("ManyMN", parseMany, recoverer, containsNoWayBack, parse.RefugeRecoverer)
 }
 
 // Many0 applies a parser repeatedly until it fails, and returns a slice of all
@@ -145,10 +145,10 @@ func SeparatedMN[Output any, S gomme.Separator](
 	containsNoWayBack := gomme.TernaryNo
 	if atLeast > 0 {
 		recoverer = BasicRecovererFunc(parseSep)
-		containsNoWayBack = parse.ContainsNoWayBack()
+		containsNoWayBack = parse.ContainsRefuge()
 	}
 
-	return gomme.NewParser[[]Output]("SeparatedMN", parseSep, recoverer, containsNoWayBack, parse.NoWayBackRecoverer)
+	return gomme.NewParser[[]Output]("SeparatedMN", parseSep, recoverer, containsNoWayBack, parse.RefugeRecoverer)
 }
 
 // Separated0 applies an element parser and a separator parser repeatedly in order

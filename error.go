@@ -47,8 +47,6 @@ func DefaultRecovererFunc[Output any](parse func(State) (State, Output)) Recover
 	}
 }
 
-var cachingRecovererIDs = &atomic.Uint64{}
-
 // CachingRecoverer should only be used in places where the Recoverer
 // will be used multiple times with the exact same input position.
 // The NoWayBack and Refuge parsers are such cases.
@@ -63,6 +61,59 @@ func CachingRecoverer(recoverer Recoverer) Recoverer {
 		}
 		return cachedWaste
 	}
+}
+
+var cachingRecovererIDs = &atomic.Uint64{}
+
+type CombiningRecoverer struct {
+	recoverers []Recoverer
+	id         uint64
+}
+
+// NewCombiningRecoverer recovers by calling all sub-recoverers and returning
+// the minimal waste.
+// The index of the best Recoverer is stored in the cache.
+// func NewCombiningRecoverer(recoverers ...Recoverer) CombiningRecoverer {
+func NewCombiningRecoverer(recoverers ...Recoverer) CombiningRecoverer {
+	return CombiningRecoverer{
+		recoverers: recoverers,
+		id:         combiningRecovererIDs.Add(1),
+	}
+}
+
+var combiningRecovererIDs = &atomic.Uint64{}
+
+func (crc CombiningRecoverer) Recover(state State) int {
+	waste, _, ok := state.cachedRecovererWasteIdx(crc.id)
+	if ok {
+		return waste
+	}
+
+	waste = -1
+	idx := -1
+	for i, recoverer := range crc.recoverers {
+		w := recoverer(state)
+		switch {
+		case w == -1: // ignore
+		case w == 0: // it won't get better than this
+			waste = 0
+			idx = i
+			break
+		case waste < 0 || w < waste:
+			waste = w
+			idx = i
+		}
+	}
+	state.cacheRecovererWasteIdx(crc.id, waste, idx)
+	return waste
+}
+
+func (crc CombiningRecoverer) CachedIndex(state State) (idx int, ok bool) {
+	_, idx, ok = state.cachedRecovererWasteIdx(crc.id)
+	if !ok {
+		return -1, false
+	}
+	return idx, true
 }
 
 // DefaultBinaryDeleter shouldn't be used outside of this package.

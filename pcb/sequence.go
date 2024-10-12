@@ -23,6 +23,20 @@ func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 // returns either a slice of results or an error if any parser fails.
 // Use one of the MapX parsers for differently typed parsers.
 func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output] {
+	containsNoWayBack := parsers[0].ContainsRefuge()
+	for i := 1; i < len(parsers); i++ {
+		containsNoWayBack = max(containsNoWayBack, parsers[i].ContainsRefuge())
+	}
+
+	// Construct myRefugeRecoverer from the sub-parsers
+	subRecoverers := make([]gomme.Recoverer, len(parsers))
+	for i, parser := range parsers {
+		if parser.ContainsRefuge() > gomme.TernaryNo {
+			subRecoverers[i] = parser.RefugeRecoverer
+		}
+	}
+	myRefugeRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
+
 	parseSeq := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, len(parsers))
 		remaining := state
@@ -42,25 +56,12 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 		return remaining, outputs
 	}
 
-	containsNoWayBack := parsers[0].ContainsNoWayBack()
-	for i := 1; i < len(parsers); i++ {
-		containsNoWayBack = max(containsNoWayBack, parsers[i].ContainsNoWayBack())
-	}
-
-	recoverers := make([]gomme.Recoverer, 0, len(parsers))
-	for _, parser := range parsers {
-		rcvr := parser.NoWayBackRecoverer
-		if rcvr != nil {
-			recoverers = append(recoverers, rcvr)
-		}
-	}
-
 	return gomme.NewParser[[]Output](
 		"Sequence",
 		parseSeq,
 		BasicRecovererFunc(parseSeq),
 		containsNoWayBack,
-		CombiningRecoverer(recoverers...),
+		myRefugeRecoverer.Recover,
 	)
 }
 

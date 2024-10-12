@@ -60,13 +60,13 @@ func OneOf(collection ...string) gomme.Parser[string] {
 //
 //	import . "github.com/oleiade/gomme/cute"
 func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	return pcb.NoWayBack[Output](parse)
+	return gomme.NoWayBack[Output](parse)
 }
 
-// FirstSuccessfulOf is a shortened version of `pcb.FirstSuccessfulOf`.
+// FirstSuccessful is a shortened version of `gomme.FirstSuccessful`.
 // It is meant to be used without the package name with an import like:
 //
 //	import . "github.com/oleiade/gomme/cute"
-func FirstSuccessfulOf[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
-	return pcb.FirstSuccessfulOf[Output](parsers...)
+func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
+	return gomme.FirstSuccessful[Output](parsers...)
 }

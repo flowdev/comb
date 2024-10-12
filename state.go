@@ -7,7 +7,8 @@ import (
 )
 
 // ============================================================================
-// This File contains only the State data structure and all of its methods
+// This File contains only the State and cache data structures and all of their
+// methods.
 // ============================================================================
 
 type cachedWaste struct {
@@ -15,17 +16,24 @@ type cachedWaste struct {
 	waste int // waste of the recoverer
 }
 
+type cachedWasteIdx struct {
+	pos   int // position in the input
+	waste int // waste of the recoverer
+	idx   int // index of the best sub-recoverer
+}
+
 // State represents the current state of a parser.
 type State struct {
-	mode                ParsingMode // one of: happy, error, handle, record, choose, play
-	input               Input
-	pointOfNoReturn     int        // mark set by SignalNoWayBack/NoWayBack parser
-	newError            *pcbError  // error that hasn't been handled yet
-	maxDel              int        // maximum number of tokens that should be deleted for error recovery
-	deleter             Deleter    // used to get back on track in error recovery
-	errHand             errHand    // everything for handling one error
-	oldErrors           []pcbError // errors that are or have been handled
-	recovererWasteCache map[uint64][]cachedWaste
+	mode                   ParsingMode // one of: happy, error, handle, record, choose, play
+	input                  Input
+	pointOfNoReturn        int        // mark set by SignalNoWayBack/NoWayBack parser
+	newError               *pcbError  // error that hasn't been handled yet
+	maxDel                 int        // maximum number of tokens that should be deleted for error recovery
+	deleter                Deleter    // used to get back on track in error recovery
+	errHand                errHand    // everything for handling one error
+	oldErrors              []pcbError // errors that are or have been handled
+	recovererWasteCache    map[uint64][]cachedWaste
+	recovererWasteIdxCache map[uint64][]cachedWasteIdx
 }
 
 // ============================================================================
@@ -105,7 +113,7 @@ func (st State) Delete(countToken int) State {
 //
 
 // cacheRecovererWaste remembers the `waste` at the current input position
-// for the function with ID `id`.
+// for the CachingRecoverer with ID `id`.
 func (st State) cacheRecovererWaste(id uint64, waste int) {
 	cache, ok := st.recovererWasteCache[id]
 	if !ok {
@@ -124,8 +132,8 @@ func (st State) cacheRecovererWaste(id uint64, waste int) {
 	cache[idx] = cachedWaste{pos: st.input.pos, waste: waste}
 }
 
-// cachedRecovererWaste returns the saved waste for the current input position or
-// (-1, false) if not found.
+// cachedRecovererWaste returns the saved waste for the current
+// input position and CachingRecoverer ID `id` or (-1, false) if not found.
 func (st State) cachedRecovererWaste(id uint64) (waste int, ok bool) {
 	var cache []cachedWaste
 	if cache, ok = st.recovererWasteCache[id]; !ok {
@@ -140,6 +148,46 @@ func (st State) cachedRecovererWaste(id uint64) (waste int, ok bool) {
 		return -1, false
 	}
 	return cache[idx].waste, true
+}
+
+// cacheRecovererWasteIdx remembers the `waste` and index at the
+// current input position for the CombiningRecoverer with ID `crID`.
+func (st State) cacheRecovererWasteIdx(crID uint64, waste, idx int) {
+	cache, ok := st.recovererWasteIdxCache[crID]
+	if !ok {
+		cache = make([]cachedWasteIdx, 0, st.maxDel+1)
+		st.recovererWasteIdxCache[crID] = cache
+	}
+
+	if len(cache) < st.maxDel+1 {
+		st.recovererWasteIdxCache[crID] = append(cache, cachedWasteIdx{pos: st.input.pos, waste: waste})
+		return
+	}
+
+	i := MinFuncIdx(cache, func(a, b cachedWasteIdx) int { // idx will never be -1
+		return cmp.Compare(a.pos, b.pos)
+	})
+	cache[i] = cachedWasteIdx{pos: st.input.pos, waste: waste, idx: idx}
+}
+
+// cachedRecovererWasteIdx returns the saved waste and index for the current
+// input position and CombiningRecoverer ID or (-1, -1, false) if not found.
+func (st State) cachedRecovererWasteIdx(crID uint64) (waste, idx int, ok bool) {
+	var cache []cachedWasteIdx
+	if cache, ok = st.recovererWasteIdxCache[crID]; !ok {
+		return -1, -1, false
+	}
+
+	i := slices.IndexFunc(cache, func(wasteData cachedWasteIdx) bool {
+		return wasteData.pos == st.input.pos
+	})
+
+	if i < 0 {
+		return -1, -1, false
+	}
+
+	wasteData := cache[i]
+	return wasteData.waste, wasteData.idx, true
 }
 
 // ============================================================================
@@ -188,7 +236,7 @@ func (st State) NewError(message string) State {
 		//}
 
 		// programming error
-		newErr.text = "programming error: State.NewError called in mode `error`"
+		newErr.text = "programming error: State.NewError called in mode `error` (while backtracking)"
 		st.oldErrors = append(st.oldErrors, newErr)
 	case ParsingModeHandle:
 		if st.handlingNewError(&newErr) {

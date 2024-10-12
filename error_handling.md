@@ -141,7 +141,7 @@ stateDiagram-v2
 ```
 
 The following sections document the details what the parsers or
-methods performing the changes should do in each mode.
+methods mentioned above should do in each mode.
 
 ### Method `State.NewError`
 
@@ -153,7 +153,8 @@ Register programming error.
   We must not error on the way back to the last `NoWayBack`.
 
 ##### handle:
-If `newError==error` then switch to `mode=record` else register programming error.
+If `newError==error` then switch to `mode=record` \
+else register programming error. \
 We must have missed either the erroring parser in `mode==happy` or
 the error to handle just now in `mode==handle`.
 
@@ -171,7 +172,7 @@ Create new error.
 ##### play:
 Like mode **_choose_**.
 
-### Parser `NoWayBack`
+### Parser `NoWayBack` and `Refuge`
 
 ##### happy:
 Set the point of no return in the State if the sub-parser has been successful.

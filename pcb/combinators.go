@@ -26,8 +26,8 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		"Optional",
 		optParse,
 		Forbidden("Optional"),
-		parse.ContainsNoWayBack(),
-		parse.NoWayBackRecoverer,
+		parse.ContainsRefuge(),
+		parse.RefugeRecoverer,
 	)
 }
 
@@ -88,8 +88,8 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 		"Recognize",
 		recParse,
 		parse.MyRecoverer(),
-		parse.ContainsNoWayBack(),
-		parse.NoWayBackRecoverer,
+		parse.ContainsRefuge(),
+		parse.RefugeRecoverer,
 	)
 }
 
@@ -111,8 +111,8 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 		parse.Expected(),
 		asgnParse,
 		parse.MyRecoverer(),
-		parse.ContainsNoWayBack(),
-		parse.NoWayBackRecoverer,
+		parse.ContainsRefuge(),
+		parse.RefugeRecoverer,
 	)
 }
 
@@ -141,8 +141,8 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 		parse.Expected(),
 		mapParse,
 		parse.MyRecoverer(),
-		parse.ContainsNoWayBack(),
-		parse.NoWayBackRecoverer,
+		parse.ContainsRefuge(),
+		parse.RefugeRecoverer,
 	)
 }
 
@@ -155,6 +155,18 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 	expected.WriteString(parse1.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse2.Expected())
+
+	containsNoWayBack := max(parse1.ContainsRefuge(), parse2.ContainsRefuge())
+
+	// Construct myRefugeRecoverer from the sub-parsers
+	subRecoverers := make([]gomme.Recoverer, 0, 2)
+	if parse1.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse1.RefugeRecoverer)
+	}
+	if parse2.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse2.RefugeRecoverer)
+	}
+	myRefugeRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -181,14 +193,12 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 		return newState2, mapped
 	}
 
-	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack())
-
 	return gomme.NewParser[MO](
 		expected.String(),
 		mapParse,
 		BasicRecovererFunc(mapParse),
 		containsNoWayBack,
-		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer),
+		myRefugeRecoverer.Recover,
 	)
 }
 
@@ -204,6 +214,21 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 	expected.WriteString(parse2.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse3.Expected())
+
+	containsNoWayBack := max(parse1.ContainsRefuge(), parse2.ContainsRefuge(), parse3.ContainsRefuge())
+
+	// Construct myRefugeRecoverer from the sub-parsers
+	subRecoverers := make([]gomme.Recoverer, 0, 3)
+	if parse1.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse1.RefugeRecoverer)
+	}
+	if parse2.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse2.RefugeRecoverer)
+	}
+	if parse3.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse3.RefugeRecoverer)
+	}
+	myRefugeRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -238,14 +263,12 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 		return newState3, mapped
 	}
 
-	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack(), parse3.ContainsNoWayBack())
-
 	return gomme.NewParser[MO](
 		expected.String(),
 		mapParse,
 		BasicRecovererFunc(mapParse),
 		containsNoWayBack,
-		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer, parse3.NoWayBackRecoverer),
+		myRefugeRecoverer.Recover,
 	)
 }
 
@@ -263,6 +286,25 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 	expected.WriteString(parse3.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse4.Expected())
+
+	containsNoWayBack := max(parse1.ContainsRefuge(), parse2.ContainsRefuge(),
+		parse3.ContainsRefuge(), parse4.ContainsRefuge())
+
+	// Construct myRefugeRecoverer from the sub-parsers
+	subRecoverers := make([]gomme.Recoverer, 0, 3)
+	if parse1.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse1.RefugeRecoverer)
+	}
+	if parse2.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse2.RefugeRecoverer)
+	}
+	if parse3.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse3.RefugeRecoverer)
+	}
+	if parse4.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse4.RefugeRecoverer)
+	}
+	myRefugeRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -305,16 +347,12 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 		return newState4, mapped
 	}
 
-	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack(),
-		parse3.ContainsNoWayBack(), parse4.ContainsNoWayBack())
-
 	return gomme.NewParser[MO](
 		expected.String(),
 		mapParse,
 		BasicRecovererFunc(mapParse),
 		containsNoWayBack,
-		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer,
-			parse3.NoWayBackRecoverer, parse4.NoWayBackRecoverer),
+		myRefugeRecoverer.Recover,
 	)
 }
 
@@ -335,6 +373,28 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	expected.WriteString(parse4.Expected())
 	expected.WriteString(" + ")
 	expected.WriteString(parse5.Expected())
+
+	containsNoWayBack := max(parse1.ContainsRefuge(), parse2.ContainsRefuge(), parse3.ContainsRefuge(),
+		parse4.ContainsRefuge(), parse5.ContainsRefuge())
+
+	// Construct myRefugeRecoverer from the sub-parsers
+	subRecoverers := make([]gomme.Recoverer, 0, 3)
+	if parse1.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse1.RefugeRecoverer)
+	}
+	if parse2.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse2.RefugeRecoverer)
+	}
+	if parse3.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse3.RefugeRecoverer)
+	}
+	if parse4.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse4.RefugeRecoverer)
+	}
+	if parse5.ContainsRefuge() > gomme.TernaryNo {
+		subRecoverers = append(subRecoverers, parse5.RefugeRecoverer)
+	}
+	myRefugeRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
@@ -385,15 +445,11 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 		return newState5, mapped
 	}
 
-	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack(), parse3.ContainsNoWayBack(),
-		parse4.ContainsNoWayBack(), parse5.ContainsNoWayBack())
-
 	return gomme.NewParser[MO](
 		expected.String(),
 		mapParse,
 		BasicRecovererFunc(mapParse),
 		containsNoWayBack,
-		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer, parse3.NoWayBackRecoverer,
-			parse4.NoWayBackRecoverer, parse5.NoWayBackRecoverer),
+		myRefugeRecoverer.Recover,
 	)
 }

@@ -1,7 +1,7 @@
-package pcb
+package gomme
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/oleiade/gomme/pcb"
 	"strings"
 	"testing"
 )
@@ -10,7 +10,7 @@ func TestNoWayBack(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		p Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -24,7 +24,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "head matching parser should succeed",
 			input: "123",
 			args: args{
-				p: FirstSuccessfulOf(Digit1(), NoWayBack(Alpha1())),
+				p: FirstSuccessful(pcb.Digit1(), NoWayBack(pcb.Alpha1())),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -34,17 +34,17 @@ func TestNoWayBack(t *testing.T) {
 			name:  "tail matching parser should succeed",
 			input: "abc",
 			args: args{
-				p: FirstSuccessfulOf(NoWayBack(Digit1()), Alpha1()),
+				p: FirstSuccessful(NoWayBack(pcb.Digit1()), pcb.Alpha1()),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
 			wantRemaining: "",
 		},
 		{
-			name:  "FirstSuccessfulOf: tail matching parser after failing NoWayBack head parser should fail",
+			name:  "FirstSuccessful: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: FirstSuccessfulOf(Preceded(NoWayBack(String("a")), Digit1()), Alpha1()),
+				p: FirstSuccessful(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1()), pcb.Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -54,7 +54,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "Optional: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: Optional(Preceded(NoWayBack(String("a")), Digit1())),
+				p: pcb.Optional(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -64,7 +64,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "Many0: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: Map(Many0(Preceded(NoWayBack(String("a")), Digit1())), func(tokens []string) (string, error) {
+				p: pcb.Map(pcb.Many0(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1())), func(tokens []string) (string, error) {
 					return strings.Join(tokens, ""), nil
 				}),
 			},
@@ -76,7 +76,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "Seperated1: matching main parser after failing NoWayBack head parser should fail",
 			input: "a,1",
 			args: args{
-				p: Map(Separated0(Preceded(NoWayBack(String("a")), Digit1()), Char(','), false),
+				p: pcb.Map(pcb.Separated0(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1()), pcb.Char(','), false),
 					func(tokens []string) (string, error) {
 						return strings.Join(tokens, ""), nil
 					},
@@ -90,7 +90,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "no matching parser should fail",
 			input: "$%^*",
 			args: args{
-				p: FirstSuccessfulOf(NoWayBack(Digit1()), NoWayBack(Alpha1())),
+				p: FirstSuccessful(NoWayBack(pcb.Digit1()), NoWayBack(pcb.Alpha1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -100,7 +100,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: FirstSuccessfulOf(NoWayBack(Digit1()), NoWayBack(Alpha1())),
+				p: FirstSuccessful(NoWayBack(pcb.Digit1()), NoWayBack(pcb.Alpha1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -113,7 +113,7 @@ func TestNoWayBack(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := gomme.NewFromString(tc.input)
+			state := NewFromString(tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
@@ -131,8 +131,8 @@ func TestNoWayBack(t *testing.T) {
 }
 
 func BenchmarkNoWayBack(b *testing.B) {
-	p := NoWayBack(Char('1'))
-	input := gomme.NewFromString("123")
+	p := NoWayBack(pcb.Char('1'))
+	input := NewFromString("123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -144,7 +144,7 @@ func TestAlternative(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		p Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -158,7 +158,7 @@ func TestAlternative(t *testing.T) {
 			name:  "head matching parser should succeed",
 			input: "123",
 			args: args{
-				p: FirstSuccessfulOf(Digit1(), Alpha0()),
+				p: FirstSuccessful(pcb.Digit1(), pcb.Alpha0()),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -168,7 +168,7 @@ func TestAlternative(t *testing.T) {
 			name:  "tail matching parser should succeed",
 			input: "abc",
 			args: args{
-				p: FirstSuccessfulOf(Digit1(), Alpha0()),
+				p: FirstSuccessful(pcb.Digit1(), pcb.Alpha0()),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
@@ -178,7 +178,7 @@ func TestAlternative(t *testing.T) {
 			name:  "no matching parser should fail",
 			input: "$%^*",
 			args: args{
-				p: FirstSuccessfulOf(Digit1(), Alpha1()),
+				p: FirstSuccessful(pcb.Digit1(), pcb.Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -188,7 +188,7 @@ func TestAlternative(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: FirstSuccessfulOf(Digit1(), Alpha1()),
+				p: FirstSuccessful(pcb.Digit1(), pcb.Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -201,7 +201,7 @@ func TestAlternative(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := gomme.NewFromString(tc.input)
+			state := NewFromString(tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
@@ -219,8 +219,8 @@ func TestAlternative(t *testing.T) {
 }
 
 func BenchmarkAlternative(b *testing.B) {
-	p := FirstSuccessfulOf(Char('b'), Char('a'))
-	input := gomme.NewFromString("abc")
+	p := FirstSuccessful(pcb.Char('b'), pcb.Char('a'))
+	input := NewFromString("abc")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
