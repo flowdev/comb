@@ -41,7 +41,27 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 
 		return remaining, outputs
 	}
-	return gomme.NewParser[[]Output]("Sequence", parseSeq, nil)
+
+	containsNoWayBack := parsers[0].ContainsNoWayBack()
+	for i := 1; i < len(parsers); i++ {
+		containsNoWayBack = max(containsNoWayBack, parsers[i].ContainsNoWayBack())
+	}
+
+	recoverers := make([]gomme.Recoverer, 0, len(parsers))
+	for _, parser := range parsers {
+		rcvr := parser.NoWayBackRecoverer
+		if rcvr != nil {
+			recoverers = append(recoverers, rcvr)
+		}
+	}
+
+	return gomme.NewParser[[]Output](
+		"Sequence",
+		parseSeq,
+		BasicRecovererFunc(parseSeq),
+		containsNoWayBack,
+		CombiningRecoverer(recoverers...),
+	)
 }
 
 // Terminated parses a result from the main parser, it then

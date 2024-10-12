@@ -4,9 +4,15 @@ import (
 	"github.com/oleiade/gomme"
 )
 
-// NoWayBack applies a child parser and marks the state with NoWayBack if successful.
+// NoWayBack applies a sub-parser and marks the new state as a
+// point of no return if successful.
+// Use this to signal that the right alternative has been found by the
+// FirstSuccessful parser even in case of a later error.
+//
+// Parsers that accept the empty input or only perform look ahead are
+// not allowed as sub-parsers.
 // It tests the optional recoverer of the parser during the construction phase
-// to get an early panic.
+// to provoke an early panic.
 // This way we won't have a panic at the runtime of the parser.
 func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	// call Recoverer to make a Forbidden recoverer panic during the construction phase
@@ -28,8 +34,36 @@ func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		"NoWayBack",
 		newParse,
 		parse.MyRecoverer(),
-		gomme.TernaryYes, // we are the only ones to be sure
+		gomme.TernaryYes, // Refuge and NoWayBack are the only ones to be sure
+		gomme.CachingRecoverer(parse.MyRecoverer()),
+	)
+}
+
+// Refuge applies its sub-parser and marks it as a possible place to
+// recover to with the Recoverer of its sub-parser.
+//
+// Parsers that accept the empty input or only perform look ahead are
+// not allowed as sub-parsers.
+// It tests the optional recoverer of the parser during the construction phase
+// to provoke an early panic.
+// This way we won't have a panic at the runtime of the parser.
+func Refuge[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
+	// call Recoverer to make a Forbidden recoverer panic during the construction phase
+	recoverer := parse.MyRecoverer()
+	if recoverer != nil {
+		recoverer(gomme.NewState(0, ByteDeleter, []byte{}))
+	}
+
+	newParse := func(state gomme.State) (gomme.State, Output) {
+		return parse.It(state)
+	}
+
+	return gomme.NewParser[Output](
+		"NoWayBack",
+		newParse,
 		parse.MyRecoverer(),
+		gomme.TernaryYes, // Refuge and NoWayBack are the only ones to be sure
+		gomme.CachingRecoverer(parse.MyRecoverer()),
 	)
 }
 
@@ -108,6 +142,6 @@ func FirstSuccessfulOf[Output any](parsers ...gomme.Parser[Output]) gomme.Parser
 		newParse,
 		nil,
 		containingNoWayBack,
-		CombiningRecoverer(subRecoverers),
+		CombiningRecoverer(subRecoverers...),
 	)
 }

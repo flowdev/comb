@@ -159,16 +159,16 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 	}
 }
 
-// BasicRecoverer recovers by trying to parse again and again and again.
+// BasicRecovererFunc recovers by trying to parse again and again and again.
 // It moves forward in the input using the Deleter one token at a time.
-func BasicRecoverer[Output any](parse gomme.Parser[Output]) gomme.Recoverer {
-	return gomme.DefaultRecoverer(parse)
+func BasicRecovererFunc[Output any](parse func(gomme.State) (gomme.State, Output)) gomme.Recoverer {
+	return gomme.DefaultRecovererFunc(parse)
 }
 
 // CombiningRecoverer isn't a real recoverer itself, but it helps to find
 // the best Recoverer by calling all and returning the minimal waste plus
 // the index of the best Recoverer.
-func CombiningRecoverer(recoverers []gomme.Recoverer) gomme.Recoverer {
+func CombiningRecoverer(recoverers ...gomme.Recoverer) gomme.Recoverer {
 	return func(state gomme.State) int {
 		waste := -1
 		for _, recoverer := range recoverers {

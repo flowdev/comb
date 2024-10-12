@@ -24,7 +24,7 @@ func init() {
 }
 
 func main() {
-	output, err := gomme.RunOnString(0, testJSON, valuep)
+	output, err := gomme.RunOnString(1, nil, testJSON, valuep)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
@@ -432,7 +432,7 @@ func characterParser() gomme.Parser[rune] {
 	return pcb.FirstSuccessfulOf(
 		pcb.Satisfy("normal character", func(c rune) bool {
 			return c != '"' && c != '\\' && c >= 0x20 && c <= 0x10FFFF
-		}, nil),
+		}),
 
 		// escape
 		escape,
@@ -519,7 +519,7 @@ var unicodeEscape = unicodeEscapeParser()
 func hexParser() gomme.Parser[rune] {
 	return pcb.Satisfy("hex digit", func(r rune) bool {
 		return ('0' <= r && r <= '9') || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')
-	}, nil)
+	})
 }
 
 var hex = hexParser()

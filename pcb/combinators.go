@@ -22,7 +22,13 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		return newState, output
 	}
 
-	return gomme.NewParser[Output]("Optional", optParse, Forbidden("Optional"))
+	return gomme.NewParser[Output](
+		"Optional",
+		optParse,
+		Forbidden("Optional"),
+		parse.ContainsNoWayBack(),
+		parse.NoWayBackRecoverer,
+	)
 }
 
 // Peek tries to apply the provided parser without consuming any input.
@@ -38,7 +44,7 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 
 		return state, output
 	}
-	return gomme.NewParser[Output]("Peek", peekParse, Forbidden("Peek"))
+	return gomme.NewParser[Output]("Peek", peekParse, Forbidden("Peek"), gomme.TernaryNo, nil)
 }
 
 // Not tries to apply the provided parser without consuming any input.
@@ -57,7 +63,7 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 		// avoid NoWayBack because we only peek; error message and consumption don't matter either
 		return state.NewError(expected), false
 	}
-	return gomme.NewParser[bool](expected, parseNot, Forbidden("Not"))
+	return gomme.NewParser[bool](expected, parseNot, Forbidden("Not"), gomme.TernaryNo, nil)
 }
 
 // Recognize returns the consumed input (instead of the original parsers output)
@@ -78,7 +84,13 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 
 		return newState, state.BytesTo(newState)
 	}
-	return gomme.NewParser[[]byte]("Recognize", recParse, parse.MyRecoverer())
+	return gomme.NewParser[[]byte](
+		"Recognize",
+		recParse,
+		parse.MyRecoverer(),
+		parse.ContainsNoWayBack(),
+		parse.NoWayBackRecoverer,
+	)
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise
@@ -95,7 +107,13 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 
 		return newState, value
 	}
-	return gomme.NewParser[Output1](parse.Expected(), asgnParse, parse.MyRecoverer())
+	return gomme.NewParser[Output1](
+		parse.Expected(),
+		asgnParse,
+		parse.MyRecoverer(),
+		parse.ContainsNoWayBack(),
+		parse.NoWayBackRecoverer,
+	)
 }
 
 // Map applies a function to the successful result of 1 parser.
@@ -119,7 +137,13 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 		return newState, mapped
 	}
 
-	return gomme.NewParser[MO](parse.Expected(), mapParse, parse.MyRecoverer())
+	return gomme.NewParser[MO](
+		parse.Expected(),
+		mapParse,
+		parse.MyRecoverer(),
+		parse.ContainsNoWayBack(),
+		parse.NoWayBackRecoverer,
+	)
 }
 
 // Map2 applies a function to the successful result of 2 parsers.
@@ -157,7 +181,15 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 		return newState2, mapped
 	}
 
-	return gomme.NewParser[MO](expected.String(), mapParse, nil)
+	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack())
+
+	return gomme.NewParser[MO](
+		expected.String(),
+		mapParse,
+		BasicRecovererFunc(mapParse),
+		containsNoWayBack,
+		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer),
+	)
 }
 
 // Map3 applies a function to the successful result of 3 parsers.
@@ -206,7 +238,15 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 		return newState3, mapped
 	}
 
-	return gomme.NewParser[MO](expected.String(), mapParse, nil)
+	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack(), parse3.ContainsNoWayBack())
+
+	return gomme.NewParser[MO](
+		expected.String(),
+		mapParse,
+		BasicRecovererFunc(mapParse),
+		containsNoWayBack,
+		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer, parse3.NoWayBackRecoverer),
+	)
 }
 
 // Map4 applies a function to the successful result of 4 parsers.
@@ -264,7 +304,18 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 
 		return newState4, mapped
 	}
-	return gomme.NewParser[MO](expected.String(), mapParse, nil)
+
+	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack(),
+		parse3.ContainsNoWayBack(), parse4.ContainsNoWayBack())
+
+	return gomme.NewParser[MO](
+		expected.String(),
+		mapParse,
+		BasicRecovererFunc(mapParse),
+		containsNoWayBack,
+		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer,
+			parse3.NoWayBackRecoverer, parse4.NoWayBackRecoverer),
+	)
 }
 
 // Map5 applies a function to the successful result of 5 parsers.
@@ -333,5 +384,16 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 		return newState5, mapped
 	}
-	return gomme.NewParser[MO](expected.String(), mapParse, nil)
+
+	containsNoWayBack := max(parse1.ContainsNoWayBack(), parse2.ContainsNoWayBack(), parse3.ContainsNoWayBack(),
+		parse4.ContainsNoWayBack(), parse5.ContainsNoWayBack())
+
+	return gomme.NewParser[MO](
+		expected.String(),
+		mapParse,
+		BasicRecovererFunc(mapParse),
+		containsNoWayBack,
+		CombiningRecoverer(parse1.NoWayBackRecoverer, parse2.NoWayBackRecoverer, parse3.NoWayBackRecoverer,
+			parse4.NoWayBackRecoverer, parse5.NoWayBackRecoverer),
+	)
 }

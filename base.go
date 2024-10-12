@@ -6,13 +6,7 @@
 package gomme
 
 import (
-	"cmp"
-	"errors"
-	"fmt"
-	"slices"
-	"strings"
 	"sync"
-	"unicode/utf8"
 )
 
 // DefaultMaxDel of 3 is a compromise between speed and optimal fault tolerance
@@ -40,6 +34,11 @@ const (
 	TernaryYes
 )
 
+// Separator is a generic type for separators (byte, rune, []byte or string)
+type Separator interface {
+	~rune | ~byte | ~string | ~[]byte
+}
+
 // Recoverer is a simplified parser that only returns the number of bytes
 // to reach a safe state.
 // If it can't recover it should return -1.
@@ -60,6 +59,10 @@ type Recoverer func(state State) int
 // Each Deleter implementation defines itself what a token really is.
 type Deleter func(state State, count int) State
 
+// ============================================================================
+// Parser Interface And Its Implementations
+//
+
 // Parser defines the type of a generic Parser
 // A few rules should be followed to prevent unexpected behaviour:
 //   - A parser that errors must add an error to the state
@@ -69,6 +72,7 @@ type Parser[Output any] interface {
 	Expected() string
 	It(State) (State, Output)
 	MyRecoverer() Recoverer
+	SwapMyRecoverer(Recoverer) Parser[Output]
 	ContainsNoWayBack() Ternary
 	NoWayBackRecoverer(State) int
 }
@@ -114,6 +118,16 @@ func (p prsr[Output]) MyRecoverer() Recoverer {
 	return p.recoverer
 }
 
+func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
+	return prsr[Output]{ // make it concurrency safe without locking
+		expected:           p.expected,
+		it:                 p.it,
+		recoverer:          p.recoverer,
+		containsNoWayBack:  p.containsNoWayBack,
+		noWayBackRecoverer: p.noWayBackRecoverer,
+	}
+}
+
 func (p prsr[Output]) ContainsNoWayBack() Ternary {
 	return p.containsNoWayBack
 }
@@ -123,9 +137,10 @@ func (p prsr[Output]) NoWayBackRecoverer(state State) int {
 }
 
 type lazyprsr[Output any] struct {
-	once       sync.Once
-	makePrsr   func() Parser[Output]
-	cachedPrsr Parser[Output]
+	once         sync.Once
+	makePrsr     func() Parser[Output]
+	cachedPrsr   Parser[Output]
+	newRecoverer Recoverer
 }
 
 // LazyParser just stores a function that creates the parser and evaluates the function later.
@@ -136,6 +151,10 @@ func LazyParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
 
 func (lp *lazyprsr[Output]) ensurePrsr() {
 	lp.cachedPrsr = lp.makePrsr()
+	if lp.newRecoverer != nil {
+		lp.cachedPrsr.SwapMyRecoverer(lp.newRecoverer)
+		lp.newRecoverer = nil
+	}
 }
 
 func (lp *lazyprsr[Output]) Expected() string {
@@ -153,6 +172,18 @@ func (lp *lazyprsr[Output]) MyRecoverer() Recoverer {
 	return lp.cachedPrsr.MyRecoverer()
 }
 
+func (lp *lazyprsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
+	if lp.cachedPrsr == nil {
+		return &lazyprsr[Output]{ // return a new instance that can't be in a stale cache somewhere
+			once:         sync.Once{},
+			makePrsr:     lp.makePrsr,
+			cachedPrsr:   lp.cachedPrsr,
+			newRecoverer: newRecoverer,
+		}
+	}
+	return lp.cachedPrsr.SwapMyRecoverer(newRecoverer)
+}
+
 func (lp *lazyprsr[Output]) ContainsNoWayBack() Ternary {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.ContainsNoWayBack()
@@ -162,6 +193,10 @@ func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.NoWayBackRecoverer(state)
 }
+
+// ============================================================================
+// Running a parser
+//
 
 // RunOnString runs a parser on text input and returns the output and error(s).
 func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser[Output]) (Output, error) {
@@ -182,10 +217,9 @@ func run[Output any](state State, parse Parser[Output]) (Output, error) {
 	return ZeroOf[Output](), pcbErrorsToGoErrors(newState.oldErrors)
 }
 
-// Separator is a generic type for separators (byte, rune, []byte or string)
-type Separator interface {
-	~rune | ~byte | ~string | ~[]byte
-}
+// ============================================================================
+// Input And Creating a State With It
+//
 
 // Input is the input data for all the parsers.
 // It can be either UTF-8 encoded text (a.k.a. string) or raw bytes.
@@ -200,61 +234,12 @@ type Input struct {
 	line   int // current line number
 }
 
-// pcbError is an error message from the parser.
-// It consists of the text itself and the position in the input where it happened.
-type pcbError struct {
-	text      string
-	pos       int // pos is the byte index in the input (state.input.pos)
-	line, col int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
-	srcLine   string
-}
-
-func ZeroOf[T any]() T {
-	var t T
-	return t
-}
-
-type delErrHand struct {
-	min     int        // minimal deletion
-	deleted int        // number of bytes that have been "deleted"
-	offset  int        // number of bytes the currently handled error happened after state.input.pos
-	errors  []pcbError // errors during handling
-}
-
-type updErrHand struct {
-	minDel int        // minimal deletion
-	curDel int        // current deletion (this value goes from minDel to maxDel)
-	errors []pcbError // errors during handling
-}
-
-type errHand struct {
-	binary bool       // true if we should delete bytes in error recovery
-	maxDel int        // maximum number of runes or bytes that should be deleted for error recovery
-	err    *pcbError  // error that is currently handled
-	del    delErrHand // for handling errors by "deleting" input
-	upd    updErrHand // for handling errors by "updating" input
-}
-
-// State represents the current state of a parser.
-// It consists of the Input, the pointOfNoReturn mark
-// and a collection of error messages.
-type State struct {
-	mode            ParsingMode // one of: happy, error, handle, record, choose, play
-	input           Input
-	pointOfNoReturn int        // mark set by SignalNoWayBack/NoWayBack parser
-	deleter         Deleter    // used to get back on track in error recovery
-	newError        *pcbError  // error that hasn't been handled yet
-	errHand         errHand    // everything for handling one error
-	oldErrors       []pcbError // errors that are or have been handled
-}
-
 // NewFromString creates a new parser state from the input data.
 func NewFromString(maxDel int, del Deleter, input string) State {
 	if del == nil {
 		del = DefaultTextDeleter
 	}
 	state := NewState(maxDel, del, []byte(input))
-	state.errHand.binary = false
 	return state
 }
 
@@ -267,418 +252,51 @@ func NewState(maxDel int, del Deleter, input []byte) State {
 		del = DefaultBinaryDeleter
 	}
 	return State{
-		input:           Input{bytes: input, line: 1, prevNl: -1},
-		pointOfNoReturn: -1,
-		errHand:         errHand{binary: true, maxDel: maxDel},
+		input:               Input{bytes: input, line: 1, prevNl: -1},
+		pointOfNoReturn:     -1,
+		maxDel:              maxDel,
+		recovererWasteCache: make(map[uint64][]cachedWaste),
 	}
-}
-
-// ============================================================================
-// Handle Input
-//
-
-func (st State) AtEnd() bool {
-	return st.input.pos >= len(st.input.bytes)
-}
-
-func (st State) BytesRemaining() int {
-	return len(st.input.bytes) - st.input.pos
-}
-
-func (st State) CurrentString() string {
-	return string(st.input.bytes[st.input.pos:])
-}
-
-func (st State) CurrentBytes() []byte {
-	return st.input.bytes[st.input.pos:]
-}
-
-func (st State) StringTo(remaining State) string {
-	return string(st.BytesTo(remaining))
-}
-
-func (st State) BytesTo(remaining State) []byte {
-	if remaining.input.pos < st.input.pos {
-		return []byte{}
-	}
-	if remaining.input.pos > len(st.input.bytes) {
-		return st.input.bytes[st.input.pos:]
-	}
-	return st.input.bytes[st.input.pos:remaining.input.pos]
-}
-
-func (st State) ByteCount(remaining State) int {
-	if remaining.input.pos < st.input.pos {
-		return 0 // we never go back so we don't give negative count back
-	}
-	n := len(st.input.bytes)
-	if remaining.input.pos > n {
-		return n - st.input.pos
-	}
-	return remaining.input.pos - st.input.pos
-}
-
-func (st State) MoveBy(countBytes int) State {
-	if countBytes < 0 {
-		countBytes = 0
-	}
-
-	pos := st.input.pos
-	n := min(len(st.input.bytes), pos+countBytes)
-	st.input.pos = n
-
-	moveText := string(st.input.bytes[pos:n])
-	lastNlPos := strings.LastIndexByte(moveText, '\n') // this is Unicode safe!!!
-	if lastNlPos >= 0 {
-		st.input.prevNl += lastNlPos + 1 // this works even if '\n' wasn't found at all
-		st.input.line += strings.Count(moveText, "\n")
-	}
-
-	return st
-}
-
-func (st State) Moved(other State) bool {
-	return st.input.pos != other.input.pos
-}
-
-func (st State) Delete(countToken int) State {
-	return st.deleter(st, countToken)
-}
-
-// ============================================================================
-// Handle success and failure
-//
-
-// Success return the State with NoWayBack saved from
-// the subState.
-func (st State) Success(subState State) State {
-	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
-	return st
-}
-
-// Failure returns the State with the error, pointOfNoReturn and mode kept from
-// the subState.
-func (st State) Failure(subState State) State {
-	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
-	st.mode = subState.mode
-
-	if subState.newError != nil { // should be true
-		st.newError = subState.newError
-	}
-
-	return st
-}
-
-// NewError sets a syntax error with the message in this state at the current position.
-// For syntax errors `expected ` is prepended to the message and the usual
-// position and source line including marker are appended.
-func (st State) NewError(message string) State {
-	line, col, srcLine := st.where(st.input.pos)
-	newErr := pcbError{
-		text: "expected " + message,
-		pos:  st.input.pos, line: line, col: col,
-		srcLine: srcLine,
-	}
-
-	switch st.mode {
-	case ParsingModeHappy:
-		st.newError = &newErr
-		st.mode = ParsingModeError
-	case ParsingModeError:
-		// should NOT happen but keep error furthest in the input
-		//if st.newError == nil || st.newError.pos < st.input.pos {
-		//	st.newError = newErr
-		//}
-
-		// programming error
-		newErr.text = "programming error: State.NewError called in mode `error`"
-		st.oldErrors = append(st.oldErrors, newErr)
-	case ParsingModeHandle:
-		if st.handlingNewError(&newErr) {
-			st.mode = ParsingModeRecord
-			st.newError = nil
-		} else {
-			newErr.text = "programming error: State.NewError called in mode `handle` with other error"
-			st.oldErrors = append(st.oldErrors, newErr)
-		}
-	case ParsingModeRecord, ParsingModeCollect:
-		// ignore error (we simulate the happy path) (should not happen)
-	case ParsingModeChoose, ParsingModePlay:
-		st.newError = &newErr
-	}
-	return st
-}
-
-// NewSemanticError sets a semantic error with the messages in this state at the
-// current position.
-// For semantic errors `expected ` is NOT prepended to the message but the usual
-// position and source line including marker are appended.
-func (st State) NewSemanticError(message string) State {
-	line, col, srcLine := st.where(st.input.pos)
-	err := pcbError{
-		text: message,
-		pos:  st.input.pos, line: line, col: col,
-		srcLine: srcLine,
-	}
-
-	st.oldErrors = append(st.oldErrors, err)
-	return st
-}
-
-// Failed returns whether this state is in a failed state or not.
-func (st State) Failed() bool {
-	return st.newError != nil
-}
-
-// ============================================================================
-// Produce error messages and give them back
-//
-
-// CurrentSourceLine returns the source line corresponding to the current position
-// including [line:column] at the start and a marker at the exact error position.
-// This should be used for reporting errors that are detected later.
-func (st State) CurrentSourceLine() string {
-	return formatSrcLine(st.where(st.input.pos))
-}
-
-func (st State) where(pos int) (line, col int, srcLine string) {
-	if len(st.input.bytes) == 0 {
-		return 1, 0, ""
-	}
-	if pos > st.input.prevNl { // pos is ahead of prevNL => search forward
-		return st.whereForward(pos, st.input.line, st.input.prevNl)
-	} else if pos <= st.input.prevNl-pos { // pos is too far back => search from start
-		return st.whereForward(pos, 1, -1)
-	} else { // pos is just a little back => search backward
-		return st.whereBackward(pos, st.input.line, st.input.prevNl)
-	}
-}
-func (st State) whereForward(pos, lineNum, prevNl int) (line, col int, srcLine string) {
-	text := string(st.input.bytes)
-	var nextNl int // Position of next newline or end
-
-	for {
-		nextNl = strings.IndexByte(text[prevNl+1:], '\n')
-		if nextNl < 0 {
-			nextNl = len(text)
-		} else {
-			nextNl += prevNl + 1
-		}
-
-		stop := false
-		line, col, srcLine, stop = st.tryWhere(prevNl, pos, nextNl, lineNum)
-		if stop {
-			return line, col, srcLine
-		}
-		prevNl = nextNl
-		lineNum++
-	}
-}
-func (st State) whereBackward(pos, lineNum, nextNl int) (line, col int, srcLine string) {
-	text := string(st.input.bytes)
-	var prevNl int // Line start (position of preceding newline)
-
-	for {
-		prevNl = strings.LastIndexByte(text[0:nextNl], '\n')
-		lineNum--
-
-		stop := false
-		line, col, srcLine, stop = st.tryWhere(prevNl, pos, nextNl, lineNum)
-		if stop {
-			return line, col, srcLine
-		}
-		nextNl = prevNl
-	}
-}
-func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, col int, srcLine string, stop bool) {
-	if prevNl < pos && pos <= nextNl {
-		return lineNum, pos - prevNl - 1, string(st.input.bytes[prevNl+1 : nextNl]), true
-	}
-	return 1, 0, "", false
-}
-
-// Error returns a human readable error string.
-func (st State) Error() string {
-	slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
-		return cmp.Compare(a.pos, b.pos)
-	})
-
-	fullMsg := strings.Builder{}
-	for _, pcbErr := range st.oldErrors {
-		fullMsg.WriteString(singleErrorMsg(pcbErr))
-		fullMsg.WriteRune('\n')
-	}
-	if st.newError != nil {
-		fullMsg.WriteString(singleErrorMsg(*st.newError))
-		fullMsg.WriteRune('\n')
-	}
-
-	return fullMsg.String()
-}
-
-func singleErrorMsg(pcbErr pcbError) string {
-	fullMsg := strings.Builder{}
-	fullMsg.WriteString(pcbErr.text)
-	fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
-
-	return fullMsg.String()
-}
-
-func formatSrcLine(line, col int, srcLine string) string {
-	result := strings.Builder{}
-	lineStart := srcLine[:col]
-	result.WriteString(lineStart)
-	result.WriteRune(0x25B6) // easy to spot marker (▶) for exact error position
-	result.WriteString(srcLine[col:])
-	return fmt.Sprintf(" [%d:%d] %q",
-		line, utf8.RuneCountInString(lineStart)+1, result.String()) // columns for the user start at 1
-}
-
-// ============================================================================
-// Parser accounting (for fair decisions about which parser path is best)
-//
-
-func pcbErrorsToGoErrors(pcbErrors []pcbError) error {
-	if len(pcbErrors) == 0 {
-		return nil
-	}
-
-	goErrors := make([]error, len(pcbErrors))
-	for i, pe := range pcbErrors {
-		goErrors[i] = errors.New(singleErrorMsg(pe))
-	}
-
-	return errors.Join(goErrors...)
-}
-
-func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Output) {
-	var output Output
-	var newState State
-
-	curState := state
-	curState.errHand.del.min = 1    // we have to delete at least 1 byte to fix anything
-	curState.errHand.upd.minDel = 0 // update needn't delete anything at all => insert
-	for {
-		if !curState.Failed() {
-			newState, output = parse.It(curState)
-			if !newState.Failed() {
-				newState.errHand.err = nil
-				break
-			}
-		} else {
-			newState = curState
-		}
-
-		if !newState.handlingNewError(newState.newError) {
-			newState.mode = ParsingModeHappy
-		}
-
-		switch newState.mode {
-		case ParsingModeHappy: // if no err handling yet -> start handling & delete single bytes
-			newState.oldErrors = append(newState.oldErrors, *newState.newError)
-			newState.errHand.err = newState.newError
-			newState.mode = ParsingModeError
-		case ParsingModeError: // if deleted single bytes -> insert good input and possibly delete some bytes
-			newState.errHand.upd.curDel = newState.errHand.upd.minDel
-			newState.mode = ParsingModeRecord
-		case ParsingModeRecord: // if updated input -> delete a bit more or try all again just harder
-			if newState.errHand.upd.curDel < newState.errHand.maxDel {
-				newState.errHand.upd.curDel++
-			} else {
-				newState = state
-				oldConsumption := curState.errHand.maxDel
-				if newState.errHand.maxDel <= oldConsumption { // we have already reached the end!!!
-					newState.errHand.err = nil
-					break
-				}
-				newState.errHand.del.min = oldConsumption
-				newState.mode = ParsingModeError
-			}
-		default:
-			// not thought through!
-		}
-
-		// let's try again
-		newState.newError = nil
-		curState = newState
-	}
-
-	newState.newError = nil
-	newState.errHand.err = nil
-	newState.mode = ParsingModeHappy
-	newState.errHand.maxDel = 0
-	newState.errHand.del = delErrHand{}
-	newState.errHand.upd = updErrHand{}
-	return newState, output
-}
-
-func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, Output) {
-	if !state.handlingNewError(state.newError) {
-		return state, ZeroOf[Output]()
-	}
-
-	switch state.mode {
-	case ParsingModeError: // try byte-wise deletion of input first
-		var tryState State
-		errOffset := state.errHand.err.pos - state.input.pos // this should be 0, but misbehaving parsers...
-
-		for i := state.errHand.del.min; i <= state.errHand.maxDel; i++ {
-			tryState = state.MoveBy(i)
-			newState, output := parse.It(tryState)
-			// It will always be a new error because the position has changed.
-			// But if this is called by the first combining parser,
-			// the position won't change beyond the `tryState` if it fails directly.
-			if !newState.Failed() || tryState.ByteCount(newState) > errOffset {
-				newState.errHand.del.deleted = i
-				newState.errHand.del.offset = errOffset
-				return newState, output
-			}
-			// we failed again without really moving
-			newState.oldErrors = append(newState.oldErrors, *newState.newError) // TODO: ERROR ID or 100 times the same error
-			newState.errHand.err = newState.newError
-			state.newError = nil
-			tryState = newState
-		}
-	case ParsingModeHandle: // imitate insertion of correct input by ignoring the error
-		state.newError = nil
-		return state, ZeroOf[Output]()
-	case ParsingModeRecord: // insert (ignore the error) + delete (move ahead)
-		state.newError = nil
-		return state.MoveBy(state.errHand.upd.curDel), ZeroOf[Output]()
-	default:
-		// intentionally do nothing
-	}
-
-	return state, ZeroOf[Output]()
-}
-
-func (st State) handlingNewError(newErr *pcbError) bool {
-	if st.errHand.err == nil || newErr == nil {
-		return false
-	}
-	return st.errHand.err.pos == newErr.pos
 }
 
 // ============================================================================
 // Misc. stuff
 //
 
-// SignalNoWayBack sets a point of no return mark at the current position.
-func (st State) SignalNoWayBack() State {
-	st.pointOfNoReturn = max(st.pointOfNoReturn, st.input.pos)
-	return st
-}
-
-// NoWayBack is true iff we crossed a point of no return.
-func (st State) NoWayBack() bool {
-	return st.pointOfNoReturn >= st.input.pos
-}
-
 // BetterOf returns the more advanced (in the input) state of the two.
-// This should be used for parsers that are alternatives. So the best error is kept.
+// This should be used for parsers that are alternatives.
+// So the best error is handled.
 func BetterOf(state, other State) State {
 	if state.input.pos < other.input.pos {
 		return other
 	}
 	return state
+}
+
+// ZeroOf returns the zero value of some type.
+func ZeroOf[T any]() T {
+	var t T
+	return t
+}
+
+// MinFuncIdx returns the index of the minimal value in x,
+// using cmp to compare elements.
+// It returns -1 if x is empty. If there is more than one minimal element
+// according to the cmp function, MinFunc returns the first one.
+func MinFuncIdx[S ~[]E, E any](x S, cmp func(a, b E) int) int {
+	switch len(x) {
+	case 0:
+		return -1
+	case 1:
+		return 0
+	}
+	m := x[0]
+	idx := 0
+	for i := 1; i < len(x); i++ {
+		if cmp(x[i], m) < 0 {
+			m = x[i]
+			idx = i
+		}
+	}
+	return idx
 }
