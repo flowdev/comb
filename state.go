@@ -26,7 +26,7 @@ type cachedWasteIdx struct {
 type State struct {
 	mode                   ParsingMode // one of: happy, error, handle, record, choose, play
 	input                  Input
-	pointOfNoReturn        int        // mark set by SignalNoWayBack/NoWayBack parser
+	noWayBackMark          int        // mark set by the NoWayBack parser
 	newError               *pcbError  // error that hasn't been handled yet
 	maxDel                 int        // maximum number of tokens that should be deleted for error recovery
 	deleter                Deleter    // used to get back on track in error recovery
@@ -197,14 +197,14 @@ func (st State) cachedRecovererWasteIdx(crID uint64) (waste, idx int, ok bool) {
 // Success return the State with NoWayBack saved from
 // the subState.
 func (st State) Success(subState State) State {
-	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
+	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
 	return st
 }
 
-// Failure returns the State with the error, pointOfNoReturn and mode kept from
+// Failure returns the State with the error, noWayBackMark and mode kept from
 // the subState.
 func (st State) Failure(subState State) State {
-	st.pointOfNoReturn = max(st.pointOfNoReturn, subState.pointOfNoReturn)
+	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
 	st.mode = subState.mode
 
 	if subState.newError != nil { // should be true
@@ -236,7 +236,7 @@ func (st State) NewError(message string) State {
 		//}
 
 		// programming error
-		newErr.text = "programming error: State.NewError called in mode `error` (while backtracking)"
+		newErr.text = "programming error: State.NewError called in mode `error` (while moving backward)"
 		st.oldErrors = append(st.oldErrors, newErr)
 	case ParsingModeHandle:
 		if st.handlingNewError(&newErr) {
@@ -369,13 +369,12 @@ func (st State) handlingNewError(newErr *pcbError) bool {
 	return st.errHand.err.pos == newErr.pos
 }
 
-// SignalNoWayBack sets a point of no return mark at the current position.
-func (st State) SignalNoWayBack() State {
-	st.pointOfNoReturn = max(st.pointOfNoReturn, st.input.pos)
-	return st
+// NoWayBack is true iff we crossed a noWayBackMark.
+func (st State) NoWayBack() bool {
+	return st.noWayBackMark >= st.input.pos
 }
 
-// NoWayBack is true iff we crossed a point of no return.
-func (st State) NoWayBack() bool {
-	return st.pointOfNoReturn >= st.input.pos
+// NoWayBackMoved is true iff the noWayBackMark is different between the 2 states.
+func (st State) NoWayBackMoved(other State) bool {
+	return st.noWayBackMark != other.noWayBackMark
 }

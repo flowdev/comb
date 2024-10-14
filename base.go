@@ -40,14 +40,14 @@ type Separator interface {
 }
 
 // Recoverer is a simplified parser that only returns the number of bytes
-// to reach a safe state (Refuge).
+// to reach a safe state (NoWayBack).
 // If it can't recover it should return -1.
 //
 // A Recoverer is used for recovering from an error in the input.
-// It helps to move forward to the next safe spot (Refuge).
-// A Recoverer will be used by the Refuge or NoWayBack parser if it's sub-parser
+// It helps to move forward to the next safe spot (NoWayBack).
+// A Recoverer will be used by the NoWayBack parser if it's sub-parser
 // provides it.
-// Otherwise, Refuge will have to try the sub-parser until it succeeds moving
+// Otherwise, NoWayBack will have to try the sub-parser until it succeeds moving
 // forward 1 token at a time. :(
 type Recoverer func(state State) int
 
@@ -73,16 +73,16 @@ type Parser[Output any] interface {
 	It(State) (State, Output)
 	MyRecoverer() Recoverer
 	SwapMyRecoverer(Recoverer) Parser[Output]
-	ContainsRefuge() Ternary
-	RefugeRecoverer(State) int
+	ContainsNoWayBack() Ternary
+	NoWayBackRecoverer(State) int
 }
 
 type prsr[Output any] struct {
-	expected        string
-	it              func(State) (State, Output)
-	recoverer       Recoverer // will be requested only by the NoWayBack parser
-	containsRefuge  Ternary
-	refugeRecoverer Recoverer // will be requested in choose mode to find the right NoWayBack parser
+	expected          string
+	it                func(State) (State, Output)
+	recoverer         Recoverer // will be requested only by the NoWayBack parser
+	containsNoWayBack Ternary
+	refugeRecoverer   Recoverer // will be requested in choose mode to find the right NoWayBack parser
 }
 
 // NewParser is THE way to create parsers.
@@ -90,15 +90,15 @@ func NewParser[Output any](
 	expected string,
 	parse func(State) (State, Output),
 	recover Recoverer,
-	containsRefuge Ternary,
+	containsNoWayBack Ternary,
 	refugeRecoverer Recoverer,
 ) Parser[Output] {
 	p := prsr[Output]{
-		expected:        expected,
-		it:              parse,
-		recoverer:       recover,
-		containsRefuge:  containsRefuge,
-		refugeRecoverer: refugeRecoverer,
+		expected:          expected,
+		it:                parse,
+		recoverer:         recover,
+		containsNoWayBack: containsNoWayBack,
+		refugeRecoverer:   refugeRecoverer,
 	}
 	if recover == nil {
 		p.recoverer = DefaultRecoverer(p)
@@ -120,19 +120,19 @@ func (p prsr[Output]) MyRecoverer() Recoverer {
 
 func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
 	return prsr[Output]{ // make it concurrency safe without locking
-		expected:        p.expected,
-		it:              p.it,
-		recoverer:       p.recoverer,
-		containsRefuge:  p.containsRefuge,
-		refugeRecoverer: p.refugeRecoverer,
+		expected:          p.expected,
+		it:                p.it,
+		recoverer:         p.recoverer,
+		containsNoWayBack: p.containsNoWayBack,
+		refugeRecoverer:   p.refugeRecoverer,
 	}
 }
 
-func (p prsr[Output]) ContainsRefuge() Ternary {
-	return p.containsRefuge
+func (p prsr[Output]) ContainsNoWayBack() Ternary {
+	return p.containsNoWayBack
 }
 
-func (p prsr[Output]) RefugeRecoverer(state State) int {
+func (p prsr[Output]) NoWayBackRecoverer(state State) int {
 	return p.refugeRecoverer(state)
 }
 
@@ -184,14 +184,14 @@ func (lp *lazyprsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Outpu
 	return lp.cachedPrsr.SwapMyRecoverer(newRecoverer)
 }
 
-func (lp *lazyprsr[Output]) ContainsRefuge() Ternary {
+func (lp *lazyprsr[Output]) ContainsNoWayBack() Ternary {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.ContainsRefuge()
+	return lp.cachedPrsr.ContainsNoWayBack()
 }
 
-func (lp *lazyprsr[Output]) RefugeRecoverer(state State) int {
+func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.RefugeRecoverer(state)
+	return lp.cachedPrsr.NoWayBackRecoverer(state)
 }
 
 // ============================================================================
@@ -253,7 +253,7 @@ func NewState(maxDel int, del Deleter, input []byte) State {
 	}
 	return State{
 		input:               Input{bytes: input, line: 1, prevNl: -1},
-		pointOfNoReturn:     -1,
+		noWayBackMark:       -1,
 		maxDel:              maxDel,
 		recovererWasteCache: make(map[uint64][]cachedWaste),
 	}

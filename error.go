@@ -49,7 +49,7 @@ func DefaultRecovererFunc[Output any](parse func(State) (State, Output)) Recover
 
 // CachingRecoverer should only be used in places where the Recoverer
 // will be used multiple times with the exact same input position.
-// The NoWayBack and Refuge parsers are such cases.
+// The NoWayBack parser is such a case.
 func CachingRecoverer(recoverer Recoverer) Recoverer {
 	id := cachingRecovererIDs.Add(1)
 

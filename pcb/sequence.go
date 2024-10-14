@@ -23,19 +23,19 @@ func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 // returns either a slice of results or an error if any parser fails.
 // Use one of the MapX parsers for differently typed parsers.
 func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output] {
-	containsNoWayBack := parsers[0].ContainsRefuge()
+	containsNoWayBack := parsers[0].ContainsNoWayBack()
 	for i := 1; i < len(parsers); i++ {
-		containsNoWayBack = max(containsNoWayBack, parsers[i].ContainsRefuge())
+		containsNoWayBack = max(containsNoWayBack, parsers[i].ContainsNoWayBack())
 	}
 
-	// Construct myRefugeRecoverer from the sub-parsers
+	// Construct myNoWayBackRecoverer from the sub-parsers
 	subRecoverers := make([]gomme.Recoverer, len(parsers))
 	for i, parser := range parsers {
-		if parser.ContainsRefuge() > gomme.TernaryNo {
-			subRecoverers[i] = parser.RefugeRecoverer
+		if parser.ContainsNoWayBack() > gomme.TernaryNo {
+			subRecoverers[i] = parser.NoWayBackRecoverer
 		}
 	}
-	myRefugeRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
+	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
 
 	parseSeq := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, len(parsers))
@@ -61,7 +61,7 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 		parseSeq,
 		BasicRecovererFunc(parseSeq),
 		containsNoWayBack,
-		myRefugeRecoverer.Recover,
+		myNoWayBackRecoverer.Recover,
 	)
 }
 

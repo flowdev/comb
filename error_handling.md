@@ -50,9 +50,11 @@ and it also marks the next safe state to which we want to recover to
 (if its position is behind the error).
 A `NoWayBack` parser at the exact error position isn't of help
 for that particular error.
+Finally, the `NoWayBack` parser is used to prevent the `FirstSuccessful` parser
+from trying other sub-parsers even in case of an error.
+
 So please use the `NoWayBack` parser as much as reasonable for your grammar!
-It also makes the parser perform better because it keeps the backtracking
-to a minimum.
+As it keeps the backtracking to a minimum, it also makes the parser perform better.
 
 The following sections define the modes and their relationships in detail.
 
@@ -61,10 +63,26 @@ The following sections define the modes and their relationships in detail.
 These are the modes:
 
 ##### happy:
-Normal parsing discovering errors.
+Normal parsing discovering and reporting errors (with `State.NewError`).
 
 ##### error:
-An error was found but might be mitigated by backtracking.
+An error was found but might be mitigated by backtracking and the
+`FirstSuccessful` parser.
+In this mode the parser goes back to find last `NoWayBack` parser.
+That might be hidden deep in a sub-parser that is earlier in sequence but
+not on the Go call stack anymore.
+
+So in this mode all parsers that use sub-parsers in sequence have to use them
+in reverse order to find the right `NoWayBack`. \
+Funnily this also applies to parsers that use the *same* sub-parser
+multiple times. So if the second time the sub-parser was used, failed
+then it might very well be that the first (successful) time it applied
+a `NoWayBack` parser. At that would be the right one to find. \
+
+Only the `FirstSuccessful` parser (not as parent parser but as sibling this time)
+is different. It has to find the first successful sub-parser and its `NoWayBack`
+again. \
+As parent parser it can just return if the `NoWayBack` mark has been set.
 
 ##### handle:
 We now know that the error found has to be handled.
@@ -77,14 +95,14 @@ on the happy path from the erroring one to the next
 safe point (`NoWayBack`).
 In general the input doesn't matter in this mode and nothing is looked at or
 consumed.
-The **_record_** mode and friends exist so we don't have to parse from far
+The **record** mode and friends exist so we don't have to parse from far
 back again and again. Because we would have to find a common ancestor of
 the erroring parser and the recovering `NoWayBack` parser.
 We want to try parsing a couple of times with some input deleted and
 the waste would add up.
 
 ##### collect:
-This is really a sub-mode of **_record_**.
+This is really a sub-mode of **record**.
 It's used by the `FirstSuccessful` parser to see if
 all of its sub-parsers contain a `NoWayBack` parser.
 In general the input doesn't matter in this mode and nothing is looked at or
@@ -104,12 +122,12 @@ Since the whole recording is often played multiple times the semantics
 shouldn't have side effects.
 
 ##### choose:
-This is really a sub-mode of **_play_**.
+This is really a sub-mode of **play**.
 It's used by the `FirstSuccessful` parser to find the
 sub-parser with minimal waste by its `Recoverer`.
 If multiple sub-parsers have the same minimal waste,
 the first of them will be chosen.
-As in **_play_** mode no actual parsing is to be done in this mode and
+As in **play** mode no actual parsing is to be done in this mode and
 no input should be consumed.
 
 ### Relationships Between Modes
@@ -129,15 +147,15 @@ stateDiagram-v2
 
     happy --> error: State.NewError
     error --> happy: FirstSuccessful(successful parser found)
-    error --> handle: NoWayBack(pos<errPos) or root
-    handle --> record: State.NewError(newError==error)
+    error --> handle: NoWayBack(pos < errPos)
+    handle --> record: State.NewError(newError == error)
     record --> collect: FirstSuccessful(at start)
     collect --> record: FirstSuccessful(parser without NoWayBack)
     collect --> choose: FirstSuccessful(all parsers with NoWayBack)
-    record --> play: NoWayBack(pos>errPos)
+    record --> play: NoWayBack(pos > errPos)
     play --> choose: FirstSuccessful(at start)
     choose --> play: FirstSuccessful(parser is chosen)
-    play --> happy: NoWayBack(pos>errPos)
+    play --> happy: NoWayBack(pos > errPos)
 ```
 
 The following sections document the details what the parsers or
@@ -172,10 +190,10 @@ Create new error.
 ##### play:
 Like mode **_choose_**.
 
-### Parser `NoWayBack` and `Refuge`
+### Parser `NoWayBack`
 
 ##### happy:
-Set the point of no return in the State if the sub-parser has been successful.
+Set the `noWayBackMark` in the State if the sub-parser has been successful.
 Else just return the error.
 
 ##### error:
@@ -197,7 +215,7 @@ recorded parser (this simulates inserting correct input).
 If still no success use the `Recoverer` to find the next safe spot in the input.
 Move there, switch to `mode=happy` and resume normal parsing by calling the sub-parser.
 This has to be successful (or we record a programming error).
-Finally advance the point of no return accordingly (like in `mode==happy`). )
+Finally advance the `noWayBackMark` accordingly (like in `mode==happy`). )
 Else just return (the sub-parser has already recorded itself).
 
 ##### collect:
@@ -219,7 +237,8 @@ Else register programming error since this parser wouldn't have recorded itself.
 Returns result of first successful parser or after first `NoWayBack`.
 
 ##### error:
-Register programming error.
+Help finding the `NoWayBack` to switch over to `mode=handle`. \
+It's the last one of the first successful sub-parser.
 
 ##### handle:
 Call sub-parsers until error is found again.
@@ -256,8 +275,8 @@ mode changed to **_happy_** when the sub-parser returns.
 Else register a programming error
 (the **FirstSuccessful** parser doesn't record itself in this case).
 
-### Other Parsers
-
+### Sequential Combining Parsers
+These are all parsers that apply one or multiple sub-parsers in sequence.
 ##### happy:
 Normal parsing potentially calling `State.NewError`.
 
