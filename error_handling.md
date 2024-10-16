@@ -139,25 +139,21 @@ A possibly different parent branch parser to witness an error
 during handling of the first is called 'witness parser (2)'.
 
 ```mermaid
-  info
-```
-
-```mermaid
 ---
 title: Parser Modes And Their Changes
 ---
 stateDiagram-v2
     [*] --> happy: start
 
-    happy --> error: State.NewError &&\nwitness parser (1)\n(no error yet)
-    error --> happy: FirstSuccessful\n(successful\nparser found)
-    error --> handle: NoWayBack\n(pos < errPos)
-    handle --> happy: witness\nparser (1)
-    happy --> rewind: State.NewError &&\nwitness parser (2)\n(error exists)
-    rewind --> happy: witness\nparser (1)
-    happy --> happy: NoWayBack\n(pos > errPos)\nclean up
-    rewind --> escape: witness\nparser (1)
-    escape --> happy: NoWayBack\n(pos > errPos)\nclean up
+    happy --> error: State.NewError && witness parser (1) (no error yet)
+    error --> happy: FirstSuccessful (successful parser found)
+    error --> handle: NoWayBack (pos < errPos)
+    handle --> happy: witness parser (1)
+    happy --> rewind: State.NewError && witness parser (2) (error exists)
+    rewind --> happy: witness parser (1)
+    happy --> happy: NoWayBack (pos > errPos) clean up
+    rewind --> escape: witness parser (1)
+    escape --> happy: NoWayBack (pos > errPos) clean up
 ```
 
 The following sections document the details what the parsers or
