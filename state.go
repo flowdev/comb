@@ -312,76 +312,42 @@ func (st State) OmitSemantics() bool {
 	return st.mode != ParsingModeHappy
 }
 
-// IWitnessed lets a branch parser report an error that it witnessed in
-// the sub-parser with index `idx` (0 if it has only 1 sub-parser).
-func (st State) IWitnessed(witnessID uint64, idx int, errState State) State {
-	if st.errHand.err != nil {
-		return st.NewSemanticError(
-			"programming error: State.IWitnessed called while still handling an error")
-	}
-	if idx < 0 {
-		idx = 0
-	}
-	if errState.errHand.witnessID == 0 { // error hasn't been witnessed yet
-		errState.errHand.witnessID = witnessID
-		errState.errHand.witnessPos = st.input.pos
-		errState.errHand.culpritIdx = idx
-	}
-	st.errHand = errState.errHand
-	return st
-}
-
-// AmIWitness returns the index of the sub-parser that failed,
-// the current number of tokens to delete for error handling and
-// whether the erroring parser should be ignored,
-// if the branch parser with the ID `id` is the witness at the current input position
-// in this error case.
-// If the branch parser isn't the witness (or there is no error case),
-// (-1, 0, false) is returned.
-// The returned index should be used for distinguishing between the cases.
-func (st State) AmIWitness(id uint64) (idx, curDel int, ignoreErrParser bool) {
-	if st.errHand.err != nil &&
-		st.errHand.witnessID == id &&
-		st.errHand.witnessPos == st.input.pos {
-
-		return st.errHand.culpritIdx, st.errHand.curDel, st.errHand.ignoreErrParser
-	}
-	return -1, 0, false
-}
-
 // Failure returns the State with the error handling, noWayBackMark and
 // mode kept from the subState.
 func (st State) Failure(subState State) State {
 	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
 	st.mode = subState.mode
 
-	if subState.errHand.err != nil { // should be true
+	if subState.errHand.err != nil || subState.errHand.witnessID > 0 { // should be true
 		st.errHand = subState.errHand
 	}
 
 	return st
 }
 
+// ErrorAgain is really just like NewError.
+// It just exists for cached error results.
 func (st State) ErrorAgain(newErr *pcbError) State {
 	switch st.mode {
 	case ParsingModeHappy:
 		st.errHand.err = newErr
-		st.mode = ParsingModeError
-	case ParsingModeError: // programming error because we have proper caching now
-		return st.NewSemanticError(
-			"programming error: State.NewError/ErrorAgain called in mode `error` despite of caching")
-	case ParsingModeHandle:
-		if st.handlingNewError(newErr) {
-			st.mode = ParsingModeRecord
-			st.errHand.err = nil
+		if st.errHand.culpritIdx < 0 {
+			st.mode = ParsingModeError
 		} else {
-			return st.NewSemanticError(
-				"programming error: State.NewError/ErrorAgain called in mode `handle` with other error")
+			st.mode = ParsingModeRewind
 		}
-	case ParsingModeRecord, ParsingModeCollect:
-		// ignore error (we simulate the happy path) (should not happen)
-	case ParsingModeChoose, ParsingModePlay:
-		st.errHand.err = newErr
+	case ParsingModeError:
+		return st.NewSemanticError(
+			"programming error: State.NewError/ErrorAgain called in mode `error`")
+	case ParsingModeHandle:
+		return st.NewSemanticError(
+			"programming error: State.NewError/ErrorAgain called in mode `handle`")
+	case ParsingModeRewind:
+		return st.NewSemanticError(
+			"programming error: State.NewError/ErrorAgain called in mode `rewind`")
+	case ParsingModeEscape:
+		return st.NewSemanticError(
+			"programming error: State.NewError/ErrorAgain called in mode `escape`")
 	}
 	return st
 }

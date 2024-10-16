@@ -48,7 +48,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 			} else if newState.Failed() {
 				if count < atLeast {
 					// TODO: Add more error handling!
-					return state.IWitnessed(id, count, newState), []Output{}
+					return gomme.IWitnessed(state, id, count, newState), []Output{}
 				} else {
 					return remaining, outputs
 				}
@@ -133,7 +133,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 		} else if firstState.Failed() {
 			if atLeast > 0 {
 				// TODO: Add more error handling!
-				return state.IWitnessed(id, 0, firstState), []Output{}
+				return gomme.IWitnessed(state, id, 0, firstState), []Output{}
 			}
 			return state, []Output{} // still success
 		}

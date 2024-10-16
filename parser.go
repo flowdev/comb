@@ -10,19 +10,25 @@ import (
 //
 //  1. Prevent a `FirstSuccessful` parser from trying later sub-parsers even
 //     in case of an error.
-//  2. Prevent unnecessary backtracking in case of an error.
+//  2. Prevent other unnecessary backtracking in case of an error.
 //  3. Mark a parser as a potential safe place to recover to
 //     when recovering from an error.
 //
 // So you don't need this parser at all if your input is always correct.
 // NoWayBack is the cornerstone of good and performant parsing otherwise.
 //
-// Parsers that accept the empty input or only perform look ahead are
-// not allowed as sub-parsers.
-// It tests the optional recoverer of the parser during the construction phase
-// to provoke an early panic.
-// This way we won't have a panic at the runtime of the parser.
+// Note:
+//   - Parsers that accept the empty input or only perform look ahead are
+//     NOT allowed as sub-parsers.
+//     NoWayBack tests the optional recoverer of the parser during the
+//     construction phase to provoke an early panic.
+//     This way we won't have a panic at the runtime of the parser.
+//   - Only leaf parsers MUST be given to NoWayBack as sub-parsers.
+//     NoWayBack will treat the sub-parser as a leaf parser.
+//     So it won't bother it with any error handling including witnessing errors.
 func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
+	id := NewBranchParserID()
+
 	// call Recoverer to make a Forbidden recoverer panic during the construction phase
 	recoverer := parse.MyRecoverer()
 	if recoverer != nil {
@@ -32,31 +38,18 @@ func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
 	newParse := func(state State) (State, Output) {
 		switch state.mode {
 		case ParsingModeHappy:
-			newState, output := parse.It(state)
-			if !newState.Failed() {
-				newState.noWayBackMark = newState.input.pos
-			}
-			return newState, output
+			return noWayBackHappy(id, parse, state)
 		case ParsingModeError: // we found the previous NoWayBack => switch to handle and find error again
-			state.mode = ParsingModeHandle
-			return state, ZeroOf[Output]()
+			return noWayBackError(id, parse, state)
 		case ParsingModeHandle: // the sub-parser must have failed, or we have a programming error
-			newState, output := parse.It(state)
-			if newState.mode != ParsingModeRecord {
-				return newState.NewSemanticError(
-					"programming error: NoWayBack called in mode `handle`; " +
-						"we must have missed the error to be handled",
-				), output
-			}
-			// TODO: record sub-parser???
-			return newState, output
-		case ParsingModeRecord:
-			// we found the next NoWayBack => stop recording; play recorded parsers and switch to happy
-			// TODO: implement!
-		case ParsingModeCollect, ParsingModeChoose, ParsingModePlay:
-			// TODO: Think about it???
+			return noWayBackHandle(id, parse, state)
+		case ParsingModeRewind: // error didn't go away yet; go back to witness parser (1)
+			return noWayBackRewind(id, parse, state)
+		case ParsingModeEscape: // recover from the error the hard way; use the recoverer
+			return noWayBackEscape(id, parse, state)
 		}
-		return state.NewSemanticError(fmt.Sprintf("parsing mode %v hasn't been handled in NoWayBack", state.mode)), ZeroOf[Output]()
+		return state.NewSemanticError(fmt.Sprintf(
+			"parsing mode %v hasn't been handled in NoWayBack", state.mode)), ZeroOf[Output]()
 	}
 
 	return NewParser[Output](
@@ -66,6 +59,38 @@ func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
 		TernaryYes, // NoWayBack is the only one to be sure
 		CachingRecoverer(parse.MyRecoverer()),
 	)
+}
+func noWayBackHappy[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
+	newState, output := parse.It(state)
+	if !newState.Failed() {
+		if newState.errHand.witnessID > 0 { // we just successfully handled an error :)
+			newState.errHand = errHand{}
+		}
+		newState.noWayBackMark = newState.input.pos // move the mark!
+		return newState, output
+	}
+	newState.errHand.witnessID = 0 // ensure we are the witness!
+	return IWitnessed(state, id, 0, newState), output
+}
+func noWayBackError[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
+	state.mode = ParsingModeHandle
+	return state, ZeroOf[Output]()
+}
+func noWayBackHandle[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
+	return HandleWitness(state, id, parse)
+}
+func noWayBackRewind[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
+	return HandleWitness(state, id, parse)
+}
+func noWayBackEscape[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
+	if state.input.pos <= state.errHand.err.pos {
+		return state, ZeroOf[Output]() // we are too far in front in the input
+	}
+	newState := state.MoveBy(parse.MyRecoverer()(state))
+	newState.errHand = errHand{}
+	newState.mode = ParsingModeHappy
+
+	return noWayBackHappy(id, parse, newState)
 }
 
 // FirstSuccessful tests a list of parsers in order, one by one,
@@ -135,7 +160,7 @@ func FirstSuccessful[Output any](parsers ...Parser[Output]) Parser[Output] {
 				parser := parsers[result.Idx]
 				newState, output := parser.It(state)
 				// the parser failed; so it MUST be the one with the error we are looking for
-				if newState.mode != ParsingModeRecord && newState.mode != ParsingModeHappy {
+				if newState.mode != ParsingModeRewind && newState.mode != ParsingModeHappy {
 					return state.NewSemanticError(fmt.Sprintf(
 						"programming errror: sub-parser (index: %d, expected: %q) "+
 							"didn't switch to parsing mode `record` or `happy`",
@@ -144,10 +169,8 @@ func FirstSuccessful[Output any](parsers ...Parser[Output]) Parser[Output] {
 				return newState, output
 			}
 			return state, ZeroOf[Output]()
-		case ParsingModeRecord: // find next NoWayBack, recording on the way (forward)
-		case ParsingModeCollect:
-		case ParsingModeChoose:
-		case ParsingModePlay:
+		case ParsingModeRewind:
+		case ParsingModeEscape:
 		}
 
 		return state, ZeroOf[Output]()
@@ -209,7 +232,7 @@ func parseFirstSuccessfulError[Output any](state State, parsers []Parser[Output]
 	}
 	if result.HasNoWayBack {
 		newState, _ := parsers[result.Idx].It(state)
-		if newState.mode != ParsingModeRecord {
+		if newState.mode != ParsingModeRewind {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) "+
 					"didn't switch to parsing mode `record`",

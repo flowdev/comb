@@ -28,6 +28,83 @@ type errHand struct {
 	ignoreErrParser bool      // true if the failing parser should be ignored
 }
 
+// IWitnessed lets a branch parser report an error that it witnessed in
+// the sub-parser with index `idx` (0 if it has only 1 sub-parser).
+func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
+	if state.errHand.err != nil {
+		return state.NewSemanticError(
+			"programming error: IWitnessed called while still handling an error")
+	}
+	if errState.errHand.witnessID == 0 { // error hasn't been witnessed yet
+		if idx < 0 {
+			idx = 0
+		}
+		errState.errHand.witnessID = witnessID
+		errState.errHand.witnessPos = state.input.pos
+		errState.errHand.culpritIdx = idx
+	}
+	state.errHand = errState.errHand
+	return state
+}
+
+// HandleWitness returns the advanced state and output if the parser is
+// the witness parser (1).
+// If the branch parser isn't the witness (or there is no error case),
+// the unmodified `state` and zero output are returned.
+// The returned index should be used for distinguishing between the cases.
+func HandleWitness[Output any](state State, id uint64, parsers ...Parser[Output]) (State, Output) {
+	var output, zero Output
+
+	if state.errHand.witnessID == id && state.errHand.witnessPos == state.input.pos {
+		orgPos := state.input.pos
+		if state.errHand.culpritIdx >= len(parsers) {
+			state = state.NewSemanticError(fmt.Sprintf(
+				"programming error: length of sub-parsers is only %d but index of culprit sub-parser is %d",
+				len(parsers), state.errHand.culpritIdx,
+			))
+			state.errHand.culpritIdx = len(parsers) - 1
+		}
+		parse := parsers[state.errHand.culpritIdx]
+		for {
+			switch state.mode {
+			case ParsingModeHandle:
+				state.errHand.err = nil
+				state.errHand.curDel = 1
+				state.errHand.ignoreErrParser = false
+			case ParsingModeRewind:
+				state.errHand.curDel++
+				if state.errHand.curDel > state.maxDel {
+					if !state.errHand.ignoreErrParser {
+						state.errHand.curDel = 0
+						state.errHand.ignoreErrParser = true
+					} else {
+						state.mode = ParsingModeEscape // give up and go the hard way
+						return state, zero
+					}
+				}
+			default:
+				return state, zero // we are witness parser but there is nothing to do
+			}
+			state.mode = ParsingModeHappy // try again
+			state.input.pos = orgPos
+			state = state.deleter(state, state.errHand.curDel)
+			if state.errHand.ignoreErrParser {
+				return state, zero
+			}
+			state, output = parse.It(state)
+			if !state.Failed() {
+				return state, output // first parser succeeded, now try the rest
+			}
+			state.mode = ParsingModeRewind
+		}
+	}
+	return state, output
+}
+
+// ============================================================================
+// Recoverers
+//
+
 // DefaultRecoverer shouldn't be used outside of this package.
 // Please use pcb.BasicRecovererFunc instead.
 func DefaultRecoverer[Output any](parse Parser[Output]) Recoverer {
@@ -116,6 +193,10 @@ func (crc CombiningRecoverer) CachedIndex(state State) (idx int, ok bool) {
 	return idx, true
 }
 
+// ============================================================================
+// Deleters
+//
+
 // DefaultBinaryDeleter shouldn't be used outside of this package.
 // Please use pcb.ByteDeleter instead.
 func DefaultBinaryDeleter(state State, count int) State {
@@ -167,7 +248,7 @@ func DefaultTextDeleter(state State, count int) State {
 }
 
 // ============================================================================
-// Error Handling
+// Error Reporting
 //
 
 func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Output) {

@@ -20,10 +20,8 @@ const (
 	ParsingModeHappy  ParsingMode = iota // normal parsing (forward)
 	ParsingModeError                     // find previous NoWayBack (backward)
 	ParsingModeHandle                    // find error again (forward)
-	ParsingModeRecord                    // find next NoWayBack, recording on the way (forward)
-	ParsingModeCollect
-	ParsingModeChoose
-	ParsingModePlay
+	ParsingModeRewind                    // find next NoWayBack, recording on the way (forward)
+	ParsingModeEscape
 )
 
 type Ternary int

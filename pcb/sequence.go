@@ -61,11 +61,9 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 			return parseSequenceError(state, parsers, 0, outputs, id)
 		case gomme.ParsingModeHandle: // find error again (forward)
 			return parseSequenceHandle(state, parsers, 0, outputs, id)
-		case gomme.ParsingModeRecord:
+		case gomme.ParsingModeRewind:
 			return parseSequenceRecord(state, parsers, 0, outputs, id)
-		case gomme.ParsingModeCollect:
-		case gomme.ParsingModeChoose:
-		case gomme.ParsingModePlay:
+		case gomme.ParsingModeEscape:
 		}
 		return state.NewSemanticError(fmt.Sprintf(
 			"programming error: Sequence didn't return in mode %v", state.ParsingMode())), []Output{}
@@ -183,11 +181,9 @@ func parseSequenceHandle[Output any](
 			return parseSequenceError(newState, parsers, result.Idx, outputs, id)
 		case gomme.ParsingModeHandle:
 			return parseSequenceHandle(newState, parsers, result.Idx+1, outputs, id)
-		case gomme.ParsingModeRecord:
+		case gomme.ParsingModeRewind:
 			return parseSequenceRecord(newState, parsers, result.Idx+1, outputs, id)
-		case gomme.ParsingModeCollect:
-		case gomme.ParsingModeChoose:
-		case gomme.ParsingModePlay:
+		case gomme.ParsingModeEscape:
 		}
 	}
 	return state, zero // we can't do anything

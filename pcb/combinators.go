@@ -78,7 +78,7 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 	recParse := func(state gomme.State) (gomme.State, []byte) {
 		newState, _ := parse.It(state)
 		if newState.Failed() {
-			return state.IWitnessed(id, 0, newState), []byte{}
+			return gomme.IWitnessed(state, id, 0, newState), []byte{}
 		}
 
 		return newState, state.BytesTo(newState)
@@ -100,7 +100,7 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 	asgnParse := func(state gomme.State) (gomme.State, Output1) {
 		newState, _ := parse.It(state)
 		if newState.Failed() {
-			return state.IWitnessed(id, 0, newState), gomme.ZeroOf[Output1]()
+			return gomme.IWitnessed(state, id, 0, newState), gomme.ZeroOf[Output1]()
 		}
 
 		return newState, value
@@ -123,7 +123,7 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState, output := parse.It(state)
 		if newState.Failed() {
-			return state.IWitnessed(id, 0, newState), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 0, newState), gomme.ZeroOf[MO]()
 		}
 
 		mapped, err := fn(output)
@@ -170,12 +170,12 @@ func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.IWitnessed(id, 0, newState1), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 0, newState1), gomme.ZeroOf[MO]()
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.IWitnessed(id, 1, newState2), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 1, newState2), gomme.ZeroOf[MO]()
 		}
 
 		mapped, err := fn(output1, output2)
@@ -228,17 +228,17 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.IWitnessed(id, 0, newState1), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 0, newState1), gomme.ZeroOf[MO]()
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.IWitnessed(id, 1, newState2), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 1, newState2), gomme.ZeroOf[MO]()
 		}
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			return state.IWitnessed(id, 2, newState2), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 2, newState2), gomme.ZeroOf[MO]()
 		}
 
 		mapped, err := fn(output1, output2, output3)
@@ -297,22 +297,22 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.IWitnessed(id, 0, newState1), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 0, newState1), gomme.ZeroOf[MO]()
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.IWitnessed(id, 1, newState2), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 1, newState2), gomme.ZeroOf[MO]()
 		}
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			return state.IWitnessed(id, 2, newState3), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 2, newState3), gomme.ZeroOf[MO]()
 		}
 
 		newState4, output4 := parse4.It(newState3)
 		if newState4.Failed() {
-			return state.IWitnessed(id, 3, newState4), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 3, newState4), gomme.ZeroOf[MO]()
 		}
 
 		mapped, err := fn(output1, output2, output3, output4)
@@ -377,27 +377,27 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := parse1.It(state)
 		if newState1.Failed() {
-			return state.IWitnessed(id, 0, newState1), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 0, newState1), gomme.ZeroOf[MO]()
 		}
 
 		newState2, output2 := parse2.It(newState1)
 		if newState2.Failed() {
-			return state.IWitnessed(id, 1, newState2), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 1, newState2), gomme.ZeroOf[MO]()
 		}
 
 		newState3, output3 := parse3.It(newState2)
 		if newState3.Failed() {
-			return state.IWitnessed(id, 2, newState3), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 2, newState3), gomme.ZeroOf[MO]()
 		}
 
 		newState4, output4 := parse4.It(newState3)
 		if newState4.Failed() {
-			return state.IWitnessed(id, 3, newState4), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 3, newState4), gomme.ZeroOf[MO]()
 		}
 
 		newState5, output5 := parse5.It(newState4)
 		if newState5.Failed() {
-			return state.IWitnessed(id, 4, newState5), gomme.ZeroOf[MO]()
+			return gomme.IWitnessed(state, id, 4, newState5), gomme.ZeroOf[MO]()
 		}
 
 		mapped, err := fn(output1, output2, output3, output4, output5)
