@@ -139,6 +139,10 @@ A possibly different parent branch parser to witness an error
 during handling of the first is called 'witness parser (2)'.
 
 ```mermaid
+  info
+```
+
+```mermaid
 ---
 title: Parser Modes And Their Changes
 ---
