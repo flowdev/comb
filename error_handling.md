@@ -71,72 +71,59 @@ These are the modes:
 ##### happy:
 Normal parsing discovering and reporting errors
 (with `State.NewError` or `State.ErrorAgain` for cached results). \
-The error will be recognized by the immediate parent branch parser.
+The error will be witnessed by the immediate parent branch parser.
+
+If we happen to handle an error and hit a `NoWayBack` parser then
+we will be very happy to clean up. \
+This means we were able to handle the error by modifying the input
+and didn't have to use any `Resolverer`.
 
 ##### error:
 An error was found but might be mitigated by backtracking and the
 `FirstSuccessful` parser.
-In this mode the parser goes back to find last `NoWayBack` parser.
-That might be hidden deep in a sub-parser that is earlier in sequence but
-not on the Go call stack anymore.
+In this mode the parser goes back to find last `NoWayBack` parser or
+trying later alternatives in the `FirstSuccessful` parser.
+
+The previous `NoWayBack` parser might be hidden deep in a sub-parser
+that is earlier in sequence but not on the Go call stack anymore.
 
 So in this mode all parsers that use sub-parsers in sequence have to use them
 in reverse order to find the right `NoWayBack`. \
 Funnily this also applies to parsers that use the *same* sub-parser
 multiple times. So if the second time the sub-parser was used, failed
 then it might very well be that the first (successful) time it applied
-a `NoWayBack` parser. At that would be the right one to find. \
+a `NoWayBack` parser. And that would be the right one to find.
 
 Only the `FirstSuccessful` parser (not as parent parser but as sibling this time)
 is different. It has to find the first successful sub-parser and its `NoWayBack`
 again. \
-As parent parser it can just return if the `NoWayBack` mark has been set.
+As parent parser it can just return.
 
 ##### handle:
 We now know that the error found has to be handled.
-We find the exact position and parser again by simply parsing one more time
-in the new mode.
+We find the exact position and witness parser again by simply parsing
+one more time (forward) in the new mode (possibly omitting any semantics).
 
-##### record:
-The error has been found again. Now we record all parsers
-on the happy path from the erroring one to the next
-safe point (`NoWayBack`).
-In general the input doesn't matter in this mode and nothing is looked at or
-consumed.
-The **record** mode and friends exist so we don't have to parse from far
-back again and again. Because we would have to find a common ancestor of
-the erroring parser and the recovering `NoWayBack` parser.
-We want to try parsing a couple of times with some input deleted and
-the waste would add up.
+The witness parser should
+1. modify the input (respecting `maxDel`),
+2. switch to **happy** mode and
+3. parse again (possibly omitting the failing parser).
 
-##### collect:
-This is really a sub-mode of **record**.
-It's used by the `FirstSuccessful` parser to see if
-all of its sub-parsers contain a `NoWayBack` parser.
-In general the input doesn't matter in this mode and nothing is looked at or
-consumed.
+##### rewind:
+We failed again and have to try again with more deletion or
+without using the parser that failed originally.
 
-This mode might not be necessary because we might add a method to the parser
-interface to know this in advance.
+So we have to go backward similar to the **error** mode.
+But with the distinction that we aren't looking for a `NoWayBack` parser
+before the error position, but instead for the immediate parent branch parser of
+the failing leaf parser that witnessed the error.
 
-##### play:
-In this mode the recorded parsers are executed up to the
-first `NoWayBack` parser whose sub-parser is successful.
-Or the `Recoverer` with minimal waste is found.
+##### escape:
+All deletion of input and inserting of good input didn't help.
+Now we are out of options and can just escape this using a `Resolverer`.
 
-Normal parsing should be done in this mode and input should be consumed.
-But semantics might be missing, but we try to minimize it.
-Since the whole recording is often played multiple times the semantics
-shouldn't have side effects.
-
-##### choose:
-This is really a sub-mode of **play**.
-It's used by the `FirstSuccessful` parser to find the
-sub-parser with minimal waste by its `Recoverer`.
-If multiple sub-parsers have the same minimal waste,
-the first of them will be chosen.
-As in **play** mode no actual parsing is to be done in this mode and
-no input should be consumed.
+So we find the best (least waste) `Resolverer` and its `NoWayBack` parser
+executes it and finally cleans up and switches back to **happy** mode.
 
 ### Relationships Between Modes
 
@@ -144,7 +131,12 @@ The relationships between the modes are shown in the following
 state diagram.
 The diagram also shows where a mode change can happen and the condition
 (next to the mode) that has to be fulfilled for the change.
-The position of the error is shortened to `errPos`.
+
+The position of the error is shortened to `errPos`. \
+The first parent branch parser to witness the error to be handled
+is called 'witness parser (1)'. \
+A possibly different parent branch parser to witness an error
+during handling of the first is called 'witness parser (2)'.
 
 ```mermaid
 ---
@@ -153,17 +145,15 @@ title: Parser Modes And Their Changes
 stateDiagram-v2
     [*] --> happy: start
 
-    happy --> error: State.NewError
-    error --> happy: FirstSuccessful(successful parser found)
-    error --> handle: NoWayBack(pos < errPos)
-    handle --> record: State.NewError(newError == error)
-    record --> collect: FirstSuccessful(at start)
-    collect --> record: FirstSuccessful(parser without NoWayBack)
-    collect --> choose: FirstSuccessful(all parsers with NoWayBack)
-    record --> play: NoWayBack(pos > errPos)
-    play --> choose: FirstSuccessful(at start)
-    choose --> play: FirstSuccessful(parser is chosen)
-    play --> happy: NoWayBack(pos > errPos)
+    happy --> error: State.NewError &&\nwitness parser (1)\n(no error yet)
+    error --> happy: FirstSuccessful\n(successful\nparser found)
+    error --> handle: NoWayBack\n(pos < errPos)
+    handle --> happy: witness\nparser (1)
+    happy --> rewind: State.NewError &&\nwitness parser (2)\n(error exists)
+    rewind --> happy: witness\nparser (1)
+    happy --> happy: NoWayBack\n(pos > errPos)\nclean up
+    rewind --> escape: witness\nparser (1)
+    escape --> happy: NoWayBack\n(pos > errPos)\nclean up
 ```
 
 The following sections document the details what the parsers or

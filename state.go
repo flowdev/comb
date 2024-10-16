@@ -307,6 +307,11 @@ func (st State) Success(subState State) State {
 	return st
 }
 
+// OmitSemantics returns true if any semantic action is useless.
+func (st State) OmitSemantics() bool {
+	return st.mode != ParsingModeHappy
+}
+
 // IWitnessed lets a branch parser report an error that it witnessed in
 // the sub-parser with index `idx` (0 if it has only 1 sub-parser).
 func (st State) IWitnessed(witnessID uint64, idx int, errState State) State {
