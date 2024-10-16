@@ -70,3 +70,11 @@ func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
 	return gomme.FirstSuccessful[Output](parsers...)
 }
+
+// ZeroOf returns the zero value of some type.
+// It is meant to be used without the package name with an import like:
+//
+//	import . "github.com/oleiade/gomme/cute"
+func ZeroOf[T any]() T {
+	return gomme.ZeroOf[T]()
+}

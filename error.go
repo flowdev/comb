@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
 )
@@ -21,7 +20,12 @@ type pcbError struct {
 
 // errHand contains all data needed for handling one error.
 type errHand struct {
-	err *pcbError // error that is currently handled
+	err             *pcbError // error that is currently handled
+	witnessID       uint64    // ID of the immediate parent branch parser that witnessed the error
+	witnessPos      int       // input position of the witness parser
+	culpritIdx      int       // index of the sub-parser that created the error
+	curDel          int       // current number of tokes to delete for error handling
+	ignoreErrParser bool      // true if the failing parser should be ignored
 }
 
 // DefaultRecoverer shouldn't be used outside of this package.
@@ -54,16 +58,14 @@ func CachingRecoverer(recoverer Recoverer) Recoverer {
 	id := cachingRecovererIDs.Add(1)
 
 	return func(state State) int {
-		cachedWaste, ok := state.cachedRecovererWaste(id)
+		waste, ok := state.cachedRecovererWaste(id)
 		if !ok {
-			cachedWaste = recoverer(state)
-			state.cacheRecovererWaste(id, cachedWaste)
+			waste = recoverer(state)
+			state.cacheRecovererWaste(id, waste)
 		}
-		return cachedWaste
+		return waste
 	}
 }
-
-var cachingRecovererIDs = &atomic.Uint64{}
 
 type CombiningRecoverer struct {
 	recoverers []Recoverer
@@ -80,8 +82,6 @@ func NewCombiningRecoverer(recoverers ...Recoverer) CombiningRecoverer {
 		id:         combiningRecovererIDs.Add(1),
 	}
 }
-
-var combiningRecovererIDs = &atomic.Uint64{}
 
 func (crc CombiningRecoverer) Recover(state State) int {
 	waste, _, ok := state.cachedRecovererWasteIdx(crc.id)
@@ -175,14 +175,6 @@ func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Outp
 	var newState State
 
 	return newState, output
-}
-
-func HandleCurrentError[Output any](state State, parse Parser[Output]) (State, Output) {
-	if !state.handlingNewError(state.newError) {
-		return state, ZeroOf[Output]()
-	}
-
-	return state, ZeroOf[Output]()
 }
 
 func singleErrorMsg(pcbErr pcbError) string {

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"sync/atomic"
 )
 
 // ============================================================================
@@ -11,10 +12,14 @@ import (
 // methods.
 // ============================================================================
 
+var cachingRecovererIDs = &atomic.Uint64{}
+
 type cachedWaste struct {
 	pos   int // position in the input
 	waste int // waste of the recoverer
 }
+
+var combiningRecovererIDs = &atomic.Uint64{}
 
 type cachedWasteIdx struct {
 	pos   int // position in the input
@@ -22,18 +27,33 @@ type cachedWasteIdx struct {
 	idx   int // index of the best sub-recoverer
 }
 
+var combiningParserIDs = &atomic.Uint64{}
+
+type ParserResult struct {
+	pos            int         // position in the input
+	Idx            int         // index of the chosen branch or parser (success or fail)
+	HasNoWayBack   bool        // true if the NoWayBack mark has been moved
+	NoWayBackIdx   int         // index of last sub-parser that moved the mark
+	NoWayBackStart int         // start of the input (relative to `pos`) for the NoWayBack parser
+	Failed         bool        // true if the sub-parser failed and provided the error to be handled
+	ErrorStart     int         // start of the input (relative to `pos`) for the failed sub-parser
+	Consumed       int         // number of bytes consumed from the input during successful parsing
+	Output         interface{} // the Output of the parser (nil if it failed)
+	Error          *pcbError   // the error if the parser failed (nil if it succeeded)
+}
+
 // State represents the current state of a parser.
 type State struct {
 	mode                   ParsingMode // one of: happy, error, handle, record, choose, play
 	input                  Input
 	noWayBackMark          int        // mark set by the NoWayBack parser
-	newError               *pcbError  // error that hasn't been handled yet
 	maxDel                 int        // maximum number of tokens that should be deleted for error recovery
 	deleter                Deleter    // used to get back on track in error recovery
 	errHand                errHand    // everything for handling one error
 	oldErrors              []pcbError // errors that are or have been handled
 	recovererWasteCache    map[uint64][]cachedWaste
 	recovererWasteIdxCache map[uint64][]cachedWasteIdx
+	parserCache            map[uint64][]ParserResult
 }
 
 // ============================================================================
@@ -115,13 +135,14 @@ func (st State) Delete(countToken int) State {
 // cacheRecovererWaste remembers the `waste` at the current input position
 // for the CachingRecoverer with ID `id`.
 func (st State) cacheRecovererWaste(id uint64, waste int) {
+	cacheSize := st.maxDel + 1
 	cache, ok := st.recovererWasteCache[id]
 	if !ok {
-		cache = make([]cachedWaste, 0, st.maxDel+1)
+		cache = make([]cachedWaste, 0, cacheSize)
 		st.recovererWasteCache[id] = cache
 	}
 
-	if len(cache) < st.maxDel+1 {
+	if len(cache) < cacheSize {
 		st.recovererWasteCache[id] = append(cache, cachedWaste{pos: st.input.pos, waste: waste})
 		return
 	}
@@ -153,18 +174,19 @@ func (st State) cachedRecovererWaste(id uint64) (waste int, ok bool) {
 // cacheRecovererWasteIdx remembers the `waste` and index at the
 // current input position for the CombiningRecoverer with ID `crID`.
 func (st State) cacheRecovererWasteIdx(crID uint64, waste, idx int) {
+	cacheSize := st.maxDel + 1
 	cache, ok := st.recovererWasteIdxCache[crID]
 	if !ok {
-		cache = make([]cachedWasteIdx, 0, st.maxDel+1)
+		cache = make([]cachedWasteIdx, 0, cacheSize)
 		st.recovererWasteIdxCache[crID] = cache
 	}
 
-	if len(cache) < st.maxDel+1 {
+	if len(cache) < cacheSize {
 		st.recovererWasteIdxCache[crID] = append(cache, cachedWasteIdx{pos: st.input.pos, waste: waste})
 		return
 	}
 
-	i := MinFuncIdx(cache, func(a, b cachedWasteIdx) int { // idx will never be -1
+	i := MinFuncIdx(cache, func(a, b cachedWasteIdx) int { // i will never be -1
 		return cmp.Compare(a.pos, b.pos)
 	})
 	cache[i] = cachedWasteIdx{pos: st.input.pos, waste: waste, idx: idx}
@@ -190,27 +212,172 @@ func (st State) cachedRecovererWasteIdx(crID uint64) (waste, idx int, ok bool) {
 	return wasteData.waste, wasteData.idx, true
 }
 
+func (st State) CacheParserResult(
+	id uint64,
+	idx int,
+	noWayBackIdx int,
+	noWayBackStart int,
+	newState State,
+	output interface{},
+) {
+	cacheSize := max(st.maxDel+1, 8)
+
+	result := ParserResult{
+		pos:            st.input.pos,
+		Idx:            idx,
+		Failed:         newState.Failed(),
+		NoWayBackIdx:   noWayBackIdx,
+		HasNoWayBack:   noWayBackStart >= 0,
+		NoWayBackStart: noWayBackStart,
+		Error:          newState.errHand.err,
+		Output:         output,
+	}
+
+	cache, ok := st.parserCache[id]
+	if !ok {
+		cache = make([]ParserResult, 0, cacheSize)
+		st.parserCache[id] = cache
+	}
+
+	if len(cache) < cacheSize {
+		st.parserCache[id] = append(cache, result)
+		return
+	}
+
+	i := MinFuncIdx(cache, func(a, b ParserResult) int { // i will never be -1
+		return cmp.Compare(a.pos, b.pos)
+	})
+	cache[i] = result
+}
+
+func (st State) CachedParserResult(id uint64) (result ParserResult, ok bool) {
+	var cache []ParserResult
+	if cache, ok = st.parserCache[id]; !ok {
+		return ParserResult{}, false
+	}
+
+	i := slices.IndexFunc(cache, func(data ParserResult) bool {
+		return data.pos == st.input.pos
+	})
+
+	if i < 0 {
+		return ParserResult{}, false
+	}
+	return cache[i], true
+}
+
+// NewBranchParserID returns a new ID for a combining parser.
+// This ID should be retrieved in the construction phase of the parsers and
+// used in the runtime phase for caching.
+func NewBranchParserID() uint64 {
+	return combiningParserIDs.Add(1)
+}
+
+// ClearAllCaches empties all caches of this state.
+// It should be used after reaching a safe state.
+// So after successfully handling an error or at the end of a
+// successful NoWayBack parser.
+// This helps to keep the memory overhead of the parser to a minimum.
+// Since we reached a new position in the input and won't go back anymore,
+// the cache contains nothing useful anymore.
+func (st State) ClearAllCaches() State {
+	clear(st.recovererWasteCache)
+	clear(st.recovererWasteIdxCache)
+	clear(st.parserCache)
+	return st
+}
+
 // ============================================================================
 // Handle success and failure
 //
 
-// Success return the State with NoWayBack saved from
+// ParsingMode returns the current mode of the parser at the current
+// input position.
+// All combining parsers have to use this to know what to do.
+func (st State) ParsingMode() ParsingMode {
+	return st.mode
+}
+
+// Success return the State with NoWayBack and mode saved from
 // the subState.
+// This should only be used by the pcb.Optional parser.
 func (st State) Success(subState State) State {
 	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
+	st.mode = subState.mode
 	return st
 }
 
-// Failure returns the State with the error, noWayBackMark and mode kept from
-// the subState.
+// IWitnessed lets a branch parser report an error that it witnessed in
+// the sub-parser with index `idx` (0 if it has only 1 sub-parser).
+func (st State) IWitnessed(witnessID uint64, idx int, errState State) State {
+	if st.errHand.err != nil {
+		return st.NewSemanticError(
+			"programming error: State.IWitnessed called while still handling an error")
+	}
+	if idx < 0 {
+		idx = 0
+	}
+	if errState.errHand.witnessID == 0 { // error hasn't been witnessed yet
+		errState.errHand.witnessID = witnessID
+		errState.errHand.witnessPos = st.input.pos
+		errState.errHand.culpritIdx = idx
+	}
+	st.errHand = errState.errHand
+	return st
+}
+
+// AmIWitness returns the index of the sub-parser that failed,
+// the current number of tokens to delete for error handling and
+// whether the erroring parser should be ignored,
+// if the branch parser with the ID `id` is the witness at the current input position
+// in this error case.
+// If the branch parser isn't the witness (or there is no error case),
+// (-1, 0, false) is returned.
+// The returned index should be used for distinguishing between the cases.
+func (st State) AmIWitness(id uint64) (idx, curDel int, ignoreErrParser bool) {
+	if st.errHand.err != nil &&
+		st.errHand.witnessID == id &&
+		st.errHand.witnessPos == st.input.pos {
+
+		return st.errHand.culpritIdx, st.errHand.curDel, st.errHand.ignoreErrParser
+	}
+	return -1, 0, false
+}
+
+// Failure returns the State with the error handling, noWayBackMark and
+// mode kept from the subState.
 func (st State) Failure(subState State) State {
 	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
 	st.mode = subState.mode
 
-	if subState.newError != nil { // should be true
-		st.newError = subState.newError
+	if subState.errHand.err != nil { // should be true
+		st.errHand = subState.errHand
 	}
 
+	return st
+}
+
+func (st State) ErrorAgain(newErr *pcbError) State {
+	switch st.mode {
+	case ParsingModeHappy:
+		st.errHand.err = newErr
+		st.mode = ParsingModeError
+	case ParsingModeError: // programming error because we have proper caching now
+		return st.NewSemanticError(
+			"programming error: State.NewError/ErrorAgain called in mode `error` despite of caching")
+	case ParsingModeHandle:
+		if st.handlingNewError(newErr) {
+			st.mode = ParsingModeRecord
+			st.errHand.err = nil
+		} else {
+			return st.NewSemanticError(
+				"programming error: State.NewError/ErrorAgain called in mode `handle` with other error")
+		}
+	case ParsingModeRecord, ParsingModeCollect:
+		// ignore error (we simulate the happy path) (should not happen)
+	case ParsingModeChoose, ParsingModePlay:
+		st.errHand.err = newErr
+	}
 	return st
 }
 
@@ -219,39 +386,13 @@ func (st State) Failure(subState State) State {
 // position and source line including marker are appended.
 func (st State) NewError(message string) State {
 	line, col, srcLine := st.where(st.input.pos)
-	newErr := pcbError{
+	newErr := &pcbError{
 		text: "expected " + message,
 		pos:  st.input.pos, line: line, col: col,
 		srcLine: srcLine,
 	}
 
-	switch st.mode {
-	case ParsingModeHappy:
-		st.newError = &newErr
-		st.mode = ParsingModeError
-	case ParsingModeError:
-		// should NOT happen but keep error furthest in the input
-		//if st.newError == nil || st.newError.pos < st.input.pos {
-		//	st.newError = newErr
-		//}
-
-		// programming error
-		newErr.text = "programming error: State.NewError called in mode `error` (while moving backward)"
-		st.oldErrors = append(st.oldErrors, newErr)
-	case ParsingModeHandle:
-		if st.handlingNewError(&newErr) {
-			st.mode = ParsingModeRecord
-			st.newError = nil
-		} else {
-			newErr.text = "programming error: State.NewError called in mode `handle` with other error"
-			st.oldErrors = append(st.oldErrors, newErr)
-		}
-	case ParsingModeRecord, ParsingModeCollect:
-		// ignore error (we simulate the happy path) (should not happen)
-	case ParsingModeChoose, ParsingModePlay:
-		st.newError = &newErr
-	}
-	return st
+	return st.ErrorAgain(newErr)
 }
 
 // NewSemanticError sets a semantic error with the messages in this state at the
@@ -272,7 +413,7 @@ func (st State) NewSemanticError(message string) State {
 
 // Failed returns whether this state is in a failed state or not.
 func (st State) Failed() bool {
-	return st.newError != nil
+	return st.errHand.err != nil
 }
 
 // ============================================================================
@@ -351,10 +492,6 @@ func (st State) Error() string {
 	fullMsg := strings.Builder{}
 	for _, pcbErr := range st.oldErrors {
 		fullMsg.WriteString(singleErrorMsg(pcbErr))
-		fullMsg.WriteRune('\n')
-	}
-	if st.newError != nil {
-		fullMsg.WriteString(singleErrorMsg(*st.newError))
 		fullMsg.WriteRune('\n')
 	}
 

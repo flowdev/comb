@@ -35,26 +35,32 @@ And they bring the most benefit to the user.
 
 ## Recovering From Errors
 
-For recovering from errors the parser uses a couple of modes.
-Fewer modes would only be possible by potentially much more wasted parsing.
-Because we not only have to find a safe point to recover to but also have to
-have the correct Go call stack to be able to parse correctly after recovering.
+In general, we distinguish between simple **leaf** parsers that don't use
+any sub-parsers and **branch** parsers that do use one or more sub-parsers.
+
+For recovering from errors the parser uses a minimal set of modes. \
+Great care has to be taken by all branch parsers because we not only
+have to find a safe point to recover to, but also have to have the correct
+Go call stack to be able to parse correctly after recovering.
+Furthermore, we need to use the parsers more often than other (e.g. LR-) parsers. \
 This is a downside of all parser combinators.
-We mitigate it by recording all parsers on the way to the next safe state
-(the next `NoWayBack` parser).
+We mitigate it with some helpers and by caching as much as reasonable.
 
 The `NoWayBack` parser plays a key role in error recovery.
 It is the one to conclude that an error has indeed to be handled
 (if its position is before the error),
 and it also marks the next safe state to which we want to recover to
-(if its position is behind the error).
+(if its position is behind the error). \
 A `NoWayBack` parser at the exact error position isn't of help
-for that particular error.
+for that particular error. \
 Finally, the `NoWayBack` parser is used to prevent the `FirstSuccessful` parser
 from trying other sub-parsers even in case of an error.
+This way we prevent unnecessary backtracking.
 
 So please use the `NoWayBack` parser as much as reasonable for your grammar!
 As it keeps the backtracking to a minimum, it also makes the parser perform better.
+
+The `FirstSuccessful` and `NoWayBack` parsers are special **branch** parsers.
 
 The following sections define the modes and their relationships in detail.
 
@@ -63,7 +69,9 @@ The following sections define the modes and their relationships in detail.
 These are the modes:
 
 ##### happy:
-Normal parsing discovering and reporting errors (with `State.NewError`).
+Normal parsing discovering and reporting errors
+(with `State.NewError` or `State.ErrorAgain` for cached results). \
+The error will be recognized by the immediate parent branch parser.
 
 ##### error:
 An error was found but might be mitigated by backtracking and the
@@ -167,8 +175,10 @@ methods mentioned above should do in each mode.
 Create new error and switch to `mode=error`.
 
 ##### error:
-Register programming error.
-  We must not error on the way back to the last `NoWayBack`.
+Ignore. \
+This can happen in an alternative branch that wasn't used because of
+a better error further in the input in a later branch. \
+With proper caching in place we can turn this into a programming error.
 
 ##### handle:
 If `newError==error` then switch to `mode=record` \
@@ -197,13 +207,14 @@ Set the `noWayBackMark` in the State if the sub-parser has been successful.
 Else just return the error.
 
 ##### error:
-Switch to `mode=handle` and if the error came from the sub-parser, call it again,
-else return.
+Switch to `mode=handle` and return.
 
 ##### handle:
 Call sub-parser to find the error again.
-If the mode hasn't changed after the call, report a programming error because
-this parser should be the one switching to `mode=handle` or we missed the error.
+If the mode hasn't changed to `record` after the call,
+report a programming error because
+this parser should have been the one switching to `mode=handle` or
+we missed the error.
 
 ##### record:
 If `mode==record` at the start then this is the safe place wanted to recover to.
@@ -239,9 +250,12 @@ Returns result of first successful parser or after first `NoWayBack`.
 ##### error:
 Help finding the `NoWayBack` to switch over to `mode=handle`. \
 It's the last one of the first successful sub-parser.
+We know the right sub-parser from the cache and only call it if it failed.
 
 ##### handle:
-Call sub-parsers until error is found again.
+Call sub-parsers until error is found again. \
+We know the right sub-parser from the cache and only call it if it failed.
+
 
 ##### record:
 If `mode==record` at start then switch to `mode=collect` to find guaranteed
@@ -275,16 +289,26 @@ mode changed to **_happy_** when the sub-parser returns.
 Else register a programming error
 (the **FirstSuccessful** parser doesn't record itself in this case).
 
-### Sequential Combining Parsers
+### Branch Parsers (Sequential Combining Parsers)
 These are all parsers that apply one or multiple sub-parsers in sequence.
+They have got the obligation to witness and handle any error happening
+in any of their sub-parsers.
+
+So creating a **branch** parser is much more involved than creating a
+**leaf** parser.
+
 ##### happy:
-Normal parsing potentially calling `State.NewError`.
+Normal parsing potentially witnessing an error and reporting oneself as
+witness (using `State.IWitnessed`).
 
 ##### error (checked with `State.Failed`):
-Backtrack returning error.
+Use the parsers (that succeeded already) in reverse order to find the last one
+with a `NoWayBack` parser that moved the mark. (Please cache this!) \
+Return including the error if none could be found.
 
 ##### handle:
-Like mode **_happy_**.
+If the parser witnessed the current error at the current input position
+(checked with `State.AmIWitness`) it has to switch to `mode=happy`.
 
 ##### record:
 Records itself.
@@ -293,8 +317,25 @@ Records itself.
 Call sub-parser (if any) or do nothing.
 
 ##### choose:
-Like mode **_collect_**.
+Like mode **collect**.
 
 ##### play:
-Call sub-parser (if any) and expect the mode changed to **_happy_** when
+Call sub-parser (if any) and expect the mode changed to **happy** when
 the sub-parser returns, or do nothing.
+
+### Leaf Parsers
+
+All parsers that don't have any sub-parsers simply do their thing and
+possibly call `State.NewError`.
+They don't have to care about `mode`s at all. :)
+But they can use `State.Semantic` to possibly skip costly semantics.
+
+## Limits
+
+There are some very academic cases that are intentionally not supported by this project:
+
+- The same `FirstSuccessful` parser is used in a cascade more than 8 times
+  without any `NoWayBack` parser in between. \
+  It is absolutely possible to support this case. \
+  But it would drive up the complexity of the `FirstSuccessful` parser.
+  And that is one of the most complex parts of the code already.

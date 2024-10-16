@@ -17,10 +17,10 @@ const DefaultMaxDel = 3
 type ParsingMode int
 
 const (
-	ParsingModeHappy ParsingMode = iota
-	ParsingModeError
-	ParsingModeHandle
-	ParsingModeRecord
+	ParsingModeHappy  ParsingMode = iota // normal parsing (forward)
+	ParsingModeError                     // find previous NoWayBack (backward)
+	ParsingModeHandle                    // find error again (forward)
+	ParsingModeRecord                    // find next NoWayBack, recording on the way (forward)
 	ParsingModeCollect
 	ParsingModeChoose
 	ParsingModePlay

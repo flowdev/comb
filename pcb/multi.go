@@ -10,7 +10,11 @@ import (
 //
 // If the provided parser cannot be successfully applied `count` times, the operation
 // fails and the Result will contain an error.
-func Count[Output any](parse gomme.Parser[Output], count uint) gomme.Parser[[]Output] {
+func Count[Output any](parse gomme.Parser[Output], count int) gomme.Parser[[]Output] {
+	if count < 0 {
+		panic("Count is unable to handle negative `count`")
+	}
+
 	return ManyMN(parse, count, count)
 }
 
@@ -19,26 +23,32 @@ func Count[Output any](parse gomme.Parser[Output], count uint) gomme.Parser[[]Ou
 //
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
-func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.Parser[[]Output] {
+func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.Parser[[]Output] {
+	id := gomme.NewBranchParserID()
+
+	if atLeast < 0 {
+		panic("ManyMN is unable to handle negative `atLeast`")
+	}
+	if atMost < 0 {
+		panic("ManyMN is unable to handle negative `atMost`")
+	}
+
 	parseMany := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, min(32, atMost))
 		remaining := state
-		count := uint(0)
+		count := 0
 		for {
 			if count >= atMost {
 				return remaining, outputs
 			}
 			newState, output := parse.It(remaining)
 			if newState.Failed() && newState.NoWayBack() {
+				// TODO: handle error!!!
 				newState, output = gomme.HandleAllErrors(remaining.Failure(newState), parse) // this will force it through
 			} else if newState.Failed() {
 				if count < atLeast {
-					// TODO: In error handling mode Insert we should "insert" missing results to reach atLeast
-					// TODO: Think this case better through
-					newState, output = gomme.HandleCurrentError(remaining.Failure(newState), parse)
-					if newState.Failed() {
-						return state.Failure(newState), []Output{}
-					}
+					// TODO: Add more error handling!
+					return state.IWitnessed(id, count, newState), []Output{}
 				} else {
 					return remaining, outputs
 				}
@@ -72,7 +82,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost uint) gomme.
 // however fail if the provided parser accepts empty inputs (such as `Digit0`, or
 // `Alpha0`) in order to prevent infinite loops.
 func Many0[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
-	return ManyMN(parse, 0, math.MaxUint)
+	return ManyMN(parse, 0, math.MaxInt)
 }
 
 // Many1 applies a parser repeatedly until it fails, and returns a slice of all
@@ -82,7 +92,7 @@ func Many0[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 // Note that Many1 will fail if the provided parser accepts empty
 // inputs (such as `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func Many1[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
-	return ManyMN(parse, 1, math.MaxUint)
+	return ManyMN(parse, 1, math.MaxInt)
 }
 
 // SeparatedMN applies an element parser and a separator parser repeatedly in order
@@ -96,10 +106,19 @@ func Many1[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 // in order to prevent infinite loops.
 func SeparatedMN[Output any, S gomme.Separator](
 	parse gomme.Parser[Output], separator gomme.Parser[S],
-	atLeast, atMost uint,
+	atLeast, atMost int,
 	parseSeparatorAtEnd bool,
 ) gomme.Parser[[]Output] {
-	parseMany := ManyMN(Preceded(separator, parse), max(atLeast, 1)-1, atMost-1)
+	id := gomme.NewBranchParserID()
+
+	if atLeast < 0 {
+		panic("SeparatedMN is unable to handle negative `atLeast`")
+	}
+	if atMost < 0 {
+		panic("SeparatedMN is unable to handle negative `atMost`")
+	}
+
+	parseMany := ManyMN(Preceded(separator, parse), max(atLeast-1, 0), max(atMost-1, 0))
 
 	parseSep := func(state gomme.State) (gomme.State, []Output) {
 		if atMost == 0 {
@@ -109,15 +128,12 @@ func SeparatedMN[Output any, S gomme.Separator](
 		firstState, firstOutput := parse.It(state)
 		firstMoved := firstState.Moved(state)
 		if firstState.Failed() && firstState.NoWayBack() {
+			// TODO: handle error!!!
 			firstState, firstOutput = gomme.HandleAllErrors(state.Failure(firstState), parse) // this will force it through
 		} else if firstState.Failed() {
 			if atLeast > 0 {
-				// TODO: Is this correct? Not in handle error mode "Insert"!
-				firstState, firstOutput = gomme.HandleCurrentError(state.Failure(firstState), parse)
-				if firstState.Failed() {
-					return state.Failure(firstState), []Output{}
-				}
-				return state.Failure(firstState), []Output{}
+				// TODO: Add more error handling!
+				return state.IWitnessed(id, 0, firstState), []Output{}
 			}
 			return state, []Output{} // still success
 		}
@@ -166,7 +182,7 @@ func Separated0[Output any, S gomme.Separator](
 	parse gomme.Parser[Output], separator gomme.Parser[S],
 	parseSeparatorAtEnd bool,
 ) gomme.Parser[[]Output] {
-	return SeparatedMN(parse, separator, 0, math.MaxUint, parseSeparatorAtEnd)
+	return SeparatedMN(parse, separator, 0, math.MaxInt, parseSeparatorAtEnd)
 }
 
 // Separated1 applies an element parser and a separator parser repeatedly in order
@@ -181,5 +197,5 @@ func Separated1[Output any, S gomme.Separator](
 	parse gomme.Parser[Output], separator gomme.Parser[S],
 	parseSeparatorAtEnd bool,
 ) gomme.Parser[[]Output] {
-	return SeparatedMN(parse, separator, 1, math.MaxUint, parseSeparatorAtEnd)
+	return SeparatedMN(parse, separator, 1, math.MaxInt, parseSeparatorAtEnd)
 }
