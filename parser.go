@@ -49,7 +49,7 @@ func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
 			return noWayBackEscape(id, parse, state)
 		}
 		return state.NewSemanticError(fmt.Sprintf(
-			"parsing mode %v hasn't been handled in NoWayBack", state.mode)), ZeroOf[Output]()
+			"parsing mode %v hasn't been handled in `NoWayBack`", state.mode)), ZeroOf[Output]()
 	}
 
 	return NewParser[Output](
@@ -146,34 +146,19 @@ func FirstSuccessful[Output any](parsers ...Parser[Output]) Parser[Output] {
 	newParse := func(state State) (State, Output) {
 		switch state.mode {
 		case ParsingModeHappy: // normal parsing (forward)
-			return parseFirstSuccessfulHappy(state, parsers, id)
+			return firstSuccessfulHappy(id, parsers, state)
 		case ParsingModeError: // find previous NoWayBack (backward)
+			return firstSuccessfulError(id, parsers, state)
 		case ParsingModeHandle: // find error again (forward)
-			// use cache to know right parser immediately (Idx, Failed)
-			result, ok := state.CachedParserResult(id)
-			if !ok {
-				return state.NewSemanticError(
-					"grammar error: cache was empty in `FirstSuccessful` parser for parsing mode `handle`",
-				), ZeroOf[Output]()
-			}
-			if result.Failed {
-				parser := parsers[result.Idx]
-				newState, output := parser.It(state)
-				// the parser failed; so it MUST be the one with the error we are looking for
-				if newState.mode != ParsingModeRewind && newState.mode != ParsingModeHappy {
-					return state.NewSemanticError(fmt.Sprintf(
-						"programming errror: sub-parser (index: %d, expected: %q) "+
-							"didn't switch to parsing mode `record` or `happy`",
-						result.Idx, parser.Expected())), ZeroOf[Output]()
-				}
-				return newState, output
-			}
-			return state, ZeroOf[Output]()
-		case ParsingModeRewind:
-		case ParsingModeEscape:
+			return firstSuccessfulHandle(id, parsers, state)
+		case ParsingModeRewind: // go back to the witness parser (1)
+			return firstSuccessfulRewind(id, parsers, state)
+		case ParsingModeEscape: // find the NoWayBack recoverer with the least waste
+			return firstSuccessfulEscape(parsers, state, containingNoWayBack, myNoWayBackRecoverer)
 		}
 
-		return state, ZeroOf[Output]()
+		return state.NewSemanticError(fmt.Sprintf(
+			"parsing mode %v hasn't been handled in `FirstSuccessful`", state.mode)), ZeroOf[Output]()
 	}
 
 	return NewParser[Output](
@@ -184,10 +169,10 @@ func FirstSuccessful[Output any](parsers ...Parser[Output]) Parser[Output] {
 		myNoWayBackRecoverer.Recover,
 	)
 }
-func parseFirstSuccessfulHappy[Output any](state State, parsers []Parser[Output], id uint64) (State, Output) {
+func firstSuccessfulHappy[Output any](id uint64, parsers []Parser[Output], state State) (State, Output) {
 	var zero Output
 
-	// use cache to know result immediately (Idx, Output)
+	// use cache to know result immediately
 	result, ok := state.CachedParserResult(id)
 	if ok {
 		if result.Failed {
@@ -221,27 +206,99 @@ func parseFirstSuccessfulHappy[Output any](state State, parsers []Parser[Output]
 	state.CacheParserResult(id, idx, idx, 0, bestState, zero)
 	return state.Failure(bestState), zero
 }
-func parseFirstSuccessfulError[Output any](state State, parsers []Parser[Output], id uint64) (State, Output) {
+func firstSuccessfulError[Output any](id uint64, parsers []Parser[Output], state State) (State, Output) {
 	var zero Output
 	// use cache to know right parser immediately (Idx, HasNoWayBack)
 	result, ok := state.CachedParserResult(id)
 	if !ok {
 		return state.NewSemanticError(
-			"grammar error: cache was empty in `FirstSuccessful` parser for parsing mode `error`",
+			"grammar error: cache was empty in `FirstSuccessful(error)` parser",
 		), zero
 	}
 	if result.HasNoWayBack {
 		newState, _ := parsers[result.Idx].It(state)
-		if newState.mode != ParsingModeRewind {
+		if newState.mode != ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) "+
-					"didn't switch to parsing mode `record`",
+					"didn't switch to parsing mode `handle` in `FirstSuccessful(error)` parser",
 				result.Idx, parsers[result.Idx].Expected())), zero
 		}
+		return newState, zero
 	}
 	return state, zero
 }
-func parseFirstSuccessfulHandle[Output any](state State, parsers []Parser[Output], id uint64) (State, Output) {
+func firstSuccessfulHandle[Output any](id uint64, parsers []Parser[Output], state State) (State, Output) {
 	var zero Output
+	// use cache to know right parser immediately (Idx, Failed)
+	result, ok := state.CachedParserResult(id)
+	if !ok {
+		return state.NewSemanticError(
+			"grammar error: cache was empty in `FirstSuccessful(handle)` parser",
+		), zero
+	}
+	if result.Failed {
+		parser := parsers[result.Idx]
+		newState, output := parser.It(state)
+		// the parser failed; so it MUST be the one with the error we are looking for
+		if newState.mode != ParsingModeHappy {
+			return state.NewSemanticError(fmt.Sprintf(
+				"programming error: sub-parser (index: %d, expected: %q) "+
+					"didn't switch to parsing mode `happy` in `FirstSuccessful(handle)` parser",
+				result.Idx, parser.Expected())), zero
+		}
+		return newState, output
+	}
 	return state, zero
+}
+func firstSuccessfulRewind[Output any](id uint64, parsers []Parser[Output], state State) (State, Output) {
+	var zero Output
+	// use cache to know right parser immediately (Idx, Failed)
+	result, ok := state.CachedParserResult(id)
+	if !ok {
+		return state.NewSemanticError(
+			"grammar error: cache was empty in `FirstSuccessful(rewind)` parser",
+		), zero
+	}
+	if result.Failed {
+		parser := parsers[result.Idx]
+		newState, output := parser.It(state)
+		// the parser failed; so it MUST be the one with the error we are looking for
+		if newState.mode != ParsingModeHappy && newState.mode != ParsingModeEscape {
+			return state.NewSemanticError(fmt.Sprintf(
+				"programming error: sub-parser (index: %d, expected: %q) "+
+					"didn't switch to parsing mode `happy` or `escape` in `FirstSuccessful(rewind)` parser",
+				result.Idx, parser.Expected())), zero
+		}
+		return newState, output
+	}
+	return state, zero
+}
+func firstSuccessfulEscape[Output any](
+	parsers []Parser[Output],
+	state State,
+	containingNoWayBack Ternary,
+	noWayBackRecoverer CombiningRecoverer,
+) (State, Output) {
+	var zero Output
+	if containingNoWayBack == TernaryNo { // we can't help
+		return state, zero
+	}
+
+	idx, ok := noWayBackRecoverer.CachedIndex(state)
+	if !ok {
+		return state.NewSemanticError(
+			"grammar error: cache was empty in `FirstSuccessful(escape)` parser",
+		), zero
+	}
+
+	parser := parsers[idx]
+	newState, output := parser.It(state)
+	// this parser has the best recoverer; so it MUST make us happy again
+	if newState.mode != ParsingModeHappy {
+		return state.NewSemanticError(fmt.Sprintf(
+			"programming error: sub-parser (index: %d, expected: %q) "+
+				"didn't switch to parsing mode `happy` in `FirstSuccessful(handle)` parser",
+			idx, parser.Expected())), zero
+	}
+	return newState, output
 }
