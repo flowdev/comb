@@ -9,13 +9,14 @@ package csv
 
 import (
 	"github.com/oleiade/gomme"
+	. "github.com/oleiade/gomme/cute"
 	"github.com/oleiade/gomme/pcb"
 )
 
 func ParseCSV(input string) ([][]string, error) {
 	parser := pcb.Separated1(
 		pcb.Separated1(
-			gomme.FirstSuccessful(
+			FirstSuccessful(
 				pcb.Alphanumeric1(),
 				pcb.Delimited(pcb.Char('"'), pcb.Alphanumeric1(), pcb.Char('"')),
 			),

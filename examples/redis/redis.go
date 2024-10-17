@@ -7,6 +7,7 @@ package redis
 import (
 	"errors"
 	"fmt"
+	. "github.com/oleiade/gomme/cute"
 	"github.com/oleiade/gomme/pcb"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		return RESPMessage{}, fmt.Errorf("malformed message %s; reason: %w", input, ErrInvalidSuffix)
 	}
 
-	parser := gomme.FirstSuccessful(
+	parser := FirstSuccessful(
 		SimpleString(),
 		Error(),
 		Integer(),
@@ -298,7 +299,7 @@ func Array() gomme.Parser[RESPMessage] {
 	return pcb.Map2(
 		sizePrefix(pcb.String(string(ArrayKind))),
 		pcb.Many0(
-			gomme.FirstSuccessful(
+			FirstSuccessful(
 				SimpleString(),
 				Error(),
 				Integer(),
