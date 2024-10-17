@@ -107,7 +107,7 @@ func parseSequenceHappy[Output any](
 			if noWayBackStart >= 0 { // handle error locally
 				return parseSequenceError(state, parsers, i, outputs, id)
 			}
-			return state.Failure(newState), nil
+			return state.Preserve(newState), nil
 		}
 
 		if remaining.NoWayBackMoved(newState) {

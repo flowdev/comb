@@ -33,7 +33,7 @@ package pcb
 // 			err := fmt.Errorf("failed parsing floating point value; " +
 // 				"reason: converting Float() parser result's output to string failed",
 // 			)
-// 			return Failure(NewFatalError(input, err, "float"), input)
+// 			return Preserve(NewFatalError(input, err, "float"), input)
 // 		}
 // 		if resultTest := dotParser(result.Remaining); resultTest.Err == nil {
 // 			if resultTest = digitsParser(resultTest.Remaining); resultTest.Err == nil {
@@ -45,7 +45,7 @@ package pcb
 // 		floatingPointValue, err := strconv.ParseFloat(parsed, 64)
 // 		if err != nil {
 // 			err = fmt.Errorf("failed to parse '%v' as float; reason: %w", parsed, err)
-// 			return Failure(NewFatalError(input, err), input)
+// 			return Preserve(NewFatalError(input, err), input)
 // 		}
 
 // 		if negative {

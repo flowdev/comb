@@ -31,17 +31,17 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 	return func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := pparse1(state)
 		if newState1.Failed() {
-			return state.Failure(newState1), gomme.ZeroOf[MO]()
+			return state.Preserve(newState1), gomme.ZeroOf[MO]()
 		}
 
 		newState2, output2 := pparse2(newState1)
 		if newState2.Failed() {
-			return state.Failure(newState2), gomme.ZeroOf[MO]()
+			return state.Preserve(newState2), gomme.ZeroOf[MO]()
 		}
 
 		newState3, output3 := pparse3(newState2)
 		if newState3.Failed() {
-			return state.Failure(newState3), gomme.ZeroOf[MO]()
+			return state.Preserve(newState3), gomme.ZeroOf[MO]()
 		}
 
 		mapped, err := fn(output1, output2, output3)

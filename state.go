@@ -35,6 +35,7 @@ type ParserResult struct {
 	HasNoWayBack   bool        // true if the NoWayBack mark has been moved
 	NoWayBackIdx   int         // index of last sub-parser that moved the mark
 	NoWayBackStart int         // start of the input (relative to `pos`) for the NoWayBack parser
+	NoWayBackMark  int         // the new NoWayBack mark (if HasNoWayBack) or -1
 	Failed         bool        // true if the sub-parser failed and provided the error to be handled
 	ErrorStart     int         // start of the input (relative to `pos`) for the failed sub-parser
 	Consumed       int         // number of bytes consumed from the input during successful parsing
@@ -135,7 +136,7 @@ func (st State) Delete(countToken int) State {
 // cacheRecovererWaste remembers the `waste` at the current input position
 // for the CachingRecoverer with ID `id`.
 func (st State) cacheRecovererWaste(id uint64, waste int) {
-	cacheSize := st.maxDel + 1
+	cacheSize := max(8, st.maxDel+1)
 	cache, ok := st.recovererWasteCache[id]
 	if !ok {
 		cache = make([]cachedWaste, 0, cacheSize)
@@ -174,7 +175,7 @@ func (st State) cachedRecovererWaste(id uint64) (waste int, ok bool) {
 // cacheRecovererWasteIdx remembers the `waste` and index at the
 // current input position for the CombiningRecoverer with ID `crID`.
 func (st State) cacheRecovererWasteIdx(crID uint64, waste, idx int) {
-	cacheSize := st.maxDel + 1
+	cacheSize := max(8, st.maxDel+1)
 	cache, ok := st.recovererWasteIdxCache[crID]
 	if !ok {
 		cache = make([]cachedWasteIdx, 0, cacheSize)
@@ -222,6 +223,10 @@ func (st State) CacheParserResult(
 ) {
 	cacheSize := max(st.maxDel+1, 8)
 
+	mark := -1
+	if noWayBackStart >= 0 {
+		mark = newState.noWayBackMark
+	}
 	result := ParserResult{
 		pos:            st.input.pos,
 		Idx:            idx,
@@ -229,6 +234,7 @@ func (st State) CacheParserResult(
 		NoWayBackIdx:   noWayBackIdx,
 		HasNoWayBack:   noWayBackStart >= 0,
 		NoWayBackStart: noWayBackStart,
+		NoWayBackMark:  mark,
 		Error:          newState.errHand.err,
 		Output:         output,
 	}
@@ -298,10 +304,12 @@ func (st State) ParsingMode() ParsingMode {
 	return st.mode
 }
 
-// Success return the State with NoWayBack and mode saved from
+// Succeed returns the State with NoWayBack mark and mode saved from
 // the subState.
+// The error handling is not kept so it will turn a failed result into a
+// successful one.
 // This should only be used by the pcb.Optional parser.
-func (st State) Success(subState State) State {
+func (st State) Succeed(subState State) State {
 	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
 	st.mode = subState.mode
 	return st
@@ -312,9 +320,9 @@ func (st State) OmitSemantics() bool {
 	return st.mode != ParsingModeHappy
 }
 
-// Failure returns the State with the error handling, noWayBackMark and
+// Preserve returns the State with the error handling, noWayBackMark and
 // mode kept from the subState.
-func (st State) Failure(subState State) State {
+func (st State) Preserve(subState State) State {
 	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
 	st.mode = subState.mode
 
@@ -323,6 +331,14 @@ func (st State) Failure(subState State) State {
 	}
 
 	return st
+}
+
+// SucceedAgain sets the NoWayBack mark and input position from the result.
+func (st State) SucceedAgain(result ParserResult) State {
+	if result.NoWayBackMark >= 0 {
+		st.noWayBackMark = result.NoWayBackMark
+	}
+	return st.MoveBy(result.Consumed)
 }
 
 // ErrorAgain is really just like NewError.

@@ -44,7 +44,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 			newState, output := parse.It(remaining)
 			if newState.Failed() && newState.NoWayBack() {
 				// TODO: handle error!!!
-				newState, output = gomme.HandleAllErrors(remaining.Failure(newState), parse) // this will force it through
+				newState, output = gomme.HandleAllErrors(remaining.Preserve(newState), parse) // this will force it through
 			} else if newState.Failed() {
 				if count < atLeast {
 					// TODO: Add more error handling!
@@ -129,7 +129,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 		firstMoved := firstState.Moved(state)
 		if firstState.Failed() && firstState.NoWayBack() {
 			// TODO: handle error!!!
-			firstState, firstOutput = gomme.HandleAllErrors(state.Failure(firstState), parse) // this will force it through
+			firstState, firstOutput = gomme.HandleAllErrors(state.Preserve(firstState), parse) // this will force it through
 		} else if firstState.Failed() {
 			if atLeast > 0 {
 				// TODO: Add more error handling!
@@ -140,7 +140,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 
 		newState, outputs := parseMany.It(firstState)
 		if newState.Failed() {
-			return state.Failure(newState), []Output{} // parseMany handled errors already
+			return state.Preserve(newState), []Output{} // parseMany handled errors already
 		}
 
 		if parseSeparatorAtEnd {

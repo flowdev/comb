@@ -68,7 +68,7 @@ func NoWayBack[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 //
 //	import . "github.com/oleiade/gomme/cute"
 func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
-	return gomme.FirstSuccessful[Output](parsers...)
+	return pcb.FirstSuccessful[Output](parsers...)
 }
 
 // ZeroOf returns the zero value of some type.
