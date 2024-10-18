@@ -5,32 +5,6 @@ import (
 	"github.com/oleiade/gomme"
 )
 
-// Delimited parses and discards the result from the prefix parser, then
-// parses the result of the main parser, and finally parses and discards
-// the result of the suffix parser.
-func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
-	return Map3(prefix, parse, suffix, func(output1 OP, output2 O, output3 OS) (O, error) {
-		return output2, nil
-	})
-}
-
-// Preceded parses and discards a result from the prefix parser. It
-// then parses a result from the main parser and returns its result.
-func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.Parser[O] {
-	return Map2(prefix, parse, func(output1 OP, output2 O) (O, error) {
-		return output2, nil
-	})
-}
-
-// Terminated parses a result from the main parser, it then
-// parses the result from the suffix parser and discards it; only
-// returning the result of the main parser.
-func Terminated[O, OS any](parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
-	return Map2(parse, suffix, func(output1 O, output2 OS) (O, error) {
-		return output1, nil
-	})
-}
-
 // Sequence applies a sequence of parsers of the same type and
 // returns either a slice of results or an error if any parser fails.
 // Use one of the MapX parsers for differently typed parsers.
@@ -54,37 +28,54 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 	// finally the parse function
 	parseSeq := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, len(parsers))
-		switch state.ParsingMode() {
-		case gomme.ParsingModeHappy: // normal parsing
-			return parseSequenceHappy(state, parsers, 0, outputs, id)
-		case gomme.ParsingModeError: // find previous NoWayBack backward
-			return parseSequenceError(state, parsers, 0, outputs, id)
-		case gomme.ParsingModeHandle: // find error again (forward)
-			return parseSequenceHandle(state, parsers, 0, outputs, id)
-		case gomme.ParsingModeRewind:
-			return parseSequenceRecord(state, parsers, 0, outputs, id)
-		case gomme.ParsingModeEscape:
-		}
-		return state.NewSemanticError(fmt.Sprintf(
-			"programming error: Sequence didn't return in mode %v", state.ParsingMode())), []Output{}
+		return sequenceAny(id, parsers, state, 0, outputs)
 	}
 
 	return gomme.NewParser[[]Output](
 		"Sequence",
 		parseSeq,
+		true,
 		BasicRecovererFunc(parseSeq),
 		containsNoWayBack,
 		myNoWayBackRecoverer.Recover,
 	)
 }
 
-// parse function for mode `happy` (normal parsing)
-func parseSequenceHappy[Output any](
-	state gomme.State,
+func sequenceAny[Output any](
+	id uint64,
 	parsers []gomme.Parser[Output],
+	state gomme.State,
 	startIdx int,
 	outputs []Output,
+) (gomme.State, []Output) {
+	if startIdx >= len(parsers) {
+		return state, outputs
+	}
+	switch state.ParsingMode() {
+	case gomme.ParsingModeHappy: // normal parsing
+		return sequenceHappy(id, parsers, state, state, -1, -1, startIdx, outputs)
+	case gomme.ParsingModeError: // find previous NoWayBack (backward)
+		return sequenceError(id, parsers, state, startIdx, outputs)
+	case gomme.ParsingModeHandle: // find error again (forward)
+		return sequenceHandle(id, parsers, state, startIdx, outputs)
+	case gomme.ParsingModeRewind: // go back to error / witness parser (1) (backward)
+		return sequenceRewind(state, parsers, startIdx, outputs, id)
+	case gomme.ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
+	}
+	return state.NewSemanticError(fmt.Sprintf(
+		"programming error: Sequence didn't return in mode %v", state.ParsingMode())), []Output{}
+
+}
+
+func sequenceHappy[Output any]( // normal parsing (forward)
 	id uint64,
+	parsers []gomme.Parser[Output],
+	state gomme.State,
+	remaining gomme.State,
+	startIdx int,
+	noWayBackStart int,
+	noWayBackIdx int,
+	outputs []Output,
 ) (gomme.State, []Output) {
 	// use cache to know result immediately (Failed, Error, Consumed, Output)
 	result, ok := state.CachedParserResult(id)
@@ -96,48 +87,43 @@ func parseSequenceHappy[Output any](
 	}
 
 	// cache miss: parse
-	remaining := state
-	noWayBackStart := -1
-	idx := -1
 	for i := startIdx; i < len(parsers); i++ {
 		parse := parsers[i]
 		newState, output := parse.It(remaining)
 		if newState.Failed() {
-			state.CacheParserResult(id, i, idx, noWayBackStart, newState, outputs)
-			if noWayBackStart >= 0 { // handle error locally
-				return parseSequenceError(state, parsers, i, outputs, id)
+			state.CacheParserResult(id, i, noWayBackIdx, noWayBackStart, newState, outputs)
+			remaining = gomme.IWitnessed(remaining, id, i, newState)
+			if noWayBackStart < 0 { // we can't do anything here
+				return state.Preserve(remaining), nil
 			}
-			return state.Preserve(newState), nil
+			return sequenceError(id, parsers, state, noWayBackIdx, outputs) // handle error locally
 		}
 
 		if remaining.NoWayBackMoved(newState) {
-			idx = i
+			noWayBackIdx = i
 			noWayBackStart = state.ByteCount(remaining)
 		}
 		outputs = saveOutput(outputs, output, i)
 		remaining = newState
 	}
 
-	state.CacheParserResult(id, len(parsers)-1, idx, noWayBackStart, remaining, outputs)
+	state.CacheParserResult(id, len(parsers)-1, noWayBackIdx, noWayBackStart, remaining, outputs)
 	return remaining, outputs
 }
 
-// parse function for mode `error` (find previous NoWayBack)
-func parseSequenceError[Output any](
-	state gomme.State,
-	parsers []gomme.Parser[Output],
-	startIdx int,
-	outputs []Output,
+func sequenceError[Output any](
 	id uint64,
+	parsers []gomme.Parser[Output],
+	state gomme.State,
+	_ int, // we don't need `startIdx` because we rely on the cache
+	outputs []Output,
 ) (gomme.State, []Output) {
-	var zero []Output
-
-	// use cache to know result immediately (Idx, HasNoWayBack)
+	// use cache to know result immediately (HasNoWayBack, NoWayBackIdx, NoWayBackStart)
 	result, ok := state.CachedParserResult(id)
 	if !ok {
 		return state.NewSemanticError(
-			"grammar error: cache was empty in `Sequence` parser for parsing mode `error`",
-		), zero
+			"grammar error: cache was empty in `Sequence(error)` parser",
+		), nil
 	}
 	// found in cache
 	if result.HasNoWayBack { // we should be able to switch to mode=handle
@@ -145,52 +131,40 @@ func parseSequenceError[Output any](
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) "+
-					"didn't switch to parsing mode `record`",
-				result.NoWayBackIdx, parsers[result.NoWayBackIdx].Expected())), zero
+					"didn't switch to parsing mode `handle` in `Sequence(error)` parser",
+				result.NoWayBackIdx, parsers[result.NoWayBackIdx].Expected())), nil
 		}
-		return parseSequenceHandle(newState, parsers, result.NoWayBackIdx, outputs, id)
+		if result.Failed {
+			return sequenceHandle(id, parsers, newState, result.Idx, outputs)
+		}
 	}
-	return state, zero // we can't do anything
+	return state, nil // we can't do anything
 }
 
-// parse function for mode `handle` (find error again)
-func parseSequenceHandle[Output any](
-	state gomme.State,
-	parsers []gomme.Parser[Output],
-	startIdx int,
-	outputs []Output,
+func sequenceHandle[Output any]( // find error again (forward)
 	id uint64,
+	parsers []gomme.Parser[Output],
+	state gomme.State,
+	_ int, // we don't need `startIdx` because we rely on the cache
+	outputs []Output,
 ) (gomme.State, []Output) {
-	var zero []Output
-
-	// use cache to know result immediately (Idx, ErrorStart)
+	// use cache to know result immediately (Failed, Idx, ErrorStart)
 	result, ok := state.CachedParserResult(id)
 	if !ok {
 		return state.NewSemanticError(
 			"grammar error: cache was empty in `Sequence` parser for parsing mode `handle`",
-		), zero
+		), nil
 	}
 	// found in cache
-	if result.Failed { // we should be able to switch to mode=record
-		newState, output := parsers[result.Idx].It(state.MoveBy(result.ErrorStart))
-		switch newState.ParsingMode() {
-		case gomme.ParsingModeHappy:
-			outputs = saveOutput(outputs, output, result.Idx)
-			return parseSequenceHappy(newState, parsers, result.Idx+1, outputs, id)
-		case gomme.ParsingModeError:
-			return parseSequenceError(newState, parsers, result.Idx, outputs, id)
-		case gomme.ParsingModeHandle:
-			return parseSequenceHandle(newState, parsers, result.Idx+1, outputs, id)
-		case gomme.ParsingModeRewind:
-			return parseSequenceRecord(newState, parsers, result.Idx+1, outputs, id)
-		case gomme.ParsingModeEscape:
-		}
+	if result.Failed { // we should be able to switch to mode=happy (or escape)
+		newState, output := gomme.HandleWitness(state.MoveBy(result.ErrorStart), id, 0, parsers[result.Idx])
+		outputs = saveOutput(outputs, output, result.Idx)
+		return sequenceAny(id, parsers, newState, result.Idx+1, outputs)
 	}
-	return state, zero // we can't do anything
+	return state, nil // we can't do anything
 }
 
-// parse function for mode `handle` (find error again)
-func parseSequenceRecord[Output any](
+func sequenceRewind[Output any]( // go back to witness parser (1) (backward)
 	state gomme.State,
 	parsers []gomme.Parser[Output],
 	startIdx int,

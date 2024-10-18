@@ -69,6 +69,7 @@ type Deleter func(state State, count int) State
 type Parser[Output any] interface {
 	Expected() string
 	It(State) (State, Output)
+	PossibleWitness() bool
 	MyRecoverer() Recoverer
 	SwapMyRecoverer(Recoverer) Parser[Output]
 	ContainsNoWayBack() Ternary
@@ -78,6 +79,7 @@ type Parser[Output any] interface {
 type prsr[Output any] struct {
 	expected          string
 	it                func(State) (State, Output)
+	possibleWitness   bool
 	recoverer         Recoverer // will be requested only by the NoWayBack parser
 	containsNoWayBack Ternary
 	refugeRecoverer   Recoverer // will be requested in choose mode to find the right NoWayBack parser
@@ -87,6 +89,7 @@ type prsr[Output any] struct {
 func NewParser[Output any](
 	expected string,
 	parse func(State) (State, Output),
+	possibleWitness bool,
 	recover Recoverer,
 	containsNoWayBack Ternary,
 	refugeRecoverer Recoverer,
@@ -94,6 +97,7 @@ func NewParser[Output any](
 	p := prsr[Output]{
 		expected:          expected,
 		it:                parse,
+		possibleWitness:   possibleWitness,
 		recoverer:         recover,
 		containsNoWayBack: containsNoWayBack,
 		refugeRecoverer:   refugeRecoverer,
@@ -110,6 +114,10 @@ func (p prsr[Output]) Expected() string {
 
 func (p prsr[Output]) It(state State) (State, Output) {
 	return p.it(state)
+}
+
+func (p prsr[Output]) PossibleWitness() bool {
+	return p.possibleWitness
 }
 
 func (p prsr[Output]) MyRecoverer() Recoverer {
@@ -165,6 +173,11 @@ func (lp *lazyprsr[Output]) It(state State) (State, Output) {
 	return lp.cachedPrsr.It(state)
 }
 
+func (lp *lazyprsr[Output]) PossibleWitness() bool {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.PossibleWitness()
+}
+
 func (lp *lazyprsr[Output]) MyRecoverer() Recoverer {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.MyRecoverer()
@@ -208,7 +221,8 @@ func RunOnBytes[Output any](maxDel int, del Deleter, input []byte, parse Parser[
 }
 
 func run[Output any](state State, parse Parser[Output]) (Output, error) {
-	newState, output := HandleAllErrors(state, parse)
+	// TODO: handle errors at this level???
+	newState, output := parse.It(state)
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}

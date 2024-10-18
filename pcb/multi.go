@@ -1,7 +1,6 @@
 package pcb
 
 import (
-	"fmt"
 	"github.com/oleiade/gomme"
 	"math"
 )
@@ -16,63 +15,6 @@ func Count[Output any](parse gomme.Parser[Output], count int) gomme.Parser[[]Out
 	}
 
 	return ManyMN(parse, count, count)
-}
-
-// ManyMN applies a parser repeatedly until it fails, and returns a slice of all
-// the results as the Result's Output.
-//
-// Note that ManyMN fails if the provided parser accepts empty inputs (such as
-// `Digit0`, or `Alpha0`) in order to prevent infinite loops.
-func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.Parser[[]Output] {
-	id := gomme.NewBranchParserID()
-
-	if atLeast < 0 {
-		panic("ManyMN is unable to handle negative `atLeast`")
-	}
-	if atMost < 0 {
-		panic("ManyMN is unable to handle negative `atMost`")
-	}
-
-	parseMany := func(state gomme.State) (gomme.State, []Output) {
-		outputs := make([]Output, 0, min(32, atMost))
-		remaining := state
-		count := 0
-		for {
-			if count >= atMost {
-				return remaining, outputs
-			}
-			newState, output := parse.It(remaining)
-			if newState.Failed() && newState.NoWayBack() {
-				// TODO: handle error!!!
-				newState, output = gomme.HandleAllErrors(remaining.Preserve(newState), parse) // this will force it through
-			} else if newState.Failed() {
-				if count < atLeast {
-					// TODO: Add more error handling!
-					return gomme.IWitnessed(state, id, count, newState), []Output{}
-				} else {
-					return remaining, outputs
-				}
-			}
-
-			// Checking for infinite loops, if nothing was consumed,
-			// the provided parser would make us go around in circles.
-			if !newState.Moved(remaining) {
-				return state.NewError(fmt.Sprintf("%s (found empty element)", parse.Expected())), []Output{}
-			}
-
-			outputs = append(outputs, output)
-			remaining = newState
-			count++
-		}
-	}
-
-	recoverer := Forbidden("Many(atLeast=0)")
-	containsNoWayBack := gomme.TernaryNo
-	if atLeast > 0 {
-		recoverer = BasicRecovererFunc(parseMany)
-		containsNoWayBack = parse.ContainsNoWayBack()
-	}
-	return gomme.NewParser[[]Output]("ManyMN", parseMany, recoverer, containsNoWayBack, parse.NoWayBackRecoverer)
 }
 
 // Many0 applies a parser repeatedly until it fails, and returns a slice of all
@@ -109,8 +51,6 @@ func SeparatedMN[Output any, S gomme.Separator](
 	atLeast, atMost int,
 	parseSeparatorAtEnd bool,
 ) gomme.Parser[[]Output] {
-	id := gomme.NewBranchParserID()
-
 	if atLeast < 0 {
 		panic("SeparatedMN is unable to handle negative `atLeast`")
 	}
@@ -118,53 +58,20 @@ func SeparatedMN[Output any, S gomme.Separator](
 		panic("SeparatedMN is unable to handle negative `atMost`")
 	}
 
-	parseMany := ManyMN(Preceded(separator, parse), max(atLeast-1, 0), max(atMost-1, 0))
+	parseManySP := ManyMN(Preceded(separator, parse), max(atLeast-1, 0), max(atMost-1, 0))
+	sep1N := Preceded(parse, parseManySP)
 
-	parseSep := func(state gomme.State) (gomme.State, []Output) {
-		if atMost == 0 {
-			return state, []Output{}
-		}
-
-		firstState, firstOutput := parse.It(state)
-		firstMoved := firstState.Moved(state)
-		if firstState.Failed() && firstState.NoWayBack() {
-			// TODO: handle error!!!
-			firstState, firstOutput = gomme.HandleAllErrors(state.Preserve(firstState), parse) // this will force it through
-		} else if firstState.Failed() {
-			if atLeast > 0 {
-				// TODO: Add more error handling!
-				return gomme.IWitnessed(state, id, 0, firstState), []Output{}
-			}
-			return state, []Output{} // still success
-		}
-
-		newState, outputs := parseMany.It(firstState)
-		if newState.Failed() {
-			return state.Preserve(newState), []Output{} // parseMany handled errors already
-		}
-
-		if parseSeparatorAtEnd {
-			separatorState, _ := separator.It(newState)
-			if !separatorState.Failed() {
-				newState = separatorState
-			}
-		}
-
-		finalOutputs := make([]Output, 0, len(outputs)+1)
-		if firstMoved {
-			finalOutputs = append(finalOutputs, firstOutput)
-		}
-		return newState, append(finalOutputs, outputs...)
-	}
-
-	recoverer := Forbidden("Separated(atLeast=0)")
-	containsNoWayBack := gomme.TernaryNo
 	if atLeast > 0 {
-		recoverer = BasicRecovererFunc(parseSep)
-		containsNoWayBack = parse.ContainsNoWayBack()
+		if parseSeparatorAtEnd {
+			return Terminated(sep1N, Optional(separator))
+		}
+		return sep1N
 	}
-
-	return gomme.NewParser[[]Output]("SeparatedMN", parseSep, recoverer, containsNoWayBack, parse.NoWayBackRecoverer)
+	sep0N := FirstSuccessful(sep1N, Optional(Count(parse, 1)))
+	if parseSeparatorAtEnd {
+		return Terminated(sep0N, Optional(separator))
+	}
+	return sep0N
 }
 
 // Separated0 applies an element parser and a separator parser repeatedly in order

@@ -311,6 +311,280 @@ func BenchmarkAssign(b *testing.B) {
 	}
 }
 
+func TestDelimited(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		p gomme.Parser[string]
+	}
+	testCases := []struct {
+		name          string
+		args          args
+		input         string
+		wantErr       bool
+		wantOutput    string
+		wantRemaining string
+	}{
+		{
+			name:  "matching parser should succeed",
+			input: "+1\r\n",
+			args: args{
+				p: Delimited(Char('+'), Digit1(), CRLF()),
+			},
+			wantErr:       false,
+			wantOutput:    "1",
+			wantRemaining: "",
+		},
+		{
+			name:  "no prefix match should fail",
+			input: "1\r\n",
+			args: args{
+				p: Delimited(Char('+'), Digit1(), CRLF()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "1\r\n",
+		},
+		{
+			name:  "no parser match should fail",
+			input: "+\r\n",
+			args: args{
+				p: Delimited(Char('+'), Digit1(), CRLF()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "+\r\n",
+		},
+		{
+			name:  "no suffix match should fail",
+			input: "+1",
+			args: args{
+				p: Delimited(Char('+'), Digit1(), CRLF()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "+1",
+		},
+		{
+			name:  "empty input should fail",
+			input: "",
+			args: args{
+				p: Delimited(Char('+'), Digit1(), CRLF()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "",
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+			}
+
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+			}
+
+			remainingString := newState.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkDelimited(b *testing.B) {
+	parser := Delimited(Char('+'), Digit1(), CRLF())
+	input := gomme.NewFromString("+1\r\n")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = parser.It(input)
+	}
+}
+
+func TestPreceded(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		p gomme.Parser[string]
+	}
+	testCases := []struct {
+		name          string
+		args          args
+		input         string
+		wantErr       bool
+		wantOutput    string
+		wantRemaining string
+	}{
+		{
+			name:  "matching parser should succeed",
+			input: "+123",
+			args: args{
+				p: Preceded(Char('+'), Digit1()),
+			},
+			wantErr:       false,
+			wantOutput:    "123",
+			wantRemaining: "",
+		},
+		{
+			name:  "no prefix match should fail",
+			input: "+123",
+			args: args{
+				p: Preceded(Char('-'), Digit1()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "+123",
+		},
+		{
+			name:  "no parser match should succeed",
+			input: "+",
+			args: args{
+				p: Preceded(Char('+'), Digit1()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "+",
+		},
+		{
+			name:  "empty input should fail",
+			input: "",
+			args: args{
+				p: Preceded(Char('+'), Digit1()),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "",
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+			}
+
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+			}
+
+			remainingString := newState.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkPreceded(b *testing.B) {
+	parser := Preceded(Char('+'), Digit1())
+	input := gomme.NewFromString("+123")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = parser.It(input)
+	}
+}
+
+func TestTerminated(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		p gomme.Parser[string]
+	}
+	testCases := []struct {
+		name          string
+		args          args
+		input         string
+		wantErr       bool
+		wantOutput    string
+		wantRemaining string
+	}{
+		{
+			name:  "matching parser should succeed",
+			input: "1+23",
+			args: args{
+				p: Terminated(Digit1(), Char('+')),
+			},
+			wantErr:       false,
+			wantOutput:    "1",
+			wantRemaining: "23",
+		},
+		{
+			name:  "no suffix match should fail",
+			input: "1-23",
+			args: args{
+				p: Terminated(Digit1(), Char('+')),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "1-23",
+		},
+		{
+			name:  "no parser match should succeed",
+			input: "+",
+			args: args{
+				p: Terminated(Digit1(), Char('+')),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "+",
+		},
+		{
+			name:  "empty input should fail",
+			input: "",
+			args: args{
+				p: Terminated(Digit1(), Char('+')),
+			},
+			wantErr:       true,
+			wantOutput:    "",
+			wantRemaining: "",
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			if newState.Failed() != tc.wantErr {
+				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+			}
+
+			if gotResult != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+			}
+
+			remainingString := newState.CurrentString()
+			if remainingString != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkTerminated(b *testing.B) {
+	parser := Terminated(Digit1(), Char('+'))
+	input := gomme.NewFromString("123+")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = parser.It(input)
+	}
+}
+
 func TestMap(t *testing.T) {
 	t.Parallel()
 
@@ -527,92 +801,4 @@ func BenchmarkMap2(b *testing.B) {
 
 func pairMapFunc(_ string, _ string) (string, error) {
 	return "", nil
-}
-
-func TestAlternative(t *testing.T) {
-	t.Parallel()
-
-	type args struct {
-		p gomme.Parser[string]
-	}
-	testCases := []struct {
-		name          string
-		args          args
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
-	}{
-		{
-			name:  "head matching parser should succeed",
-			input: "123",
-			args: args{
-				p: FirstSuccessful(Digit1(), Alpha0()),
-			},
-			wantErr:       false,
-			wantOutput:    "123",
-			wantRemaining: "",
-		},
-		{
-			name:  "tail matching parser should succeed",
-			input: "abc",
-			args: args{
-				p: FirstSuccessful(Digit1(), Alpha0()),
-			},
-			wantErr:       false,
-			wantOutput:    "abc",
-			wantRemaining: "",
-		},
-		{
-			name:  "no matching parser should fail",
-			input: "$%^*",
-			args: args{
-				p: FirstSuccessful(Digit1(), Alpha1()),
-			},
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "$%^*",
-		},
-		{
-			name:  "empty input should fail",
-			input: "",
-			args: args{
-				p: FirstSuccessful(Digit1(), Alpha1()),
-			},
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
-		},
-	}
-	for _, tc := range testCases {
-		tc := tc
-
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			state := gomme.NewFromString(tc.input)
-			newState, gotResult := tc.args.p.It(state)
-			if newState.Failed() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
-			}
-
-			if gotResult != tc.wantOutput {
-				t.Errorf("got output %q, want %q", gotResult, tc.wantOutput)
-			}
-
-			if newState.CurrentString() != tc.wantRemaining {
-				t.Errorf("got remaining %q, want remaining %q", newState.CurrentString(), tc.wantRemaining)
-			}
-		})
-	}
-}
-
-func BenchmarkAlternative(b *testing.B) {
-	p := FirstSuccessful(Char('b'), Char('a'))
-	input := gomme.NewFromString("abc")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
-	}
 }

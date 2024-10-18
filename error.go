@@ -52,53 +52,59 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 // If the branch parser isn't the witness (or there is no error case),
 // the unmodified `state` and zero output are returned.
 // The returned index should be used for distinguishing between the cases.
-func HandleWitness[Output any](state State, id uint64, parsers ...Parser[Output]) (State, Output) {
+func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parser[Output]) (State, Output) {
 	var output, zero Output
 
-	if state.errHand.witnessID == id && state.errHand.witnessPos == state.input.pos {
-		orgPos := state.input.pos
-		if state.errHand.culpritIdx >= len(parsers) {
-			state = state.NewSemanticError(fmt.Sprintf(
-				"programming error: length of sub-parsers is only %d but index of culprit sub-parser is %d",
-				len(parsers), state.errHand.culpritIdx,
-			))
-			state.errHand.culpritIdx = len(parsers) - 1
+	if state.errHand.witnessID != id || state.errHand.witnessPos != state.input.pos {
+		parse := parsers[idx]
+		if parse.PossibleWitness() {
+
 		}
-		parse := parsers[state.errHand.culpritIdx]
-		for {
-			switch state.mode {
-			case ParsingModeHandle:
-				state.errHand.err = nil
-				state.errHand.curDel = 1
-				state.errHand.ignoreErrParser = false
-			case ParsingModeRewind:
-				state.errHand.curDel++
-				if state.errHand.curDel > state.maxDel {
-					if !state.errHand.ignoreErrParser {
-						state.errHand.curDel = 0
-						state.errHand.ignoreErrParser = true
-					} else {
-						state.mode = ParsingModeEscape // give up and go the hard way
-						return state, zero
-					}
-				}
-			default:
-				return state, zero // we are witness parser but there is nothing to do
-			}
-			state.mode = ParsingModeHappy // try again
-			state.input.pos = orgPos
-			state = state.deleter(state, state.errHand.curDel)
-			if state.errHand.ignoreErrParser {
-				return state, zero
-			}
-			state, output = parse.It(state)
-			if !state.Failed() {
-				return state, output // first parser succeeded, now try the rest
-			}
-			state.mode = ParsingModeRewind
-		}
+		return parsers[idx].It(state) // this sub-parser or on of its sub-parsers might be the witness parser (1)
 	}
-	return state, output
+
+	// we are witness
+	orgPos := state.input.pos
+	if state.errHand.culpritIdx >= len(parsers) {
+		state = state.NewSemanticError(fmt.Sprintf(
+			"programming error: length of sub-parsers is only %d but index of culprit sub-parser is %d",
+			len(parsers), state.errHand.culpritIdx,
+		))
+		state.errHand.culpritIdx = len(parsers) - 1
+	}
+	parse := parsers[state.errHand.culpritIdx]
+	for {
+		switch state.mode {
+		case ParsingModeHandle:
+			state.errHand.err = nil
+			state.errHand.curDel = 1
+			state.errHand.ignoreErrParser = false
+		case ParsingModeRewind:
+			state.errHand.curDel++
+			if state.errHand.curDel > state.maxDel {
+				if !state.errHand.ignoreErrParser {
+					state.errHand.curDel = 0
+					state.errHand.ignoreErrParser = true
+				} else {
+					state.mode = ParsingModeEscape // give up and go the hard way
+					return state, zero
+				}
+			}
+		default:
+			return state, zero // we are witness parser but there is nothing to do
+		}
+		state.mode = ParsingModeHappy // try again
+		state.input.pos = orgPos
+		state = state.deleter(state, state.errHand.curDel)
+		if state.errHand.ignoreErrParser {
+			return state, zero
+		}
+		state, output = parse.It(state)
+		if !state.Failed() {
+			return state, output // first parser succeeded, now try the rest
+		}
+		state.mode = ParsingModeRewind
+	}
 }
 
 // ============================================================================
@@ -250,13 +256,6 @@ func DefaultTextDeleter(state State, count int) State {
 // ============================================================================
 // Error Reporting
 //
-
-func HandleAllErrors[Output any](state State, parse Parser[Output]) (State, Output) {
-	var output Output
-	var newState State
-
-	return newState, output
-}
 
 func singleErrorMsg(pcbErr pcbError) string {
 	fullMsg := strings.Builder{}

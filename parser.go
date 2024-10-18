@@ -55,6 +55,7 @@ func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
 	return NewParser[Output](
 		"NoWayBack",
 		newParse,
+		true,
 		parse.MyRecoverer(),
 		TernaryYes, // NoWayBack is the only one to be sure
 		CachingRecoverer(parse.MyRecoverer()),
@@ -77,10 +78,10 @@ func noWayBackError[Output any](_ uint64, _ Parser[Output], state State) (State,
 	return state, ZeroOf[Output]()
 }
 func noWayBackHandle[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
-	return HandleWitness(state, id, parse)
+	return HandleWitness(state, id, 0, parse)
 }
 func noWayBackRewind[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
-	return HandleWitness(state, id, parse)
+	return HandleWitness(state, id, 0, parse)
 }
 func noWayBackEscape[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
 	if state.input.pos <= state.errHand.err.pos {

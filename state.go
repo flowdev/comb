@@ -227,6 +227,11 @@ func (st State) CacheParserResult(
 	if noWayBackStart >= 0 {
 		mark = newState.noWayBackMark
 	}
+
+	errPos := 0
+	if newState.errHand.err != nil {
+		errPos = newState.errHand.err.pos
+	}
 	result := ParserResult{
 		pos:            st.input.pos,
 		Idx:            idx,
@@ -236,6 +241,7 @@ func (st State) CacheParserResult(
 		NoWayBackStart: noWayBackStart,
 		NoWayBackMark:  mark,
 		Error:          newState.errHand.err,
+		ErrorStart:     errPos,
 		Output:         output,
 	}
 
