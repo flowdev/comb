@@ -187,24 +187,26 @@ The simple sequence scenario looks like this if nothing fails:
 
 ```mermaid
 flowchart LR
-  st(["`start`"])--->|"`(happy)`"|p1["`NWB1`"]--->|"`1 (happy)`"|p2["`WP1`"]--->|?|p3["`NWB2`"]
+  a([start])--->|"(happy)"|NWB1--->|"1 (happy)"|WP1--->|"2 (happy)"|NWB2--->|"3 (happy)"|b([end])
 ```
 
 If `WP1` fails it will look like this:
 
 ```mermaid
 flowchart LR
-  st(["`start`"])
-  p1["`NWB1`"]
-  p2["`WP1`"]
-  p3["`NWB2`"]
+  st(["start"])
+  p1["NWB1"]
+  p2["WP1"]
+  p3["NWB2"]
+  ed(["end"])
   
-  st--->|"`(happy)`"| p1
-  p1--->|"`1 (happy)`"| p2
-  p2--->|"`2 (error)`"| p1
-  p1--->|"`3 (handle)`"| p2
-  p2--->|"`4 (rewind)`"| p2
-  p2--->|"`5 (happy, escape)`"| p3
+  st--->|"(happy)"| p1
+  p1--->|"1 (happy)"| p2
+  p2--->|"2 (error)"| p1
+  p1--->|"3 (handle)"| p2
+  p2--->|"4 (rewind)"| p2
+  p2--->|"5 (happy, escape)"| p3
+  p3--->|"6 (happy)"| ed
 ```
 The last step can be in mode `happy` if the error could be resolved by deletion or insertion.
 It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
@@ -215,30 +217,34 @@ A slight complication of the sequence above is the following (without failure):
 
 ```mermaid
 flowchart LR
-  st(["`start`"])
-  p1["`NWB1`"]
-  p2["`NWB2(WP1)`"]
-  p3["`WP2`"]
-  p4["`NWB3`"]
+  st(["start"])
+  p1["NWB1"]
+  p2["NWB2(WP1)"]
+  p3["WP2"]
+  p4["NWB3"]
+  ed(["end"])
 
-  st--->|"`(happy)`"|p1--->|"`1 (happy)`"|p2--->|"`2 (happy)`"|p3--->|"`3 (happy)`"|p4
+  st--->|"(happy)"|p1--->|"1 (happy)"|p2--->|"2 (happy)"|p3--->|"3 (happy)"|p4
+  p4--->|"4 (happy)"| ed
 ```
 
 If `WP1` fails it will look like this:
 
 ```mermaid
 flowchart LR
-  st(["`start`"])
-  p1["`NWB1`"]
-  p2["`NWB2(WP1)`"]
-  p3["`WP2`"]
-  p4["`NWB3`"]
+  st(["start"])
+  p1["NWB1"]
+  p2["NWB2(WP1)"]
+  p3["WP2"]
+  p4["NWB3"]
+  ed(["end"])
   
-  st--->|"`(happy)`"|p1--->|"`1 (happy)`"|p2--->|"`6 (happy, escape)`"|p3--->|"`7 (happy, escape)`"|p4
-  p2--->|"`2 (error)`"|p1
-  p1--->|"`3 (handle)`"|p2
-  p2--->|"`4 (happy)`"|p3
-  p3--->|"`5 (rewind)`"|p2
+  st--->|"(happy)"|p1--->|"1 (happy)"|p2--->|"6 (happy, escape)"|p3--->|"7 (happy, escape)"|p4
+  p2--->|"2 (error)"|p1
+  p1--->|"3 (handle)"|p2
+  p2--->|"4 (happy)"|p3
+  p3--->|"5 (rewind)"|p2
+  p4--->|"4 (happy)"|ed
 ```
 The last two steps can be in mode `happy` if the error could be resolved by deletion or insertion.
 It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
@@ -255,42 +261,42 @@ sequence like parsers (parsers base on `Sequence`, `MapN` or `MultiMN`).
 
 ```mermaid
 flowchart LR
-  st(["`start`"])
-  subgraph main["`Main Sequence`"]
+  st(["start"])
+  subgraph main["Main Sequence"]
     direction LR
     subgraph sub1["Subsequence 1"]
       direction TB
-      p11["`P4`"]
-      p12["`NWB1`"]
-      p13["`P5`"]
+      p11["P4"]
+      p12["NWB1"]
+      p13["P5"]
       p11--->p12--->p13
     end
-    subgraph sub2["`Subsequence 2`"]
+    subgraph sub2["Subsequence 2"]
       direction TB
-      p21["`P6`"]
-      p22["`WP1`"]
-      p23["`P7`"]
+      p21["P6"]
+      p22["WP1"]
+      p23["P7"]
       p21--->p22--->p23
     end
     sub1--->sub2
-    subgraph sub3["`Subsequence 3`"]
+    subgraph sub3["Subsequence 3"]
       direction TB
-      p31["`P8`"]
-      p32["`WP2`"]
-      p33["`P9`"]
+      p31["P8"]
+      p32["WP2"]
+      p33["P9"]
       p31--->p32--->p33
     end
     sub2--->sub3
-    subgraph sub4["`Subsequence 4`"]
+    subgraph sub4["Subsequence 4"]
       direction TB
-      p41["`P10`"]
-      p42["`NWB3`"]
-      p43["`P11`"]
+      p41["P10"]
+      p42["NWB3"]
+      p43["P11"]
       p41--->p42--->p43
     end
     sub3--->sub4
   end
-  ed(["`end`"])
+  ed(["end"])
   st--->main
   main--->ed
 ```
