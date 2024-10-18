@@ -67,11 +67,10 @@ func SeparatedMN[Output any, S gomme.Separator](
 		}
 		return sep1N
 	}
-	sep0N := FirstSuccessful(sep1N, Optional(Count(parse, 1)))
 	if parseSeparatorAtEnd {
-		return Terminated(sep0N, Optional(separator))
+		return Optional(Terminated(sep1N, Optional(separator)))
 	}
-	return sep0N
+	return Optional(sep1N)
 }
 
 // Separated0 applies an element parser and a separator parser repeatedly in order

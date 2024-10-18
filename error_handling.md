@@ -156,6 +156,157 @@ stateDiagram-v2
     escape --> happy: NoWayBack (pos > errPos) clean up
 ```
 
+The following sections detail the most important scenarios.
+
+### Parser Modes in Different Scenarios
+
+To make the following diagrams quicker to read, we will use the following abbreviations:
+
+- Px: any parser with no special role ('x' being a decimal number), e.g.: `P7`
+- NWB: `NoWayBack` parser wrapping any leaf parser
+- NWB3: up to three `NoWayBack` parsers might be involved in a complex scenario
+- WP1: `witness parser (1)` witnessing any sub-parser
+- WP2: `witness parser (2)` witnessing any sub-parser
+- FS: `FirstSuccessful` parser
+- FSx: `FirstSuccessful` parser number 'x' ('x' being a decimal number), e.g.: `FS3`
+- parser(mode): the parser is in a certain mode, e.g.: `WP1(handle)`
+- parser(mode1, mode2): multiple possible modes are separated by a comma (','),
+  e.g.: `WP2(error, rewind)`
+- NWB(parser): the `NoWayBack` parser wraps a parser, e.g: `NWB(other parser)`
+
+A complex example is: `NWB(WP1(happy, handle))` meaning a `NoWayBack` parser
+that also acts as `witness parser (1)` that is either in mode `happy` or
+in mode `handle`.
+
+We will use flow diagrams for the scenarios and the links between the nodes
+show the order and potentially modes in parentheses and additional information.
+
+#### Simple Sequence
+
+The simple sequence scenario looks like this if nothing fails:
+
+```mermaid
+flowchart LR
+  st(["`start`"])--->|"`(happy)`"|p1["`NWB1`"]--->|"`1 (happy)`"|p2["`WP1`"]--->|?|p3["`NWB2`"]
+```
+
+If `WP1` fails it will look like this:
+
+```mermaid
+flowchart LR
+  st(["`start`"])
+  p1["`NWB1`"]
+  p2["`WP1`"]
+  p3["`NWB2`"]
+  
+  st--->|"`(happy)`"| p1
+  p1--->|"`1 (happy)`"| p2
+  p2--->|"`2 (error)`"| p1
+  p1--->|"`3 (handle)`"| p2
+  p2--->|"`4 (rewind)`"| p2
+  p2--->|"`5 (happy, escape)`"| p3
+```
+The last step can be in mode `happy` if the error could be resolved by deletion or insertion.
+It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
+
+#### Simple Sequence With Three `NoWayBack`s
+
+A slight complication of the sequence above is the following (without failure):
+
+```mermaid
+flowchart LR
+  st(["`start`"])
+  p1["`NWB1`"]
+  p2["`NWB2(WP1)`"]
+  p3["`WP2`"]
+  p4["`NWB3`"]
+
+  st--->|"`(happy)`"|p1--->|"`1 (happy)`"|p2--->|"`2 (happy)`"|p3--->|"`3 (happy)`"|p4
+```
+
+If `WP1` fails it will look like this:
+
+```mermaid
+flowchart LR
+  st(["`start`"])
+  p1["`NWB1`"]
+  p2["`NWB2(WP1)`"]
+  p3["`WP2`"]
+  p4["`NWB3`"]
+  
+  st--->|"`(happy)`"|p1--->|"`1 (happy)`"|p2--->|"`6 (happy, escape)`"|p3--->|"`7 (happy, escape)`"|p4
+  p2--->|"`2 (error)`"|p1
+  p1--->|"`3 (handle)`"|p2
+  p2--->|"`4 (happy)`"|p3
+  p3--->|"`5 (rewind)`"|p2
+```
+The last two steps can be in mode `happy` if the error could be resolved by deletion or insertion.
+It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
+
+So this scenario is **really** the same as the most simple one above.
+It mainly illustrates that the `NoWayBack` parser 2 (`NWB2`) isn't of any help
+but only serves as `witness parser (1)` in this scenario.
+And the error recovery is (sometimes) failing at the witness parser (2) (`WP2`).
+
+#### Cascading Sequences
+
+In this scenario all parts involved are distributed over different
+sequence like parsers (parsers base on `Sequence`, `MapN` or `MultiMN`).
+
+```mermaid
+flowchart LR
+  st(["`start`"])
+  subgraph main["`Main Sequence`"]
+    direction LR
+    subgraph sub1["Subsequence 1"]
+      direction TB
+      p11["`P4`"]
+      p12["`NWB1`"]
+      p13["`P5`"]
+      p11--->p12--->p13
+    end
+    subgraph sub2["`Subsequence 2`"]
+      direction TB
+      p21["`P6`"]
+      p22["`WP1`"]
+      p23["`P7`"]
+      p21--->p22--->p23
+    end
+    sub1--->sub2
+    subgraph sub3["`Subsequence 3`"]
+      direction TB
+      p31["`P8`"]
+      p32["`WP2`"]
+      p33["`P9`"]
+      p31--->p32--->p33
+    end
+    sub2--->sub3
+    subgraph sub4["`Subsequence 4`"]
+      direction TB
+      p41["`P10`"]
+      p42["`NWB3`"]
+      p43["`P11`"]
+      p41--->p42--->p43
+    end
+    sub3--->sub4
+  end
+  ed(["`end`"])
+  st--->main
+  main--->ed
+```
+The important thing to note about this much more complex scenario is that all
+the `Px` parsers play no active role in the game.
+They don't change the mode or perform any kind of error handling.
+
+They only pass on the state in the right direction (according to the parsing mode)
+and possibly advance the position in the input.
+The position in the input is **the** crucial thing here.
+If that isn't handled perfectly, all caching will miss, and the parser
+is **broken**.
+
+#### Cascading Sequences With `FirstSuccessful` Parser
+
+
 The following sections document the details what the parsers or
 methods mentioned above should do in each mode.
 
