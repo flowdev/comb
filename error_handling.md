@@ -81,23 +81,24 @@ and didn't have to use any `Resolverer`.
 ##### error:
 An error was found but might be mitigated by backtracking and the
 `FirstSuccessful` parser.
-In this mode the parser goes back to find last `NoWayBack` parser or
+In this mode the parser goes back to find the last `NoWayBack` parser or
 trying later alternatives in the `FirstSuccessful` parser.
 
 The previous `NoWayBack` parser might be hidden deep in a sub-parser
 that is earlier in sequence but not on the Go call stack anymore.
 
 So in this mode all parsers that use sub-parsers in sequence have to use them
-in reverse order to find the right `NoWayBack`. \
+in reverse order to find the right `NoWayBack` parser. \
 Funnily this also applies to parsers that use the *same* sub-parser
 multiple times. So if the second time the sub-parser was used, failed
 then it might very well be that the first (successful) time it applied
 a `NoWayBack` parser. And that would be the right one to find.
 
 Only the `FirstSuccessful` parser (not as parent parser but as sibling this time)
-is different. It has to find the first successful sub-parser and its `NoWayBack`
-again. \
-As parent parser it can just return.
+is different. It has to find the first successful sub-parser and
+its `NoWayBack` parser again. \
+As parent parser (if the **error** mode is switched to while trying alternatives)
+it can just try another alternative (normal **happy** mode behaviour).
 
 ##### handle:
 We now know that the error found has to be handled.
@@ -108,6 +109,7 @@ The witness parser should
 1. modify the input (respecting `maxDel`),
 2. switch to **happy** mode and
 3. parse again (possibly omitting the failing parser).
+4. switch to **escape** mode if everything else fails.
 
 ##### rewind:
 We failed again and have to try again with more deletion or
@@ -123,7 +125,26 @@ All deletion of input and inserting of good input didn't help.
 Now we are out of options and can just escape this using a `Resolverer`.
 
 So we find the best (least waste) `Resolverer` and its `NoWayBack` parser
-executes it and finally cleans up and switches back to **happy** mode.
+executes it and finally cleans up and switches back to **happy** mode. \
+The best `Resolverer` to use can't be determined statically,
+because it depends on the input.
+
+### Parsing Directions Per Mode
+
+The direction of parsing changes with the mode.
+Normal parsing is forward of course but in some other modes we have to move backward.
+Here is the full table:
+
+|   Mode | Direction                                      |
+|-------:|:-----------------------------------------------|
+|  happy | forward (until a failure is witnessed)         |
+|  error | **backward** (to the **previous** `NoWayBack`) |
+| handle | forward (to the `witness parser (1)`)          |
+| rewind | **backward** (to the `witness parser (1)`)     |
+| escape | forward (to the **next** `NoWayBack`)          |
+
+So the parsers move only in the **error** and **rewind** modes backward,
+and forward in all other modes.
 
 ### Relationships Between Modes
 
@@ -145,41 +166,60 @@ title: Parser Modes And Their Changes
 stateDiagram-v2
     [*] --> happy: start
 
-    happy --> error: State.NewError && witness parser (1) (no error yet)
+    happy --> error: State.NewError + witness parser (1) (no error yet)
     error --> happy: FirstSuccessful (successful parser found)
     error --> handle: NoWayBack (pos < errPos)
     handle --> happy: witness parser (1)
-    happy --> rewind: State.NewError && witness parser (2) (error exists)
+    happy --> rewind: State.NewError + witness parser (2) (error exists)
     rewind --> happy: witness parser (1)
     happy --> happy: NoWayBack (pos > errPos) clean up
     rewind --> escape: witness parser (1)
     escape --> happy: NoWayBack (pos > errPos) clean up
 ```
 
-The following sections detail the most important scenarios.
+Next we will look at the changes in modes that are possible within sub-parsers.
 
-### Parser Modes in Different Scenarios
+### Possible Mode Changes
 
-To make the following diagrams quicker to read, we will use the following abbreviations:
+The following table lists the mode changes that are possible in a leaf or
+branch sub-parser. \
+The `NoWayBack` parser and the `witness parser`s can only have leaf parsers
+as sub-parser. Every other branch parser can also have branch parsers as
+sub-parsers.
 
-- Px: any parser with no special role ('x' being a decimal number), e.g.: `P7`
-- NWB: `NoWayBack` parser wrapping any leaf parser
-- NWB3: up to three `NoWayBack` parsers might be involved in a complex scenario
-- WP1: `witness parser (1)` witnessing any sub-parser
-- WP2: `witness parser (2)` witnessing any sub-parser
-- FS: `FirstSuccessful` parser
-- FSx: `FirstSuccessful` parser number 'x' ('x' being a decimal number), e.g.: `FS3`
-- parser(mode): the parser is in a certain mode, e.g.: `WP1(handle)`
-- parser(mode1, mode2): multiple possible modes are separated by a comma (','),
+| Mode At Entry | Possible Modes After Leaf Parser | Possible Modes After Branch Parser |
+|--------------:|:---------------------------------|:-----------------------------------|
+|         happy | happy, error                     | happy, error, escape               |
+|         error | error                            | error, handle                      |
+|        handle | handle                           | handle, happy, escape              |
+|        rewind | rewind                           | rewind, happy, escape              |
+|        escape | escape                           | escape, happy, escape              |
+
+The following sections detail some error recovery scenarios.
+
+### Example Scenarios Or Error Recovery
+
+Before we can dive into the scenarios themselves we have to define
+a few abbreviations (or the diagrams would go beyond the screen).
+
+- `Px`: any parser with no special role (`x` being a decimal number), e.g.: `P7`
+- `NWB`: a `NoWayBack` parser wrapping any leaf parser
+- `NWB3`: up to three `NoWayBack` parsers might be involved in a complex scenario
+- `WP1`: `witness parser (1)` witnessing any sub-parser; it's the error handling parser
+- `WP2`: `witness parser (2)` witnessing any sub-parser; it just witnesses a secondary error
+- `FS`: a `FirstSuccessful` parser
+- `FSx`: the `FirstSuccessful` parser number `x` (`x` being a decimal number), e.g.: `FS3`
+- `parser(mode)`: the parser is in a certain mode, e.g.: `WP1(handle)`
+- `parser(mode1, mode2)`: multiple possible modes are separated by a comma (','),
   e.g.: `WP2(error, rewind)`
-- NWB(parser): the `NoWayBack` parser wraps a parser, e.g: `NWB(other parser)`
+- `NWB(parser)`: the `NoWayBack` parser wraps a parser, e.g: `NWB(other parser)`
 
 A complex example is: `NWB(WP1(happy, handle))` meaning a `NoWayBack` parser
 that also acts as `witness parser (1)` that is either in mode `happy` or
 in mode `handle`.
 
 We will use flow diagrams for the scenarios and the links between the nodes
-show the order and potentially modes in parentheses and additional information.
+show the order and potentially modes in parentheses.
 
 #### Simple Sequence
 
@@ -290,7 +330,7 @@ flowchart LR
     subgraph sub4["Subsequence 4"]
       direction TB
       p41["P10"]
-      p42["NWB3"]
+      p42["NWB2"]
       p43["P11"]
       p41--->p42--->p43
     end
@@ -312,6 +352,84 @@ is **broken**.
 
 #### Cascading Sequences With `FirstSuccessful` Parser
 
+In this scenario all parts involved are inside different `FirstSuccessful` parsers.
+The alternative sub-parsers of the `FirstSuccessful` parser are connected by
+dotted lines and the alternatives are numbered in parentheses in the order
+they are tried.
+
+```mermaid
+flowchart LR
+  st(["start"])
+  subgraph main["Main Sequence"]
+    direction LR
+    subgraph fs1["FirstSuccessful 1"]
+      direction BT
+      p1["(1) P1"]
+      subgraph sub1["(2) Subsequence 1"]
+        direction BT
+        p11["P2"]
+        p12["NWB1"]
+        p13["P3"]
+        p11--->p12--->p13
+      end
+      p2["(3) P4"]
+      p1-.-sub1-.-p2
+    end
+    subgraph fs2["FirstSuccessful 2"]
+      direction BT
+      p3["(1) P5"]
+      subgraph sub2["(2) Subsequence 2"]
+        direction BT
+        p21["P6"]
+        p22["WP1"]
+        p23["P7"]
+        p21--->p22--->p23
+      end
+      p4["(3) P8"]
+      p3-.-sub2-.-p4
+    end
+    fs1--->fs2
+    subgraph fs3["FirstSuccessful 3"]
+      direction BT
+      p5["(1) P9"]
+      subgraph sub3["(2) Subsequence 3"]
+        direction BT
+        p31["P10"]
+        p32["WP2"]
+        p33["P11"]
+        p31--->p32--->p33
+      end
+      p6["(3) P12"]
+      p5-.-sub3-.-p6
+    end
+    fs2--->fs3
+    subgraph fs4["FirstSuccessful 4"]
+      direction BT
+      p7["(1) P13"]
+      subgraph sub4["(2) Subsequence 4"]
+        direction BT
+        p41["P14"]
+        p42["NWB2"]
+        p43["P15"]
+        p41--->p42--->p43
+      end
+      p8["(3) P16"]
+      p7-.-sub4-.-p8
+    end
+    fs3--->fs4
+  end
+  ed(["end"])
+  st--->main
+  main--->ed
+```
+
+The important thing to note here is that the `FirstSuccessful` parser should
+evaluate and choose between alternatives only in **happy** mode.
+
+In modes **error**, **handle** and **rewind** it has to use the exact same
+alternative as before. \
+And in **escape** mode it has to choose between potentially multiple
+`NoWayBack` parsers and their `Recoverer`s in a different way.
 
 The following sections document the details what the parsers or
 methods mentioned above should do in each mode.
