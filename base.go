@@ -9,6 +9,9 @@ import (
 	"sync"
 )
 
+// Use the stringer package from the Go team for printing of names of enums:
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -linecomment -type ParsingMode,Ternary
+
 // DefaultMaxDel of 3 is a compromise between speed and optimal fault tolerance
 // (ANTLR is using 1)
 const DefaultMaxDel = 3
@@ -17,19 +20,24 @@ const DefaultMaxDel = 3
 type ParsingMode int
 
 const (
-	ParsingModeHappy  ParsingMode = iota // normal parsing (forward)
-	ParsingModeError                     // find previous NoWayBack (backward)
-	ParsingModeHandle                    // find error again (forward)
-	ParsingModeRewind                    // find next NoWayBack, recording on the way (forward)
-	ParsingModeEscape
+	// ParsingModeHappy - normal parsing until failure (forward)
+	ParsingModeHappy ParsingMode = iota // happy
+	// ParsingModeError - find previous NoWayBack (backward)
+	ParsingModeError // error
+	// ParsingModeHandle - find witness parser (1) again (forward)
+	ParsingModeHandle // handle
+	// ParsingModeRewind - find witness parser (1) again (backward)
+	ParsingModeRewind // rewind
+	// ParsingModeEscape - find the (best) next NoWayBack (forward)
+	ParsingModeEscape // escape
 )
 
 type Ternary int
 
 const (
-	TernaryNo Ternary = iota
-	TernaryMaybe
-	TernaryYes
+	TernaryNo    Ternary = iota // no
+	TernaryMaybe                // maybe
+	TernaryYes                  // yes
 )
 
 // Separator is a generic type for separators (byte, rune, []byte or string)
@@ -128,7 +136,7 @@ func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
 	return prsr[Output]{ // make it concurrency safe without locking
 		expected:          p.expected,
 		it:                p.it,
-		recoverer:         p.recoverer,
+		recoverer:         newRecoverer,
 		containsNoWayBack: p.containsNoWayBack,
 		refugeRecoverer:   p.refugeRecoverer,
 	}

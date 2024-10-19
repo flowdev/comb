@@ -63,7 +63,7 @@ func sequenceAny[Output any](
 	case gomme.ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
 	}
 	return state.NewSemanticError(fmt.Sprintf(
-		"programming error: Sequence didn't return in mode %v", state.ParsingMode())), []Output{}
+		"programming error: Sequence didn't return in mode `%s`", state.ParsingMode())), []Output{}
 
 }
 
@@ -127,12 +127,13 @@ func sequenceError[Output any](
 	}
 	// found in cache
 	if result.HasNoWayBack { // we should be able to switch to mode=handle
-		newState, _ := parsers[result.NoWayBackIdx].It(state.MoveBy(result.NoWayBackStart))
+		parse := parsers[result.NoWayBackIdx]
+		newState, _ := parse.It(state.MoveBy(result.NoWayBackStart))
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
-				"programming error: sub-parser (index: %d, expected: %q) "+
-					"didn't switch to parsing mode `handle` in `Sequence(error)` parser",
-				result.NoWayBackIdx, parsers[result.NoWayBackIdx].Expected())), nil
+				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
+					"parsing mode `handle` in `Sequence(error)` parser, but mode is: `%s`",
+				result.NoWayBackIdx, parse.Expected(), newState.ParsingMode())), nil
 		}
 		if result.Failed {
 			return sequenceHandle(id, parsers, newState, result.Idx, outputs)

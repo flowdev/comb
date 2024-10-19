@@ -14,10 +14,10 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 	id := gomme.NewBranchParserID()
 
 	if atLeast < 0 {
-		panic("ManyMN is unable to handle negative `atLeast`")
+		panic("ManyMN is unable to handle negative `atLeast` argument")
 	}
 	if atMost < 0 {
-		panic("ManyMN is unable to handle negative `atMost`")
+		panic("ManyMN is unable to handle negative `atMost` argument")
 	}
 
 	parseMany := func(state gomme.State) (gomme.State, []Output) {

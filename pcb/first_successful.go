@@ -70,7 +70,7 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		}
 
 		return state.NewSemanticError(fmt.Sprintf(
-			"parsing mode %v hasn't been handled in `FirstSuccessful`", state.ParsingMode(),
+			"parsing mode `%s` hasn't been handled in `FirstSuccessful`", state.ParsingMode(),
 		)), gomme.ZeroOf[Output]()
 	}
 
@@ -136,9 +136,9 @@ func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output],
 		newState, _ := parse.It(state)
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
-				"programming error: sub-parser (index: %d, expected: %q) "+
-					"didn't switch to parsing mode `handle` in `FirstSuccessful(error)` parser",
-				result.Idx, parse.Expected())), zero
+				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
+					"parsing mode `handle` in `FirstSuccessful(error)` parser, but mode is: `%s`",
+				result.Idx, parse.Expected(), newState.ParsingMode())), zero
 		}
 		return newState, zero
 	}
@@ -161,9 +161,9 @@ func firstSuccessfulHandle[Output any](id uint64, parsers []gomme.Parser[Output]
 		// the parser failed; so it MUST be the one with the error we are looking for
 		if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 			return state.NewSemanticError(fmt.Sprintf(
-				"programming error: sub-parser (index: %d, expected: %q) "+
-					"didn't switch to parsing mode `happy` or `escape` in `FirstSuccessful(handle)` parser",
-				result.Idx, parse.Expected())), zero
+				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
+					"parsing mode `happy` or `escape` in `FirstSuccessful(handle)` parser, but mode is: `%s`",
+				result.Idx, parse.Expected(), newState.ParsingMode())), zero
 		}
 		return newState, output
 	}
@@ -185,9 +185,9 @@ func firstSuccessfulRewind[Output any](id uint64, parsers []gomme.Parser[Output]
 		// the parser failed; so it MUST be the one with the error we are looking for
 		if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 			return state.NewSemanticError(fmt.Sprintf(
-				"programming error: sub-parser (index: %d, expected: %q) "+
-					"didn't switch to parsing mode `happy` or `escape` in `FirstSuccessful(rewind)` parser",
-				result.Idx, parse.Expected())), zero
+				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
+					"parsing mode `happy` or `escape` in `FirstSuccessful(rewind)` parser, but mode is: `%s`",
+				result.Idx, parse.Expected(), newState.ParsingMode())), zero
 		}
 		return newState, output
 	}
@@ -216,9 +216,9 @@ func firstSuccessfulEscape[Output any](
 	// this parser has the best recoverer; so it MUST make us happy again
 	if newState.ParsingMode() != gomme.ParsingModeHappy {
 		return state.NewSemanticError(fmt.Sprintf(
-			"programming error: sub-parser (index: %d, expected: %q) "+
-				"didn't switch to parsing mode `happy` in `FirstSuccessful(handle)` parser",
-			idx, parse.Expected())), zero
+			"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
+				"parsing mode `happy` in `FirstSuccessful(escape)` parser, but mode is: `%s`",
+			idx, parse.Expected(), newState.ParsingMode())), zero
 	}
 	return newState, output
 }

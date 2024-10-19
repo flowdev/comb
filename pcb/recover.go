@@ -66,9 +66,11 @@ func IndexOf[S gomme.Separator](stop S) gomme.Recoverer {
 // IndexOfAny searches until it finds a stop token in the input.
 // If found the recoverer returns the number of bytes up to the stop.
 // If no stop token could be found, the recoverer returns -1.
-// If any of the `stops` is empty it returns 0.
 //
-// This function panics during the construction phase if no stops are provided.
+// NOTE:
+//   - If any of the `stops` is empty it returns 0.
+//   - If no stops are provided then this function panics during
+//     the construction phase.
 func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 	const (
 		modeByte = iota

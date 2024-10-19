@@ -182,18 +182,22 @@ Next we will look at the changes in modes that are possible within sub-parsers.
 ### Possible Mode Changes
 
 The following table lists the mode changes that are possible in a leaf or
-branch sub-parser. \
+branch sub-parser.
+
 The `NoWayBack` parser and the `witness parser`s can only have leaf parsers
 as sub-parser. Every other branch parser can also have branch parsers as
 sub-parsers.
 
-| Mode At Entry | Possible Modes After Leaf Parser | Possible Modes After Branch Parser |
-|--------------:|:---------------------------------|:-----------------------------------|
-|    happy (>>) | happy, error                     | happy, error, escape               |
-|    error (<<) | error                            | error, handle                      |
-|   handle (>>) | handle                           | handle, happy, escape              |
-|   rewind (<<) | rewind                           | rewind, happy, escape              |
-|    escape(>>) | escape                           | escape, happy, escape              |
+The first column shows the mode the parent parser is in,
+the second column the possible modes
+
+|    At Start | After Leaf Parser | After Any Branch Parser | After Searched Parser |
+|------------:|:------------------|:------------------------|:----------------------|
+|  happy (>>) | happy, error      | happy, error, escape    | not searching         |
+|  error (<<) | error             | error, handle           | handle                |
+| handle (>>) | handle            | handle, happy, escape   | happy, escape         |
+| rewind (<<) | rewind            | rewind, happy, escape   | happy, escape         |
+|  escape(>>) | escape            | escape, happy, escape   | happy, escape         |
 
 The following sections detail some error recovery scenarios.
 

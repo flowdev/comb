@@ -2,6 +2,7 @@ package gomme
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -353,23 +354,14 @@ func (st State) ErrorAgain(newErr *pcbError) State {
 	switch st.mode {
 	case ParsingModeHappy:
 		st.errHand.err = newErr
-		if st.errHand.culpritIdx < 0 {
+		if st.errHand.witnessID == 0 {
 			st.mode = ParsingModeError
 		} else {
 			st.mode = ParsingModeRewind
 		}
-	case ParsingModeError:
-		return st.NewSemanticError(
-			"programming error: State.NewError/ErrorAgain called in mode `error`")
-	case ParsingModeHandle:
-		return st.NewSemanticError(
-			"programming error: State.NewError/ErrorAgain called in mode `handle`")
-	case ParsingModeRewind:
-		return st.NewSemanticError(
-			"programming error: State.NewError/ErrorAgain called in mode `rewind`")
-	case ParsingModeEscape:
-		return st.NewSemanticError(
-			"programming error: State.NewError/ErrorAgain called in mode `escape`")
+	default:
+		return st.NewSemanticError(fmt.Sprintf(
+			"programming error: State.NewError/ErrorAgain called in mode `%s`", st.mode))
 	}
 	return st
 }
