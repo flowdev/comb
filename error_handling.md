@@ -141,7 +141,7 @@ Here is the full table:
 |  error | **backward** (to the **previous** `NoWayBack`) |
 | handle | forward (to the `witness parser (1)`)          |
 | rewind | **backward** (to the `witness parser (1)`)     |
-| escape | forward (to the **next** `NoWayBack`)          |
+| escape | forward (to the (best) **next** `NoWayBack`)   |
 
 So the parsers move only in the **error** and **rewind** modes backward,
 and forward in all other modes.
@@ -155,9 +155,9 @@ The diagram also shows where a mode change can happen and the condition
 
 The position of the error is shortened to `errPos`. \
 The first parent branch parser to witness the error to be handled
-is called 'witness parser (1)'. \
+is called `witness parser (1)`. \
 A possibly different parent branch parser to witness an error
-during handling of the first is called 'witness parser (2)'.
+during handling of the first is called `witness parser (2)`.
 
 ```mermaid
 ---
@@ -189,11 +189,11 @@ sub-parsers.
 
 | Mode At Entry | Possible Modes After Leaf Parser | Possible Modes After Branch Parser |
 |--------------:|:---------------------------------|:-----------------------------------|
-|         happy | happy, error                     | happy, error, escape               |
-|         error | error                            | error, handle                      |
-|        handle | handle                           | handle, happy, escape              |
-|        rewind | rewind                           | rewind, happy, escape              |
-|        escape | escape                           | escape, happy, escape              |
+|    happy (>>) | happy, error                     | happy, error, escape               |
+|    error (<<) | error                            | error, handle                      |
+|   handle (>>) | handle                           | handle, happy, escape              |
+|   rewind (<<) | rewind                           | rewind, happy, escape              |
+|    escape(>>) | escape                           | escape, happy, escape              |
 
 The following sections detail some error recovery scenarios.
 
