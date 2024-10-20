@@ -50,7 +50,7 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 			subRecoverers[i] = parser.NoWayBackRecoverer
 		}
 	}
-	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
+	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
 	//
 	// Finally the parsing function
@@ -83,6 +83,7 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		myNoWayBackRecoverer.Recover,
 	)
 }
+
 func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
 ) (gomme.State, Output) {
 	var zero Output
@@ -95,6 +96,7 @@ func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output],
 		}
 		return state.SucceedAgain(result), result.Output.(Output)
 	}
+
 	// cache miss: parse
 	bestState := state
 	idx := 0
@@ -121,6 +123,7 @@ func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output],
 	state.CacheParserResult(id, idx, idx, 0, bestState, zero)
 	return state.Preserve(bestState), zero
 }
+
 func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
 ) (gomme.State, Output) {
 	var zero Output
@@ -144,6 +147,7 @@ func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output],
 	}
 	return state, zero
 }
+
 func firstSuccessfulHandle[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
 ) (gomme.State, Output) {
 	var zero Output
@@ -169,6 +173,7 @@ func firstSuccessfulHandle[Output any](id uint64, parsers []gomme.Parser[Output]
 	}
 	return state, zero
 }
+
 func firstSuccessfulRewind[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
 ) (gomme.State, Output) {
 	var zero Output
@@ -193,6 +198,7 @@ func firstSuccessfulRewind[Output any](id uint64, parsers []gomme.Parser[Output]
 	}
 	return state, zero
 }
+
 func firstSuccessfulEscape[Output any](
 	parsers []gomme.Parser[Output],
 	state gomme.State,
@@ -214,10 +220,10 @@ func firstSuccessfulEscape[Output any](
 	parse := parsers[idx]
 	newState, output := parse.It(state)
 	// this parser has the best recoverer; so it MUST make us happy again
-	if newState.ParsingMode() != gomme.ParsingModeHappy {
+	if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 		return state.NewSemanticError(fmt.Sprintf(
 			"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
-				"parsing mode `happy` in `FirstSuccessful(escape)` parser, but mode is: `%s`",
+				"parsing mode `happy` or `escape` in `FirstSuccessful(escape)` parser, but mode is: `%s`",
 			idx, parse.Expected(), newState.ParsingMode())), zero
 	}
 	return newState, output

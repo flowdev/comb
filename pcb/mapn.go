@@ -78,7 +78,7 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 			}
 		}
 	}
-	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(subRecoverers...)
+	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
 		newState1, output1 := p1.It(state)

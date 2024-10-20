@@ -152,29 +152,41 @@ func CachingRecoverer(recoverer Recoverer) Recoverer {
 
 type CombiningRecoverer struct {
 	recoverers []Recoverer
+	lastIdx    int
 	id         uint64
 }
 
 // NewCombiningRecoverer recovers by calling all sub-recoverers and returning
 // the minimal waste.
 // The index of the best Recoverer is stored in the cache.
-// func NewCombiningRecoverer(recoverers ...Recoverer) CombiningRecoverer {
-func NewCombiningRecoverer(recoverers ...Recoverer) CombiningRecoverer {
+// If `doCache` is false then no caching is performed.
+func NewCombiningRecoverer(doCache bool, recoverers ...Recoverer) CombiningRecoverer {
+	id := uint64(0)
+	if doCache {
+		id = combiningRecovererIDs.Add(1)
+	}
 	return CombiningRecoverer{
 		recoverers: recoverers,
-		id:         combiningRecovererIDs.Add(1),
+		lastIdx:    -1,
+		id:         id,
 	}
 }
 
 func (crc CombiningRecoverer) Recover(state State) int {
-	waste, _, ok := state.cachedRecovererWasteIdx(crc.id)
-	if ok {
-		return waste
+	if crc.id > 0 {
+		waste, idx, ok := state.cachedRecovererWasteIdx(crc.id)
+		if ok {
+			crc.lastIdx = idx
+			return waste
+		}
 	}
 
-	waste = -1
+	waste := -1
 	idx := -1
 	for i, recoverer := range crc.recoverers {
+		if recoverer == nil {
+			continue
+		}
 		w := recoverer(state)
 		switch {
 		case w == -1: // ignore
@@ -187,8 +199,15 @@ func (crc CombiningRecoverer) Recover(state State) int {
 			idx = i
 		}
 	}
-	state.cacheRecovererWasteIdx(crc.id, waste, idx)
+	crc.lastIdx = idx
+	if crc.id > 0 {
+		state.cacheRecovererWasteIdx(crc.id, waste, idx)
+	}
 	return waste
+}
+
+func (crc CombiningRecoverer) LastIndex() int {
+	return crc.lastIdx
 }
 
 func (crc CombiningRecoverer) CachedIndex(state State) (idx int, ok bool) {

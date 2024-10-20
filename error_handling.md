@@ -197,7 +197,21 @@ the second column the possible modes
 |  error (<<) | error             | error, handle           | handle                |
 | handle (>>) | handle            | handle, happy, escape   | happy, escape         |
 | rewind (<<) | rewind            | rewind, happy, escape   | happy, escape         |
-|  escape(>>) | escape            | escape, happy, escape   | happy, escape         |
+|  escape(>>) | escape            | escape, happy           | happy, escape         |
+
+The last column is the most important for the implementation since we often know
+the exact parser we are searching from the cache.
+In those cases an entry of 'happy, escape' means:
+
+- `happy`: Error recovery has been successful.
+           Parse normally again with the next (sub-)parser.
+- `escape`: Use the (best of the) next `Resolverer`(s) to escape the mess.
+            Only `NoWayBack-Resolverer`s from later (sub-)parsers must be
+            considered.
+
+So all parsers working sequentially that really do error handling
+(`Sequence`, `MapN` and `MultiMN`) have to have a `startIdx` parameter
+for modes `happy` and `escape` to be able to use only later sub-parsers.
 
 The following sections detail some error recovery scenarios.
 
