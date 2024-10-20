@@ -16,7 +16,7 @@ import (
 // (ANTLR is using 1)
 const DefaultMaxDel = 3
 
-// ParsingMode is needed for error handling. See `error_handling.md` for details.
+// ParsingMode is needed for error handling. See `ERROR_HANDLING.md` for details.
 type ParsingMode int
 
 const (
