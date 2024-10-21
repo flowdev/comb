@@ -10,7 +10,7 @@ import (
 func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	optParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
-		if newState.Failed() {
+		if newState.Failed() && !state.NoWayBackMoved(newState) {
 			return state.Succeed(newState), gomme.ZeroOf[Output]()
 		}
 		return newState, output
@@ -34,7 +34,7 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 //
 // NOTE:
 //   - NoWayBack isn't honored here because we aren't officially parsing anything.
-//   - Even though Not accepts a parser as argument it behaves like a leaf parser
+//   - Even though Peek accepts a parser as argument it behaves like a leaf parser
 //     to the outside. So it doesn't need to use MapN or the like.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output) {

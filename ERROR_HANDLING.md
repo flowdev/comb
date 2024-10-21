@@ -60,7 +60,20 @@ This way we prevent unnecessary backtracking.
 So please use the `NoWayBack` parser as much as reasonable for your grammar!
 As it keeps the backtracking to a minimum, it also makes the parser perform better.
 
-The `FirstSuccessful` and `NoWayBack` parsers are special **branch** parsers.
+The `FirstSuccessful` and `NoWayBack` parsers are special **branch** parsers. \
+In general, it's true that **all** branch parsers have to deal a lot with
+error recovery. But we have you covered, because the base parsers
+`FirstSuccessful`, `Sequence`, `MapN` and `ManyMN` are all doing the hard work
+for you. \
+As long as you are able to build your own branch parser on them
+(directly or indirectly), care is already taken. \
+`Map`, `Map2`, `Map3`, `Map4`, `Map5`, `Prefixed`, `Suffixed`, `Delimited`,
+`Recognize`, `Optional` and `Assign` all build on `MapN`. \
+`Count`, `Many0` and `Many1` are built on `ManyMN`. \
+`SeparatedMN`, `Separated0` and `Separated1` are building on `ManyMN` and `MapN`.
+
+All other parsers in the `pcb` package are leaf parsers that don't need to
+care about error handling.
 
 The following sections define the modes and their relationships in detail.
 
