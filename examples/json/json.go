@@ -81,9 +81,9 @@ func parseObject() gomme.Parser[JSONValue] {
 		pcb.Delimited[rune, map[string]JSONValue, rune](
 			pcb.Char('{'),
 			pcb.Optional[map[string]JSONValue](
-				pcb.Preceded(
+				pcb.Prefixed(
 					ws,
-					pcb.Terminated[map[string]JSONValue](
+					pcb.Suffixed[map[string]JSONValue](
 						members,
 						ws,
 					),
@@ -296,7 +296,7 @@ var pstring = stringParser()
 func integerParser() gomme.Parser[int] {
 	return FirstSuccessful(
 		// "-" onenine digits
-		pcb.Preceded(
+		pcb.Prefixed(
 			pcb.Char('-'),
 			pcb.Map2(
 				onenine, digits,
@@ -315,7 +315,7 @@ func integerParser() gomme.Parser[int] {
 		),
 
 		// "-" digit
-		pcb.Preceded(
+		pcb.Prefixed(
 			pcb.Char('-'),
 			pcb.Map(
 				digit,
@@ -371,7 +371,7 @@ var onenine = onenineParser()
 //
 // It expects a dot followed by at least one digit.
 func fractionParser() gomme.Parser[string] {
-	return pcb.Preceded(
+	return pcb.Prefixed(
 		pcb.String("."),
 		pcb.Digit1(),
 	)
@@ -383,7 +383,7 @@ var fraction = fractionParser()
 //
 // It handles the exponent sign and the exponent digits.
 func exponentParser() gomme.Parser[string] {
-	return pcb.Preceded(
+	return pcb.Prefixed(
 		pcb.String("e"),
 		pcb.Map2(
 			sign, digits,

@@ -1,6 +1,7 @@
-package gomme
+package gomme_test
 
 import (
+	"github.com/oleiade/gomme"
 	"github.com/oleiade/gomme/pcb"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ func TestNoWayBack(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p Parser[string]
+		p gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -24,7 +25,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "head matching parser should succeed",
 			input: "123",
 			args: args{
-				p: FirstSuccessful(pcb.Digit1(), NoWayBack(pcb.Alpha1())),
+				p: pcb.FirstSuccessful(pcb.Digit1(), gomme.NoWayBack(pcb.Alpha1())),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -34,7 +35,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "tail matching parser should succeed",
 			input: "abc",
 			args: args{
-				p: FirstSuccessful(NoWayBack(pcb.Digit1()), pcb.Alpha1()),
+				p: pcb.FirstSuccessful(gomme.NoWayBack(pcb.Digit1()), pcb.Alpha1()),
 			},
 			wantErr:       false,
 			wantOutput:    "abc",
@@ -44,7 +45,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "FirstSuccessful: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: FirstSuccessful(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1()), pcb.Alpha1()),
+				p: pcb.FirstSuccessful(pcb.Prefixed(gomme.NoWayBack(pcb.String("a")), pcb.Digit1()), pcb.Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -54,7 +55,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "Optional: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: pcb.Optional(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1())),
+				p: pcb.Optional(pcb.Prefixed(gomme.NoWayBack(pcb.String("a")), pcb.Digit1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -64,7 +65,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "Many0: tail matching parser after failing NoWayBack head parser should fail",
 			input: "abc",
 			args: args{
-				p: pcb.Map(pcb.Many0(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1())), func(tokens []string) (string, error) {
+				p: pcb.Map(pcb.Many0(pcb.Prefixed(gomme.NoWayBack(pcb.String("a")), pcb.Digit1())), func(tokens []string) (string, error) {
 					return strings.Join(tokens, ""), nil
 				}),
 			},
@@ -76,7 +77,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "Seperated1: matching main parser after failing NoWayBack head parser should fail",
 			input: "a,1",
 			args: args{
-				p: pcb.Map(pcb.Separated0(pcb.Preceded(NoWayBack(pcb.String("a")), pcb.Digit1()), pcb.Char(','), false),
+				p: pcb.Map(pcb.Separated0(pcb.Prefixed(gomme.NoWayBack(pcb.String("a")), pcb.Digit1()), pcb.Char(','), false),
 					func(tokens []string) (string, error) {
 						return strings.Join(tokens, ""), nil
 					},
@@ -90,7 +91,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "no matching parser should fail",
 			input: "$%^*",
 			args: args{
-				p: FirstSuccessful(NoWayBack(pcb.Digit1()), NoWayBack(pcb.Alpha1())),
+				p: pcb.FirstSuccessful(gomme.NoWayBack(pcb.Digit1()), gomme.NoWayBack(pcb.Alpha1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -100,7 +101,7 @@ func TestNoWayBack(t *testing.T) {
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: FirstSuccessful(NoWayBack(pcb.Digit1()), NoWayBack(pcb.Alpha1())),
+				p: pcb.FirstSuccessful(gomme.NoWayBack(pcb.Digit1()), gomme.NoWayBack(pcb.Alpha1())),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -113,7 +114,7 @@ func TestNoWayBack(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := NewFromString(tc.input)
+			state := gomme.NewFromString(0, nil, tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
@@ -131,8 +132,8 @@ func TestNoWayBack(t *testing.T) {
 }
 
 func BenchmarkNoWayBack(b *testing.B) {
-	p := NoWayBack(pcb.Char('1'))
-	input := NewFromString("123")
+	p := gomme.NoWayBack(pcb.Char('1'))
+	input := gomme.NewFromString(1, nil, "123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

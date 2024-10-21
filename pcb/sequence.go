@@ -90,7 +90,7 @@ func (seq *sequenceData[Output]) sequenceAny(
 		return seq.sequenceEscape(state, remaining, startIdx, outputs)
 	}
 	return state.NewSemanticError(fmt.Sprintf(
-		"programming error: Sequence didn't handle parsing mode `%s`", state.ParsingMode())), []Output{}
+		"programming error: Sequence didn't handle parsing mode `%s`", state.ParsingMode())), nil
 
 }
 
@@ -119,11 +119,11 @@ func (seq *sequenceData[Output]) sequenceHappy( // normal parsing (forward)
 		newState, output := parse.It(remaining)
 		if newState.Failed() {
 			state.CacheParserResult(seq.id, i, noWayBackIdx, noWayBackStart, newState, outputs)
-			remaining = gomme.IWitnessed(remaining, seq.id, i, newState)
+			state = gomme.IWitnessed(state, seq.id, i, newState)
 			if noWayBackStart < 0 { // we can't do anything here
-				return state.Preserve(remaining), nil
+				return state, nil
 			}
-			return seq.sequenceError(state, noWayBackIdx, outputs) // handle error locally
+			return seq.sequenceError(state, i, outputs) // handle error locally
 		}
 
 		if remaining.NoWayBackMoved(newState) {
@@ -163,6 +163,7 @@ func (seq *sequenceData[Output]) sequenceError(
 		if result.Failed {
 			return seq.sequenceHandle(newState, result.Idx, outputs)
 		}
+		return state.Preserve(newState), nil
 	}
 	return state, nil // we can't do anything
 }
@@ -182,7 +183,9 @@ func (seq *sequenceData[Output]) sequenceHandle( // find error again (forward)
 	// found in cache
 	if result.Failed { // we should be able to switch to mode=happy (or escape)
 		outputs = result.Output.([]Output)
-		newState, output := gomme.HandleWitness(state.MoveBy(result.ErrorStart), seq.id, 0, seq.parsers[result.Idx])
+		newState, output := gomme.HandleWitness(
+			state.MoveBy(result.ErrorStart), seq.id, result.Idx, seq.parsers...,
+		)
 		outputs = saveOutput(outputs, output, result.Idx)
 		return seq.sequenceAny(
 			state,
@@ -211,7 +214,9 @@ func (seq *sequenceData[Output]) sequenceRewind(
 	// found in cache
 	if result.Failed { // we should be able to switch to mode=happy (or escape)
 		outputs = result.Output.([]Output)
-		newState, output := gomme.HandleWitness(state.MoveBy(result.ErrorStart), seq.id, 0, seq.parsers[result.Idx])
+		newState, output := gomme.HandleWitness(
+			state.MoveBy(result.ErrorStart), seq.id, result.Idx, seq.parsers...,
+		)
 		outputs = saveOutput(outputs, output, result.Idx)
 		return seq.sequenceAny(
 			state,
@@ -233,7 +238,12 @@ func (seq *sequenceData[Output]) sequenceEscape(
 ) (gomme.State, []Output) {
 	idx := 0
 	if startIdx <= 0 { // use seq.noWayBackRecoverer
-		idx = seq.noWayBackRecoverer.LastIndex()
+		ok := false
+		idx, ok = seq.noWayBackRecoverer.CachedIndex(state)
+		if !ok {
+			seq.noWayBackRecoverer.Recover(state)
+			idx = seq.noWayBackRecoverer.LastIndex()
+		}
 	} else { // we have to use seq.subRecoverers
 		recoverers := slices.Clone(seq.subRecoverers) // make shallow copy, so we can set the first elements to nil
 		for i := 0; i < startIdx; i++ {

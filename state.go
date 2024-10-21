@@ -322,11 +322,6 @@ func (st State) Succeed(subState State) State {
 	return st
 }
 
-// OmitSemantics returns true if any semantic action is useless.
-func (st State) OmitSemantics() bool {
-	return st.mode != ParsingModeHappy
-}
-
 // Preserve returns the State with the error handling, noWayBackMark and
 // mode kept from the subState.
 func (st State) Preserve(subState State) State {

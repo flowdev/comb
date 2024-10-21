@@ -19,7 +19,7 @@ type RGBColor struct {
 // ParseRGBColor creates a new RGBColor from a hexadecimal color string.
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
-	parse := pcb.Preceded(
+	parse := pcb.Prefixed(
 		pcb.Char('#'),
 		pcb.Map(
 			pcb.Count(HexColorComponent(), 3),

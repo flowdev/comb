@@ -34,7 +34,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 			} else if newState.Failed() {
 				if count < atLeast {
 					// TODO: Add more error handling!
-					return gomme.IWitnessed(state, id, count, newState), []Output{}
+					return gomme.IWitnessed(state, id, count, newState), nil
 				} else {
 					return remaining, outputs
 				}
@@ -43,7 +43,7 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 			// Checking for infinite loops, if nothing was consumed,
 			// the provided parser would make us go around in circles.
 			if !newState.Moved(remaining) {
-				return state.NewError(fmt.Sprintf("%s (found empty element)", parse.Expected())), []Output{}
+				return state.NewError(fmt.Sprintf("%s (found empty element)", parse.Expected())), nil
 			}
 
 			outputs = append(outputs, output)

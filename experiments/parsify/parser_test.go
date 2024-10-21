@@ -44,9 +44,9 @@ func TestDelimitedByChar(t *testing.T) {
 			var firstOutput rune
 
 			if tc.basicParser2 != nil {
-				state, firstOutput = tc.basicParser2(gomme.NewFromString(input[:1]))
+				state, firstOutput = tc.basicParser2(gomme.NewFromString(0, nil, input[:1]))
 			} else {
-				state, firstOutput = tc.basicParser1.It(gomme.NewFromString(input[:1]))
+				state, firstOutput = tc.basicParser1.It(gomme.NewFromString(0, nil, input[:1]))
 			}
 			t.Log("Error1? :", state.Error())
 
@@ -65,9 +65,9 @@ func TestDelimitedByChar(t *testing.T) {
 			var gotOutput string
 
 			if tc.basicParser2 != nil {
-				newState, gotOutput = tc.complexParser2(gomme.NewFromString(input))
+				newState, gotOutput = tc.complexParser2(gomme.NewFromString(0, nil, input))
 			} else {
-				newState, gotOutput = tc.complexParser1.It(gomme.NewFromString(input))
+				newState, gotOutput = tc.complexParser1.It(gomme.NewFromString(0, nil, input))
 			}
 			t.Log("Error2? :", newState.Error())
 

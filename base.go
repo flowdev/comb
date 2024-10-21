@@ -272,10 +272,12 @@ func NewState(maxDel int, del Deleter, input []byte) State {
 		del = DefaultBinaryDeleter
 	}
 	return State{
-		input:               Input{bytes: input, line: 1, prevNl: -1},
-		noWayBackMark:       -1,
-		maxDel:              maxDel,
-		recovererWasteCache: make(map[uint64][]cachedWaste),
+		input:                  Input{bytes: input, line: 1, prevNl: -1},
+		noWayBackMark:          -1,
+		maxDel:                 maxDel,
+		recovererWasteCache:    make(map[uint64][]cachedWaste),
+		recovererWasteIdxCache: make(map[uint64][]cachedWasteIdx),
+		parserCache:            make(map[uint64][]ParserResult),
 	}
 }
 

@@ -77,13 +77,13 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 // as the produced value when the provided parser succeeds.
 //
 // Note:
-// Using this parser is a code smell as it effectively removes type safety.
-// Rather use one of the MapX functions instead.
+//   - Using this parser is a code smell as it effectively removes type safety.
+//   - Rather use one of the MapX functions instead.
 func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 	recParse := func(state gomme.State) (gomme.State, []byte) {
 		newState, _ := parse.It(state)
 		if newState.Failed() {
-			return state.Preserve(newState), []byte{}
+			return state.Preserve(newState), nil
 		}
 		return newState, state.BytesTo(newState)
 	}
@@ -120,9 +120,9 @@ func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parse gomme.Parser[O], su
 		}, nil, nil)
 }
 
-// Preceded parses and discards a result from the prefix parser. It
+// Prefixed parses and discards a result from the prefix parser. It
 // then parses a result from the main parser and returns its result.
-func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.Parser[O] {
+func Prefixed[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.Parser[O] {
 	return MapN[OP, O, interface{}, interface{}, interface{}](
 		prefix, parse, nil, nil, nil, 2, nil,
 		func(output1 OP, output2 O) (O, error) {
@@ -130,10 +130,10 @@ func Preceded[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 		}, nil, nil, nil)
 }
 
-// Terminated parses a result from the main parser, it then
+// Suffixed parses a result from the main parser, it then
 // parses the result from the suffix parser and discards it; only
 // returning the result of the main parser.
-func Terminated[O, OS any](parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
+func Suffixed[O, OS any](parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
 	return MapN[O, OS, interface{}, interface{}, interface{}](
 		parse, suffix, nil, nil, nil, 2, nil,
 		func(output1 O, output2 OS) (O, error) {

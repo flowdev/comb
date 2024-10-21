@@ -66,7 +66,7 @@ func TestCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -87,7 +87,7 @@ func TestCount(t *testing.T) {
 
 func BenchmarkCount(b *testing.B) {
 	parser := Count(Char('#'), 3)
-	state := gomme.NewFromString("###")
+	state := gomme.NewFromString(1, nil, "###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -146,7 +146,7 @@ func TestMany0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -169,7 +169,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := gomme.NewFromString("abcdef")
+	state := gomme.NewFromString(1, nil, "abcdef")
 	parser := Many0(Digit0())
 
 	newState, output := parser.It(state)
@@ -181,7 +181,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany0(b *testing.B) {
 	parser := Many0(Char('#'))
-	state := gomme.NewFromString("###")
+	state := gomme.NewFromString(1, nil, "###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -260,7 +260,7 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -283,7 +283,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := gomme.NewFromString("abcdef")
+	state := gomme.NewFromString(1, nil, "abcdef")
 	parser := Many1(Digit0())
 
 	newState, output := parser.It(state)
@@ -295,7 +295,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany1(b *testing.B) {
 	parser := Many1(Char('#'))
-	state := gomme.NewFromString("###")
+	state := gomme.NewFromString(1, nil, "###")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -394,7 +394,7 @@ func TestSeparated0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -415,7 +415,7 @@ func TestSeparated0(t *testing.T) {
 
 func BenchmarkSeparated0(t *testing.B) {
 	parser := Separated0(Char('#'), Char(','), false)
-	state := gomme.NewFromString("#,#,#")
+	state := gomme.NewFromString(1, nil, "#,#,#")
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
@@ -494,7 +494,7 @@ func TestSeparated1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -515,7 +515,7 @@ func TestSeparated1(t *testing.T) {
 
 func BenchmarkSeparated1(t *testing.B) {
 	parser := Separated1(Char('#'), Char(','), false)
-	state := gomme.NewFromString("#,#,#,#")
+	state := gomme.NewFromString(1, nil, "#,#,#,#")
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {

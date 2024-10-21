@@ -5,7 +5,7 @@ import (
 )
 
 func TestWhere(t *testing.T) {
-	st := NewFromString("content\nline2\nline3\nand4\n").MoveBy(15)
+	st := NewFromString(0, nil, "content\nline2\nline3\nand4\n").MoveBy(15)
 
 	specs := []struct {
 		name            string

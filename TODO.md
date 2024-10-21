@@ -20,8 +20,8 @@
 ## Maybes
 
 - [ ] Rename project to `crayon`?
-- [ ] Rename `Preceded` to `Prefixed`
-- [ ] Rename `Terminated` to `Suffixed`
+- [X] Rename `Preceded` to `Prefixed`
+- [X] Rename `Terminated` to `Suffixed`
 - [ ] Rename `Sequence` to `List`?
 - [ ] Rename `Satisfy` to `Satisfies`?
 - [X] Introduce `SeparatedList` as a result of previous?

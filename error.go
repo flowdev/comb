@@ -35,6 +35,8 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 		return state.NewSemanticError(
 			"programming error: IWitnessed called while still handling an error")
 	}
+	state.noWayBackMark = max(state.noWayBackMark, errState.noWayBackMark)
+	state.mode = errState.mode
 	if errState.errHand.witnessID == 0 { // error hasn't been witnessed yet
 		if idx < 0 {
 			idx = 0
@@ -58,9 +60,9 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 	if state.errHand.witnessID != id || state.errHand.witnessPos != state.input.pos {
 		parse := parsers[idx]
 		if parse.PossibleWitness() {
-
+			return parse.It(state) // this sub-parser or one of its sub-parsers might be the witness parser (1)
 		}
-		return parsers[idx].It(state) // this sub-parser or on of its sub-parsers might be the witness parser (1)
+		return state, zero
 	}
 
 	// we are witness
@@ -76,7 +78,6 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 	for {
 		switch state.mode {
 		case ParsingModeHandle:
-			state.errHand.err = nil
 			state.errHand.curDel = 1
 			state.errHand.ignoreErrParser = false
 		case ParsingModeRewind:
@@ -94,6 +95,7 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 			return state, zero // we are witness parser but there is nothing to do
 		}
 		state.mode = ParsingModeHappy // try again
+		state.errHand.err = nil
 		state.input.pos = orgPos
 		state = state.deleter(state, state.errHand.curDel)
 		if state.errHand.ignoreErrParser {

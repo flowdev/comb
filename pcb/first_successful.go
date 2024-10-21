@@ -103,13 +103,17 @@ func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output],
 	for i, parse := range parsers {
 		newState, output := parse.It(state)
 		if !newState.Failed() {
-			state.CacheParserResult(id, i, i, 0, newState, output)
+			if state.NoWayBackMoved(newState) {
+				state.CacheParserResult(id, i, i, 0, newState, output)
+			} else {
+				state.CacheParserResult(id, i, -1, -1, newState, output)
+			}
 			return newState, output
 		}
 
 		if state.NoWayBackMoved(newState) { // don't look further than this
 			state.CacheParserResult(id, i, i, 0, newState, output)
-			return state.Preserve(newState), zero
+			return gomme.IWitnessed(state, id, i, newState), zero
 		}
 
 		// may the best error win:
@@ -121,7 +125,7 @@ func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output],
 		}
 	}
 	state.CacheParserResult(id, idx, idx, 0, bestState, zero)
-	return state.Preserve(bestState), zero
+	return gomme.IWitnessed(state, id, idx, bestState), zero
 }
 
 func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
@@ -151,7 +155,6 @@ func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output],
 func firstSuccessfulHandle[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
 ) (gomme.State, Output) {
 	var zero Output
-	// TODO: FirstSuccessful might be witness parser (1)
 	// use cache to know right parser immediately (Idx, Failed)
 	result, ok := state.CachedParserResult(id)
 	if !ok {
@@ -160,14 +163,13 @@ func firstSuccessfulHandle[Output any](id uint64, parsers []gomme.Parser[Output]
 		), zero
 	}
 	if result.Failed {
-		parse := parsers[result.Idx]
-		newState, output := parse.It(state)
+		newState, output := gomme.HandleWitness(state, id, result.Idx, parsers...)
 		// the parser failed; so it MUST be the one with the error we are looking for
 		if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
 					"parsing mode `happy` or `escape` in `FirstSuccessful(handle)` parser, but mode is: `%s`",
-				result.Idx, parse.Expected(), newState.ParsingMode())), zero
+				result.Idx, parsers[result.Idx].Expected(), newState.ParsingMode())), zero
 		}
 		return newState, output
 	}
@@ -185,14 +187,13 @@ func firstSuccessfulRewind[Output any](id uint64, parsers []gomme.Parser[Output]
 		), zero
 	}
 	if result.Failed {
-		parse := parsers[result.Idx]
-		newState, output := parse.It(state)
+		newState, output := gomme.HandleWitness(state, id, result.Idx, parsers...)
 		// the parser failed; so it MUST be the one with the error we are looking for
 		if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
 					"parsing mode `happy` or `escape` in `FirstSuccessful(rewind)` parser, but mode is: `%s`",
-				result.Idx, parse.Expected(), newState.ParsingMode())), zero
+				result.Idx, parsers[result.Idx].Expected(), newState.ParsingMode())), zero
 		}
 		return newState, output
 	}

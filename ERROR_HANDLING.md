@@ -70,7 +70,7 @@ As long as you are able to build your own branch parser on them
 `Map`, `Map2`, `Map3`, `Map4`, `Map5`, `Prefixed`, `Suffixed`, `Delimited`,
 `Recognize`, `Optional` and `Assign` all build on `MapN`. \
 `Count`, `Many0` and `Many1` are built on `ManyMN`. \
-`SeparatedMN`, `Separated0` and `Separated1` are building on `ManyMN` and `MapN`.
+`SeparatedMN`, `Separated0` and `Separated1` are based on `ManyMN` and `MapN`.
 
 All other parsers in the `pcb` package are leaf parsers that don't need to
 care about error handling.
