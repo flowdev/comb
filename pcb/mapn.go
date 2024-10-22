@@ -97,7 +97,7 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	}
 
 	mapParse := func(state gomme.State) (gomme.State, MO) {
-		return md.mapnAny(
+		return md.any(
 			state, state,
 			0,
 			-1, -1,
@@ -134,7 +134,7 @@ type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	subRecoverers      []gomme.Recoverer
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnAny(
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) any(
 	state gomme.State, remaining gomme.State,
 	startIdx int,
 	noWayBackStart int, noWayBackIdx int,
@@ -151,25 +151,25 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnAny(
 
 	switch state.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
-		return md.sequenceHappy(
+		return md.happy(
 			state, remaining, startIdx, noWayBackStart, noWayBackIdx,
 			out1, out2, out3, out4, out5,
 		)
 	case gomme.ParsingModeError: // find previous NoWayBack (backward)
-		return md.mapnError(state, startIdx, out1, out2, out3, out4, out5)
+		return md.error(state, startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeHandle: // find error again (forward)
-		return md.mapnHandle(state, startIdx, out1, out2, out3, out4, out5)
+		return md.handle(state, startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeRewind: // go back to error / witness parser (1) (backward)
-		return md.mapnRewind(state, startIdx, out1, out2, out3, out4, out5)
+		return md.rewind(state, startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
-		return md.mapnEscape(state, remaining, startIdx, out1, out2, out3, out4, out5)
+		return md.escape(state, remaining, startIdx, out1, out2, out3, out4, out5)
 	}
 	return state.NewSemanticError(fmt.Sprintf(
 		"programming error: MapN didn't handle parsing mode `%s`", state.ParsingMode())), zero
 
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) sequenceHappy(
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 	state gomme.State, remaining gomme.State,
 	startIdx int,
 	noWayBackStart int, noWayBackIdx int,
@@ -214,7 +214,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) sequenceHappy(
 				if noWayBackStart < 0 { // we can't do anything here
 					return state, zeroMO
 				}
-				return md.mapnError(state, 1, out1, out2, out3, out4, out5) // handle error locally
+				return md.error(state, 1, out1, out2, out3, out4, out5) // handle error locally
 			}
 			if newState1.NoWayBackMoved(newState2) {
 				noWayBackIdx = 1
@@ -233,7 +233,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) sequenceHappy(
 					if noWayBackStart < 0 { // we can't do anything here
 						return state, zeroMO
 					}
-					return md.mapnError(state, 2, out1, out2, out3, out4, out5) // handle error locally
+					return md.error(state, 2, out1, out2, out3, out4, out5) // handle error locally
 				}
 				if newState2.NoWayBackMoved(newState3) {
 					noWayBackIdx = 2
@@ -252,7 +252,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) sequenceHappy(
 						if noWayBackStart < 0 { // we can't do anything here
 							return state, zeroMO
 						}
-						return md.mapnError(state, 3, out1, out2, out3, out4, out5) // handle error locally
+						return md.error(state, 3, out1, out2, out3, out4, out5) // handle error locally
 					}
 					if newState3.NoWayBackMoved(newState4) {
 						noWayBackIdx = 3
@@ -270,7 +270,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) sequenceHappy(
 						if noWayBackStart < 0 { // we can't do anything here
 							return state, zeroMO
 						}
-						return md.mapnError(state, 4, out1, out2, out3, out4, out5) // handle error locally
+						return md.error(state, 4, out1, out2, out3, out4, out5) // handle error locally
 					}
 					if newState4.NoWayBackMoved(newState5) {
 						noWayBackIdx = 4
@@ -318,7 +318,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) sequenceHappy(
 	return newState1, mapped
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnError(state gomme.State, startIdx int, out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5) (gomme.State, MO) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) error(state gomme.State, startIdx int, out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5) (gomme.State, MO) {
 	var zeroMO MO
 
 	// use cache to know result immediately (HasNoWayBack, NoWayBackIdx, NoWayBackStart)
@@ -356,14 +356,14 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnError(state gomme.State, sta
 				result.NoWayBackIdx, expected, newState.ParsingMode())), zeroMO
 		}
 		if result.Failed {
-			return md.mapnHandle(newState, result.Idx, out1, out2, out3, out4, out5)
+			return md.handle(newState, result.Idx, out1, out2, out3, out4, out5)
 		}
 		return state.Preserve(newState), zeroMO
 	}
 	return state, zeroMO // we can't do anything
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnHandle(state gomme.State, startIdx int, out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5) (gomme.State, MO) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) handle(state gomme.State, startIdx int, out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5) (gomme.State, MO) {
 	var zeroMO MO
 
 	// use cache to know result immediately (Failed, Idx, ErrorStart)
@@ -396,7 +396,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnHandle(state gomme.State, st
 				state.MoveBy(result.ErrorStart), md.id, 0, md.p5,
 			)
 		}
-		return md.mapnAny(
+		return md.any(
 			state, newState,
 			result.Idx+1,
 			result.NoWayBackStart, result.NoWayBackIdx,
@@ -406,7 +406,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnHandle(state gomme.State, st
 	return state, zeroMO // we can't do anything
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnRewind(
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) rewind(
 	state gomme.State,
 	startIdx int,
 	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
@@ -443,7 +443,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnRewind(
 				state.MoveBy(result.ErrorStart), md.id, 0, md.p5,
 			)
 		}
-		return md.mapnAny(
+		return md.any(
 			state, newState,
 			result.Idx+1,
 			result.NoWayBackStart, result.NoWayBackIdx,
@@ -453,7 +453,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnRewind(
 	return state, zeroMO // we can't do anything
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnEscape(
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 	state gomme.State, remaining gomme.State,
 	startIdx int,
 	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,

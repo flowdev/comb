@@ -34,12 +34,10 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 	// finally the parse function
 	parseSeq := func(state gomme.State) (gomme.State, []Output) {
 		outputs := make([]Output, 0, len(parsers))
-		return seq.sequenceAny(
-			state,
-			state,
+		return seq.any(
+			state, state,
 			0,
-			-1,
-			-1,
+			-1, -1,
 			outputs,
 		)
 	}
@@ -66,12 +64,10 @@ type sequenceData[Output any] struct {
 	subRecoverers      []gomme.Recoverer
 }
 
-func (seq *sequenceData[Output]) sequenceAny(
-	state gomme.State,
-	remaining gomme.State,
+func (seq *sequenceData[Output]) any(
+	state, remaining gomme.State,
 	startIdx int,
-	noWayBackStart int,
-	noWayBackIdx int,
+	noWayBackIdx, noWayBackStart int,
 	outputs []Output,
 ) (gomme.State, []Output) {
 	if startIdx >= len(seq.parsers) {
@@ -79,27 +75,25 @@ func (seq *sequenceData[Output]) sequenceAny(
 	}
 	switch state.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
-		return seq.sequenceHappy(state, remaining, startIdx, noWayBackStart, noWayBackIdx, outputs)
+		return seq.happy(state, remaining, startIdx, noWayBackStart, noWayBackIdx, outputs)
 	case gomme.ParsingModeError: // find previous NoWayBack (backward)
-		return seq.sequenceError(state, startIdx, outputs)
+		return seq.error(state, startIdx, outputs)
 	case gomme.ParsingModeHandle: // find error again (forward)
-		return seq.sequenceHandle(state, startIdx, outputs)
+		return seq.handle(state, startIdx, outputs)
 	case gomme.ParsingModeRewind: // go back to error / witness parser (1) (backward)
-		return seq.sequenceRewind(state, startIdx, outputs)
+		return seq.rewind(state, startIdx, outputs)
 	case gomme.ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
-		return seq.sequenceEscape(state, remaining, startIdx, outputs)
+		return seq.escape(state, remaining, startIdx, outputs)
 	}
 	return state.NewSemanticError(fmt.Sprintf(
 		"programming error: Sequence didn't handle parsing mode `%s`", state.ParsingMode())), nil
 
 }
 
-func (seq *sequenceData[Output]) sequenceHappy( // normal parsing (forward)
-	state gomme.State,
-	remaining gomme.State,
+func (seq *sequenceData[Output]) happy( // normal parsing (forward)
+	state, remaining gomme.State,
 	startIdx int,
-	noWayBackStart int,
-	noWayBackIdx int,
+	noWayBackStart, noWayBackIdx int,
 	outputs []Output,
 ) (gomme.State, []Output) {
 	if startIdx <= 0 { // caching only works if parsing from the start
@@ -123,7 +117,7 @@ func (seq *sequenceData[Output]) sequenceHappy( // normal parsing (forward)
 			if noWayBackStart < 0 { // we can't do anything here
 				return state, nil
 			}
-			return seq.sequenceError(state, i, outputs) // handle error locally
+			return seq.error(state, i, outputs) // handle error locally
 		}
 
 		if remaining.NoWayBackMoved(newState) {
@@ -138,7 +132,7 @@ func (seq *sequenceData[Output]) sequenceHappy( // normal parsing (forward)
 	return remaining, outputs
 }
 
-func (seq *sequenceData[Output]) sequenceError(
+func (seq *sequenceData[Output]) error(
 	state gomme.State,
 	_ int, // we don't need `startIdx` because we rely on the cache
 	outputs []Output,
@@ -161,14 +155,14 @@ func (seq *sequenceData[Output]) sequenceError(
 				result.NoWayBackIdx, parse.Expected(), newState.ParsingMode())), nil
 		}
 		if result.Failed {
-			return seq.sequenceHandle(newState, result.Idx, outputs)
+			return seq.handle(newState, result.Idx, outputs)
 		}
 		return state.Preserve(newState), nil
 	}
 	return state, nil // we can't do anything
 }
 
-func (seq *sequenceData[Output]) sequenceHandle( // find error again (forward)
+func (seq *sequenceData[Output]) handle( // find error again (forward)
 	state gomme.State,
 	_ int, // we don't need `startIdx` because we rely on the cache
 	outputs []Output,
@@ -187,19 +181,19 @@ func (seq *sequenceData[Output]) sequenceHandle( // find error again (forward)
 			state.MoveBy(result.ErrorStart), seq.id, result.Idx, seq.parsers...,
 		)
 		outputs = saveOutput(outputs, output, result.Idx)
-		return seq.sequenceAny(
+		return seq.any(
 			state,
 			newState,
 			result.Idx+1,
-			result.NoWayBackStart,
 			result.NoWayBackIdx,
+			result.NoWayBackStart,
 			outputs,
 		)
 	}
 	return state, nil // we can't do anything
 }
 
-func (seq *sequenceData[Output]) sequenceRewind(
+func (seq *sequenceData[Output]) rewind(
 	state gomme.State,
 	_ int, // we don't need `startIdx` because we rely on the cache
 	outputs []Output,
@@ -218,21 +212,20 @@ func (seq *sequenceData[Output]) sequenceRewind(
 			state.MoveBy(result.ErrorStart), seq.id, result.Idx, seq.parsers...,
 		)
 		outputs = saveOutput(outputs, output, result.Idx)
-		return seq.sequenceAny(
+		return seq.any(
 			state,
 			newState,
 			result.Idx+1,
-			result.NoWayBackStart,
 			result.NoWayBackIdx,
+			result.NoWayBackStart,
 			outputs,
 		)
 	}
 	return state, nil // we can't do anything
 }
 
-func (seq *sequenceData[Output]) sequenceEscape(
-	state gomme.State,
-	remaining gomme.State,
+func (seq *sequenceData[Output]) escape(
+	state, remaining gomme.State,
 	startIdx int,
 	outputs []Output,
 ) (gomme.State, []Output) {
@@ -261,7 +254,9 @@ func (seq *sequenceData[Output]) sequenceEscape(
 		))), nil
 	}
 	newState, output := seq.parsers[idx].It(remaining)
-	outputs = saveOutput(outputs, output, idx)
+	if newState.ParsingMode() == gomme.ParsingModeHappy {
+		outputs = saveOutput(outputs, output, idx)
+	}
 	return newState, outputs
 }
 

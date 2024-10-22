@@ -15,8 +15,6 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		panic("FirstSuccessful(missing parsers)")
 	}
 
-	id := gomme.NewBranchParserID()
-
 	//
 	// Are we a real NoWayBack parser? Yes? No? Maybe?
 	//
@@ -52,21 +50,28 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 	}
 	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
+	fsd := &firstSuccessfulData[Output]{
+		id:                  gomme.NewBranchParserID(),
+		parsers:             parsers,
+		containingNoWayBack: containingNoWayBack,
+		noWayBackRecoverer:  myNoWayBackRecoverer,
+	}
+
 	//
 	// Finally the parsing function
 	//
 	newParse := func(state gomme.State) (gomme.State, Output) {
 		switch state.ParsingMode() {
 		case gomme.ParsingModeHappy: // normal parsing (forward)
-			return firstSuccessfulHappy(id, parsers, state)
+			return fsd.happy(state)
 		case gomme.ParsingModeError: // find previous NoWayBack (backward)
-			return firstSuccessfulError(id, parsers, state)
+			return fsd.error(state)
 		case gomme.ParsingModeHandle: // find error again (forward)
-			return firstSuccessfulHandle(id, parsers, state)
+			return fsd.handle(state)
 		case gomme.ParsingModeRewind: // go back to the witness parser (1)
-			return firstSuccessfulRewind(id, parsers, state)
+			return fsd.rewind(state)
 		case gomme.ParsingModeEscape: // find the NoWayBack recoverer with the least waste
-			return firstSuccessfulEscape(parsers, state, containingNoWayBack, myNoWayBackRecoverer)
+			return fsd.escape(state)
 		}
 
 		return state.NewSemanticError(fmt.Sprintf(
@@ -84,12 +89,18 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 	)
 }
 
-func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
-) (gomme.State, Output) {
+type firstSuccessfulData[Output any] struct {
+	id                  uint64
+	parsers             []gomme.Parser[Output]
+	containingNoWayBack gomme.Ternary
+	noWayBackRecoverer  gomme.CombiningRecoverer
+}
+
+func (fsd *firstSuccessfulData[Output]) happy(state gomme.State) (gomme.State, Output) {
 	var zero Output
 
 	// use cache to know result immediately
-	result, ok := state.CachedParserResult(id)
+	result, ok := state.CachedParserResult(fsd.id)
 	if ok {
 		if result.Failed {
 			return state.ErrorAgain(result.Error), zero
@@ -100,20 +111,20 @@ func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output],
 	// cache miss: parse
 	bestState := state
 	idx := 0
-	for i, parse := range parsers {
+	for i, parse := range fsd.parsers {
 		newState, output := parse.It(state)
 		if !newState.Failed() {
 			if state.NoWayBackMoved(newState) {
-				state.CacheParserResult(id, i, i, 0, newState, output)
+				state.CacheParserResult(fsd.id, i, i, 0, newState, output)
 			} else {
-				state.CacheParserResult(id, i, -1, -1, newState, output)
+				state.CacheParserResult(fsd.id, i, -1, -1, newState, output)
 			}
 			return newState, output
 		}
 
 		if state.NoWayBackMoved(newState) { // don't look further than this
-			state.CacheParserResult(id, i, i, 0, newState, output)
-			return gomme.IWitnessed(state, id, i, newState), zero
+			state.CacheParserResult(fsd.id, i, i, 0, newState, output)
+			return gomme.IWitnessed(state, fsd.id, i, newState), zero
 		}
 
 		// may the best error win:
@@ -124,22 +135,21 @@ func firstSuccessfulHappy[Output any](id uint64, parsers []gomme.Parser[Output],
 			idx = i
 		}
 	}
-	state.CacheParserResult(id, idx, idx, 0, bestState, zero)
-	return gomme.IWitnessed(state, id, idx, bestState), zero
+	state.CacheParserResult(fsd.id, idx, idx, 0, bestState, zero)
+	return gomme.IWitnessed(state, fsd.id, idx, bestState), zero
 }
 
-func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
-) (gomme.State, Output) {
+func (fsd *firstSuccessfulData[Output]) error(state gomme.State) (gomme.State, Output) {
 	var zero Output
 	// use cache to know right parser immediately (Idx, HasNoWayBack)
-	result, ok := state.CachedParserResult(id)
+	result, ok := state.CachedParserResult(fsd.id)
 	if !ok {
 		return state.NewSemanticError(
 			"grammar error: cache was empty in `FirstSuccessful(error)` parser",
 		), zero
 	}
 	if result.HasNoWayBack {
-		parse := parsers[result.Idx]
+		parse := fsd.parsers[result.Idx]
 		newState, _ := parse.It(state)
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
@@ -152,73 +162,66 @@ func firstSuccessfulError[Output any](id uint64, parsers []gomme.Parser[Output],
 	return state, zero
 }
 
-func firstSuccessfulHandle[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
-) (gomme.State, Output) {
+func (fsd *firstSuccessfulData[Output]) handle(state gomme.State) (gomme.State, Output) {
 	var zero Output
 	// use cache to know right parser immediately (Idx, Failed)
-	result, ok := state.CachedParserResult(id)
+	result, ok := state.CachedParserResult(fsd.id)
 	if !ok {
 		return state.NewSemanticError(
 			"grammar error: cache was empty in `FirstSuccessful(handle)` parser",
 		), zero
 	}
 	if result.Failed {
-		newState, output := gomme.HandleWitness(state, id, result.Idx, parsers...)
+		newState, output := gomme.HandleWitness(state, fsd.id, result.Idx, fsd.parsers...)
 		// the parser failed; so it MUST be the one with the error we are looking for
 		if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
 					"parsing mode `happy` or `escape` in `FirstSuccessful(handle)` parser, but mode is: `%s`",
-				result.Idx, parsers[result.Idx].Expected(), newState.ParsingMode())), zero
+				result.Idx, fsd.parsers[result.Idx].Expected(), newState.ParsingMode())), zero
 		}
 		return newState, output
 	}
 	return state, zero
 }
 
-func firstSuccessfulRewind[Output any](id uint64, parsers []gomme.Parser[Output], state gomme.State,
-) (gomme.State, Output) {
+func (fsd *firstSuccessfulData[Output]) rewind(state gomme.State) (gomme.State, Output) {
 	var zero Output
 	// use cache to know right parser immediately (Idx, Failed)
-	result, ok := state.CachedParserResult(id)
+	result, ok := state.CachedParserResult(fsd.id)
 	if !ok {
 		return state.NewSemanticError(
 			"grammar error: cache was empty in `FirstSuccessful(rewind)` parser",
 		), zero
 	}
 	if result.Failed {
-		newState, output := gomme.HandleWitness(state, id, result.Idx, parsers...)
+		newState, output := gomme.HandleWitness(state, fsd.id, result.Idx, fsd.parsers...)
 		// the parser failed; so it MUST be the one with the error we are looking for
 		if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
 					"parsing mode `happy` or `escape` in `FirstSuccessful(rewind)` parser, but mode is: `%s`",
-				result.Idx, parsers[result.Idx].Expected(), newState.ParsingMode())), zero
+				result.Idx, fsd.parsers[result.Idx].Expected(), newState.ParsingMode())), zero
 		}
 		return newState, output
 	}
 	return state, zero
 }
 
-func firstSuccessfulEscape[Output any](
-	parsers []gomme.Parser[Output],
-	state gomme.State,
-	containingNoWayBack gomme.Ternary,
-	noWayBackRecoverer gomme.CombiningRecoverer,
-) (gomme.State, Output) {
+func (fsd *firstSuccessfulData[Output]) escape(state gomme.State) (gomme.State, Output) {
 	var zero Output
-	if containingNoWayBack == gomme.TernaryNo { // we can't help
+	if fsd.containingNoWayBack == gomme.TernaryNo { // we can't help
 		return state, zero
 	}
 
-	idx, ok := noWayBackRecoverer.CachedIndex(state)
+	idx, ok := fsd.noWayBackRecoverer.CachedIndex(state)
 	if !ok {
 		return state.NewSemanticError(
 			"grammar error: cache was empty in `FirstSuccessful(escape)` parser",
 		), zero
 	}
 
-	parse := parsers[idx]
+	parse := fsd.parsers[idx]
 	newState, output := parse.It(state)
 	// this parser has the best recoverer; so it MUST make us happy again
 	if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
