@@ -59,25 +59,25 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	}
 
 	// Construct myNoWayBackRecoverer from the sub-parsers
-	subRecoverers := make([]gomme.Recoverer, 0, 5)
+	subRecoverers := make([]gomme.Recoverer, n)
 	if p1.ContainsNoWayBack() > gomme.TernaryNo {
-		subRecoverers = append(subRecoverers, p1.NoWayBackRecoverer)
+		subRecoverers[0] = p1.NoWayBackRecoverer
 	}
 	if n > 1 {
 		if p2.ContainsNoWayBack() > gomme.TernaryNo {
-			subRecoverers = append(subRecoverers, p2.NoWayBackRecoverer)
+			subRecoverers[1] = p2.NoWayBackRecoverer
 		}
 		if n > 2 {
 			if p3.ContainsNoWayBack() > gomme.TernaryNo {
-				subRecoverers = append(subRecoverers, p3.NoWayBackRecoverer)
+				subRecoverers[2] = p3.NoWayBackRecoverer
 			}
 			if n > 3 {
 				if p4.ContainsNoWayBack() > gomme.TernaryNo {
-					subRecoverers = append(subRecoverers, p4.NoWayBackRecoverer)
+					subRecoverers[3] = p4.NoWayBackRecoverer
 				}
 				if n > 4 {
 					if p5.ContainsNoWayBack() > gomme.TernaryNo {
-						subRecoverers = append(subRecoverers, p5.NoWayBackRecoverer)
+						subRecoverers[4] = p5.NoWayBackRecoverer
 					}
 				}
 			}
@@ -143,24 +143,24 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) any(
 	var zero MO
 
 	if startIdx >= md.n {
-		if state.ParsingMode() == gomme.ParsingModeHappy {
-			return md.mapnMap(state, out1, out2, out3, out4, out5)
+		if remaining.ParsingMode() == gomme.ParsingModeHappy {
+			return md.mapn(remaining, out1, out2, out3, out4, out5)
 		}
-		return state, zero
+		return remaining, zero
 	}
 
-	switch state.ParsingMode() {
+	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
 		return md.happy(
 			state, remaining, startIdx, noWayBackStart, noWayBackIdx,
 			out1, out2, out3, out4, out5,
 		)
 	case gomme.ParsingModeError: // find previous NoWayBack (backward)
-		return md.error(state, startIdx, out1, out2, out3, out4, out5)
+		return md.error(state.Preserve(remaining), startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeHandle: // find error again (forward)
-		return md.handle(state, startIdx, out1, out2, out3, out4, out5)
+		return md.handle(state.Preserve(remaining), startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeRewind: // go back to error / witness parser (1) (backward)
-		return md.rewind(state, startIdx, out1, out2, out3, out4, out5)
+		return md.rewind(state.Preserve(remaining), startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
 		return md.escape(state, remaining, startIdx, out1, out2, out3, out4, out5)
 	}
@@ -170,7 +170,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) any(
 }
 
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
-	state gomme.State, remaining gomme.State,
+	state, remaining gomme.State,
 	startIdx int,
 	noWayBackStart int, noWayBackIdx int,
 	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
@@ -192,10 +192,10 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 	outputs := make([]interface{}, 0, 4)
 	var newState1 gomme.State
 	if startIdx <= 0 {
-		newState1, out1 = md.p1.It(state)
+		newState1, out1 = md.p1.It(remaining)
 		if newState1.Failed() {
 			state.CacheParserResult(md.id, 0, noWayBackIdx, noWayBackStart, newState1, outputs)
-			return gomme.IWitnessed(state, md.id, 0, newState1), zeroMO
+			return gomme.IWitnessed(remaining, md.id, 0, newState1), zeroMO
 		}
 		if state.NoWayBackMoved(newState1) {
 			noWayBackIdx = 0
@@ -207,10 +207,13 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 	if md.n > 1 {
 		var newState2 gomme.State
 		if startIdx <= 1 {
+			if startIdx == 1 {
+				newState1 = remaining
+			}
 			newState2, out2 = md.p2.It(newState1)
 			if newState2.Failed() {
 				state.CacheParserResult(md.id, 1, noWayBackIdx, noWayBackStart, newState2, outputs)
-				state = gomme.IWitnessed(state, md.id, 0, newState2)
+				state = gomme.IWitnessed(newState1, md.id, 0, newState2)
 				if noWayBackStart < 0 { // we can't do anything here
 					return state, zeroMO
 				}
@@ -226,10 +229,13 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 		if md.n > 2 {
 			var newState3 gomme.State
 			if startIdx <= 2 {
+				if startIdx == 2 {
+					newState2 = remaining
+				}
 				newState3, out3 = md.p3.It(newState2)
 				if newState3.Failed() {
 					state.CacheParserResult(md.id, 2, noWayBackIdx, noWayBackStart, newState3, outputs)
-					state = gomme.IWitnessed(state, md.id, 0, newState3)
+					state = gomme.IWitnessed(newState2, md.id, 0, newState3)
 					if noWayBackStart < 0 { // we can't do anything here
 						return state, zeroMO
 					}
@@ -245,10 +251,13 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 			if md.n > 3 {
 				var newState4 gomme.State
 				if startIdx <= 3 {
+					if startIdx == 3 {
+						newState3 = remaining
+					}
 					newState4, out4 = md.p4.It(newState3)
 					if newState4.Failed() {
 						state.CacheParserResult(md.id, 3, noWayBackIdx, noWayBackStart, newState4, outputs)
-						state = gomme.IWitnessed(state, md.id, 0, newState4)
+						state = gomme.IWitnessed(newState3, md.id, 0, newState4)
 						if noWayBackStart < 0 { // we can't do anything here
 							return state, zeroMO
 						}
@@ -263,10 +272,13 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 
 				if md.n > 4 {
 					var newState5 gomme.State
+					if startIdx == 4 {
+						newState4 = remaining
+					}
 					newState5, out5 = md.p5.It(newState4)
 					if newState5.Failed() {
 						state.CacheParserResult(md.id, 4, noWayBackIdx, noWayBackStart, newState5, outputs)
-						state = gomme.IWitnessed(state, md.id, 0, newState5)
+						state = gomme.IWitnessed(newState4, md.id, 0, newState5)
 						if noWayBackStart < 0 { // we can't do anything here
 							return state, zeroMO
 						}
@@ -318,7 +330,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) happy(
 	return newState1, mapped
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) error(state gomme.State, startIdx int, out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5) (gomme.State, MO) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) error(
+	state gomme.State,
+	_ int, // we don't need startIdx because we rely on the cache
+	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
+) (gomme.State, MO) {
 	var zeroMO MO
 
 	// use cache to know result immediately (HasNoWayBack, NoWayBackIdx, NoWayBackStart)
@@ -363,7 +379,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) error(state gomme.State, startId
 	return state, zeroMO // we can't do anything
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) handle(state gomme.State, startIdx int, out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5) (gomme.State, MO) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) handle(
+	state gomme.State,
+	startIdx int,
+	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
+) (gomme.State, MO) {
 	var zeroMO MO
 
 	// use cache to know result immediately (Failed, Idx, ErrorStart)
@@ -478,7 +498,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 		idx = crc.LastIndex()
 	}
 
-	if idx < 0 {
+	if idx < 0 { // TODO: Remove and just return to give up???
 		return state.Preserve(remaining.NewSemanticError(fmt.Sprintf(
 			"programming error: no recoverer found in `MapN(escape)` parser "+
 				"and `startIdx`: %d", startIdx,
@@ -499,12 +519,12 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 		newState, out5 = md.p5.It(remaining)
 	}
 	if newState.ParsingMode() == gomme.ParsingModeHappy {
-		return md.mapnMap(state, out1, out2, out3, out4, out5)
+		return md.mapn(state, out1, out2, out3, out4, out5)
 	}
 	return state, zeroMO // we can't do anything
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapnMap(
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapn(
 	state gomme.State,
 	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
 ) (gomme.State, MO) {

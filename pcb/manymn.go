@@ -26,18 +26,16 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 	}
 
 	parseMany := func(state gomme.State) (gomme.State, []Output) {
-		outputs := make([]Output, 0, min(32, atMost))
+		outputs := make([]Output, 0, min(32, md.atMost))
 		return md.any(state, state, -1, -1, outputs)
 	}
 
 	recoverer := Forbidden("Many(atLeast=0)")
-	containsNoWayBack := gomme.TernaryNo
 	if atLeast > 0 {
 		recoverer = BasicRecovererFunc(parseMany)
-		containsNoWayBack = parse.ContainsNoWayBack()
 	}
 	return gomme.NewParser[[]Output]("ManyMN", parseMany, true, recoverer,
-		containsNoWayBack, parse.NoWayBackRecoverer)
+		parse.ContainsNoWayBack(), parse.NoWayBackRecoverer)
 }
 
 type manyData[Output any] struct {
@@ -55,7 +53,7 @@ func (md *manyData[Output]) any(
 	count := len(outputs)
 
 	if count >= md.atMost {
-		return state, outputs
+		return remaining, outputs
 	}
 	switch state.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing

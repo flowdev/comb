@@ -11,7 +11,7 @@ func TestOptional(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		parser gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -25,7 +25,7 @@ func TestOptional(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "\r\n123",
 			args: args{
-				p: Optional(CRLF()),
+				parser: Optional(CRLF()),
 			},
 			wantErr:       false,
 			wantOutput:    "\r\n",
@@ -35,7 +35,7 @@ func TestOptional(t *testing.T) {
 			name:  "no match should succeed",
 			input: "123",
 			args: args{
-				p: Optional(CRLF()),
+				parser: Optional(CRLF()),
 			},
 			wantErr:       false,
 			wantOutput:    "",
@@ -45,7 +45,7 @@ func TestOptional(t *testing.T) {
 			name:  "empty input should succeed",
 			input: "",
 			args: args{
-				p: Optional(CRLF()),
+				parser: Optional(CRLF()),
 			},
 			wantErr:       false,
 			wantOutput:    "",
@@ -58,8 +58,8 @@ func TestOptional(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -69,19 +69,19 @@ func TestOptional(t *testing.T) {
 
 			remainingString := newState.CurrentString()
 			if remainingString != tc.wantRemaining {
-				t.Errorf("got remaining %v, want remaining %v", remainingString, tc.wantRemaining)
+				t.Errorf("got remaining %q, want remaining %q", remainingString, tc.wantRemaining)
 			}
 		})
 	}
 }
 
 func BenchmarkOptional(b *testing.B) {
-	p := Optional(CRLF())
+	parser := Optional(CRLF())
 	input := gomme.NewFromString(1, nil, "\r\n123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestPeek(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		parser gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -103,7 +103,7 @@ func TestPeek(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abcd;",
 			args: args{
-				p: Peek(Alpha1()),
+				parser: Peek(Alpha1()),
 			},
 			wantErr:       false,
 			wantOutput:    "abcd",
@@ -113,7 +113,7 @@ func TestPeek(t *testing.T) {
 			name:  "non matching parser should fail",
 			input: "123;",
 			args: args{
-				p: Peek(Alpha1()),
+				parser: Peek(Alpha1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -126,8 +126,8 @@ func TestPeek(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -144,12 +144,12 @@ func TestPeek(t *testing.T) {
 }
 
 func BenchmarkPeek(b *testing.B) {
-	p := Peek(Alpha1())
+	parser := Peek(Alpha1())
 	input := gomme.NewFromString(1, nil, "abcd;")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestRecognize(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[[]byte]
+		parser gomme.Parser[[]byte]
 	}
 	testCases := []struct {
 		name          string
@@ -171,9 +171,7 @@ func TestRecognize(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "123abc",
 			args: args{
-				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)), /*func(po1 string, po2 string) (string, error) {
-					return po1 + po2, nil
-				})),*/
+				parser: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       false,
 			wantOutput:    "123abc",
@@ -183,27 +181,27 @@ func TestRecognize(t *testing.T) {
 			name:  "no prefix match should fail",
 			input: "abc",
 			args: args{
-				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
+				parser: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "abc",
+			wantOutput:    "abc",
+			wantRemaining: "",
 		},
 		{
 			name:  "no parser match should fail",
 			input: "123",
 			args: args{
-				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
+				parser: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "123",
+			wantOutput:    "123",
+			wantRemaining: "",
 		},
 		{
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
+				parser: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -216,13 +214,13 @@ func TestRecognize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
 			if string(gotResult) != tc.wantOutput {
-				t.Errorf("got output %v, want output %v", string(gotResult), tc.wantOutput)
+				t.Errorf("got output %q, want output %q", string(gotResult), tc.wantOutput)
 			}
 
 			remainingString := newState.CurrentString()
@@ -234,12 +232,12 @@ func TestRecognize(t *testing.T) {
 }
 
 func BenchmarkRecognize(b *testing.B) {
-	p := Recognize(Map2(Digit1(), Alpha1(), pairMapFunc))
+	parser := Recognize(Map2(Digit1(), Alpha1(), pairMapFunc))
 	input := gomme.NewFromString(1, nil, "123abc")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
@@ -247,7 +245,7 @@ func TestAssign(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[int]
+		parser gomme.Parser[int]
 	}
 	testCases := []struct {
 		name          string
@@ -261,7 +259,7 @@ func TestAssign(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abcd",
 			args: args{
-				p: Assign(1234, Alpha1()),
+				parser: Assign(1234, Alpha1()),
 			},
 			wantErr:       false,
 			wantOutput:    1234,
@@ -271,10 +269,10 @@ func TestAssign(t *testing.T) {
 			name:  "non matching parser should fail",
 			input: "123abcd;",
 			args: args{
-				p: Assign(1234, Alpha1()),
+				parser: Assign(1234, Alpha1()),
 			},
 			wantErr:       true,
-			wantOutput:    0,
+			wantOutput:    1234,
 			wantRemaining: "123abcd;",
 		},
 	}
@@ -284,13 +282,13 @@ func TestAssign(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
-				t.Errorf("got output %q, want output %q", gotResult, tc.wantOutput)
+				t.Errorf("got output %d, want output %d", gotResult, tc.wantOutput)
 			}
 
 			remainingString := newState.CurrentString()
@@ -302,12 +300,12 @@ func TestAssign(t *testing.T) {
 }
 
 func BenchmarkAssign(b *testing.B) {
-	p := Assign(1234, Alpha1())
+	parser := Assign(1234, Alpha1())
 	input := gomme.NewFromString(1, nil, "abcd")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
@@ -315,7 +313,7 @@ func TestDelimited(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		parser gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -329,7 +327,7 @@ func TestDelimited(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "+1\r\n",
 			args: args{
-				p: Delimited(Char('+'), Digit1(), CRLF()),
+				parser: Delimited(Char('+'), Digit1(), CRLF()),
 			},
 			wantErr:       false,
 			wantOutput:    "1",
@@ -339,37 +337,37 @@ func TestDelimited(t *testing.T) {
 			name:  "no prefix match should fail",
 			input: "1\r\n",
 			args: args{
-				p: Delimited(Char('+'), Digit1(), CRLF()),
+				parser: Delimited(Char('+'), Digit1(), CRLF()),
 			},
 			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "1\r\n",
+			wantOutput:    "1",
+			wantRemaining: "",
 		},
 		{
 			name:  "no parser match should fail",
 			input: "+\r\n",
 			args: args{
-				p: Delimited(Char('+'), Digit1(), CRLF()),
+				parser: Delimited(Char('+'), Digit1(), CRLF()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
-			wantRemaining: "+\r\n",
+			wantRemaining: "",
 		},
 		{
 			name:  "no suffix match should fail",
 			input: "+1",
 			args: args{
-				p: Delimited(Char('+'), Digit1(), CRLF()),
+				parser: Delimited(Char('+'), Digit1(), CRLF()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
-			wantRemaining: "+1",
+			wantRemaining: "",
 		},
 		{
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Delimited(Char('+'), Digit1(), CRLF()),
+				parser: Delimited(Char('+'), Digit1(), CRLF()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -382,8 +380,8 @@ func TestDelimited(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -405,15 +403,15 @@ func BenchmarkDelimited(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
-func TestPreceded(t *testing.T) {
+func TestPrefixed(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		parser gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -427,7 +425,7 @@ func TestPreceded(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "+123",
 			args: args{
-				p: Prefixed(Char('+'), Digit1()),
+				parser: Prefixed(Char('+'), Digit1()),
 			},
 			wantErr:       false,
 			wantOutput:    "123",
@@ -437,27 +435,27 @@ func TestPreceded(t *testing.T) {
 			name:  "no prefix match should fail",
 			input: "+123",
 			args: args{
-				p: Prefixed(Char('-'), Digit1()),
+				parser: Prefixed(Char('-'), Digit1()),
 			},
 			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "+123",
+			wantOutput:    "123",
+			wantRemaining: "",
 		},
 		{
-			name:  "no parser match should succeed",
+			name:  "no parser match should fail",
 			input: "+",
 			args: args{
-				p: Prefixed(Char('+'), Digit1()),
+				parser: Prefixed(Char('+'), Digit1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
-			wantRemaining: "+",
+			wantRemaining: "",
 		},
 		{
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Prefixed(Char('+'), Digit1()),
+				parser: Prefixed(Char('+'), Digit1()),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -470,8 +468,8 @@ func TestPreceded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -487,21 +485,21 @@ func TestPreceded(t *testing.T) {
 	}
 }
 
-func BenchmarkPreceded(b *testing.B) {
+func BenchmarkPrefixed(b *testing.B) {
 	parser := Prefixed(Char('+'), Digit1())
 	input := gomme.NewFromString(1, nil, "+123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
-func TestTerminated(t *testing.T) {
+func TestSuffixed(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		parser gomme.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -515,7 +513,7 @@ func TestTerminated(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "1+23",
 			args: args{
-				p: Suffixed(Digit1(), Char('+')),
+				parser: Suffixed(Digit1(), Char('+')),
 			},
 			wantErr:       false,
 			wantOutput:    "1",
@@ -525,27 +523,27 @@ func TestTerminated(t *testing.T) {
 			name:  "no suffix match should fail",
 			input: "1-23",
 			args: args{
-				p: Suffixed(Digit1(), Char('+')),
+				parser: Suffixed(Digit1(), Char('+')),
 			},
 			wantErr:       true,
 			wantOutput:    "",
-			wantRemaining: "1-23",
+			wantRemaining: "-23",
 		},
 		{
-			name:  "no parser match should succeed",
+			name:  "no parser match should fail",
 			input: "+",
 			args: args{
-				p: Suffixed(Digit1(), Char('+')),
+				parser: Suffixed(Digit1(), Char('+')),
 			},
 			wantErr:       true,
 			wantOutput:    "",
-			wantRemaining: "+",
+			wantRemaining: "",
 		},
 		{
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Suffixed(Digit1(), Char('+')),
+				parser: Suffixed(Digit1(), Char('+')),
 			},
 			wantErr:       true,
 			wantOutput:    "",
@@ -558,8 +556,8 @@ func TestTerminated(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -581,7 +579,7 @@ func BenchmarkTerminated(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
@@ -635,7 +633,7 @@ func TestMap(t *testing.T) {
 			},
 			wantErr:       true,
 			wantOutput:    0,
-			wantRemaining: "1abc\r\n",
+			wantRemaining: "abc\r\n",
 		},
 		{
 			name:  "empty input should fail",
@@ -658,8 +656,8 @@ func TestMap(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.parser.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -674,8 +672,8 @@ func TestMap(t *testing.T) {
 	}
 }
 
-func BenchmarkMap1(b *testing.B) {
-	p := Map(Digit1(), func(digit string) (int, error) {
+func BenchmarkMap(b *testing.B) {
+	parser := Map(Digit1(), func(digit string) (int, error) {
 		i, _ := strconv.Atoi(digit)
 		return i, nil
 	})
@@ -683,7 +681,7 @@ func BenchmarkMap1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 
@@ -729,8 +727,8 @@ func TestMap2(t *testing.T) {
 				}),
 			},
 			wantErr:       true,
-			wantOutput:    TestStruct{},
-			wantRemaining: "abc\r\n",
+			wantOutput:    TestStruct{Bar: "abc"},
+			wantRemaining: "\r\n",
 		},
 		{
 			name:  "failing mapper should fail",
@@ -742,7 +740,7 @@ func TestMap2(t *testing.T) {
 			},
 			wantErr:       true,
 			wantOutput:    TestStruct{},
-			wantRemaining: "1abc\r\n",
+			wantRemaining: "\r\n",
 		},
 		{
 			name:  "empty input should fail",
@@ -765,8 +763,8 @@ func TestMap2(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.parser.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -787,7 +785,7 @@ func BenchmarkMap2(b *testing.B) {
 		Bar string
 	}
 
-	p := Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
+	parser := Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
 		first, _ := strconv.Atoi(digit)
 		return TestStruct{Foo: first, Bar: alpha}, nil
 	})
@@ -795,7 +793,7 @@ func BenchmarkMap2(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = p.It(input)
+		_, _ = gomme.RunOnState(input, parser)
 	}
 }
 

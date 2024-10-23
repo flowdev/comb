@@ -85,10 +85,14 @@ func noWayBackRewind[Output any](id uint64, parse Parser[Output], state State) (
 	return HandleWitness(state, id, 0, parse)
 }
 func noWayBackEscape[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
-	if state.input.pos <= state.errHand.err.pos {
-		return state, ZeroOf[Output]() // we are too far in front in the input
+	if state.input.pos < state.errHand.err.pos {
+		return state, ZeroOf[Output]() // we are too far back in the input
 	}
-	newState := state.MoveBy(parse.MyRecoverer()(state))
+	waste := parse.MyRecoverer()(state)
+	if waste < 0 {
+		return state.NewSemanticError("unable to recover from error"), ZeroOf[Output]()
+	}
+	newState := state.MoveBy(waste)
 	newState.errHand = errHand{}
 	newState.mode = ParsingModeHappy
 

@@ -26,15 +26,14 @@ type errHand struct {
 	culpritIdx      int       // index of the sub-parser that created the error
 	curDel          int       // current number of tokes to delete for error handling
 	ignoreErrParser bool      // true if the failing parser should be ignored
+	orgPos          int       // state.input.pos before starting to use deleter
+	orgLine         int       // state.input.line before starting to use deleter
+	orgPrevNl       int       // state.input.prevNl before starting to use deleter
 }
 
 // IWitnessed lets a branch parser report an error that it witnessed in
 // the sub-parser with index `idx` (0 if it has only 1 sub-parser).
 func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
-	if state.errHand.err != nil {
-		return state.NewSemanticError(
-			"programming error: IWitnessed called while still handling an error")
-	}
 	state.noWayBackMark = max(state.noWayBackMark, errState.noWayBackMark)
 	state.mode = errState.mode
 	if errState.errHand.witnessID == 0 { // error hasn't been witnessed yet
@@ -44,6 +43,8 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 		errState.errHand.witnessID = witnessID
 		errState.errHand.witnessPos = state.input.pos
 		errState.errHand.culpritIdx = idx
+	} else if errState.errHand.ignoreErrParser || errState.errHand.curDel > 0 { // we try to recover
+		state.mode = ParsingModeRewind
 	}
 	state.errHand = errState.errHand
 	return state
@@ -66,7 +67,11 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 	}
 
 	// we are witness
-	orgPos := state.input.pos
+	if state.errHand.orgPos == 0 && state.errHand.orgLine == 0 && state.errHand.orgPrevNl == 0 {
+		state.errHand.orgPos = state.input.pos
+		state.errHand.orgLine = state.input.line
+		state.errHand.orgPrevNl = state.input.prevNl
+	}
 	if state.errHand.culpritIdx >= len(parsers) {
 		state = state.NewSemanticError(fmt.Sprintf(
 			"programming error: length of sub-parsers is only %d but index of culprit sub-parser is %d",
@@ -84,9 +89,15 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 			state.errHand.curDel++
 			if state.errHand.curDel > state.maxDel {
 				if !state.errHand.ignoreErrParser {
+					state.input.pos = state.errHand.orgPos
+					state.input.line = state.errHand.orgLine
+					state.input.prevNl = state.errHand.orgPrevNl
 					state.errHand.curDel = 0
 					state.errHand.ignoreErrParser = true
 				} else {
+					state.input.pos = state.errHand.orgPos
+					state.input.line = state.errHand.orgLine
+					state.input.prevNl = state.errHand.orgPrevNl
 					state.mode = ParsingModeEscape // give up and go the hard way
 					return state, zero
 				}
@@ -96,14 +107,18 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 		}
 		state.mode = ParsingModeHappy // try again
 		state.errHand.err = nil
-		state.input.pos = orgPos
-		state = state.deleter(state, state.errHand.curDel)
-		if state.errHand.ignoreErrParser {
-			return state, zero
-		}
-		state, output = parse.It(state)
-		if !state.Failed() {
-			return state, output // first parser succeeded, now try the rest
+		oldRemaining := state.BytesRemaining()
+		state = state.deleter(state, min(state.errHand.curDel, 1))
+		if oldRemaining > state.BytesRemaining() || state.errHand.curDel == 0 {
+			if state.errHand.ignoreErrParser {
+				return state, zero
+			}
+			state, output = parse.It(state)
+			if !state.Failed() {
+				return state, output // first parser succeeded, now try the rest
+			}
+		} else { // speed up since we don't get further anyway
+			state.errHand.curDel = state.maxDel
 		}
 		state.mode = ParsingModeRewind
 	}
@@ -227,6 +242,9 @@ func (crc CombiningRecoverer) CachedIndex(state State) (idx int, ok bool) {
 // DefaultBinaryDeleter shouldn't be used outside of this package.
 // Please use pcb.ByteDeleter instead.
 func DefaultBinaryDeleter(state State, count int) State {
+	if count <= 0 { // don't delete at all
+		return state
+	}
 	return state.MoveBy(count)
 }
 
@@ -236,6 +254,9 @@ func DefaultTextDeleter(state State, count int) State {
 	found := 0
 	oldTyp := rune(0)
 
+	if count <= 0 { // don't delete at all
+		return state
+	}
 	byteCount := strings.IndexFunc(state.CurrentString(), func(r rune) bool {
 		var typ, paren rune
 

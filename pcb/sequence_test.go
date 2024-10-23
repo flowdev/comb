@@ -10,7 +10,7 @@ func TestSequence(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[[]string]
+		parser gomme.Parser[[]string]
 	}
 	testCases := []struct {
 		name          string
@@ -24,7 +24,7 @@ func TestSequence(t *testing.T) {
 			name:  "matching parsers should succeed",
 			input: "1a3",
 			args: args{
-				p: Sequence(Digit1(), Alpha0(), Digit1()),
+				parser: Sequence(Digit1(), Alpha0(), Digit1()),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"1", "a", "3"},
@@ -34,7 +34,7 @@ func TestSequence(t *testing.T) {
 			name:  "matching parsers in longer input should succeed",
 			input: "1a3bcd",
 			args: args{
-				p: Sequence(Digit1(), Alpha0(), Digit1()),
+				parser: Sequence(Digit1(), Alpha0(), Digit1()),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"1", "a", "3"},
@@ -42,29 +42,29 @@ func TestSequence(t *testing.T) {
 		},
 		{
 			name:  "partially matching parsers should fail",
-			input: "1a3",
+			input: "1a?",
 			args: args{
-				p: Sequence(Digit1(), Digit1(), Digit1()),
+				parser: Sequence(Digit1(), Alpha0(), Digit1()),
 			},
 			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "1a3",
+			wantOutput:    []string{"1", "a", ""},
+			wantRemaining: "?",
 		},
 		{
 			name:  "too short input should fail",
-			input: "12",
+			input: "1a",
 			args: args{
-				p: Sequence(Digit1(), Digit1(), Digit1()),
+				parser: Sequence(Digit1(), Alpha0(), Digit1()),
 			},
 			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "12",
+			wantOutput:    []string{"1", "a", ""},
+			wantRemaining: "",
 		},
 		{
-			name:  "empty input should succeed",
+			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Sequence(Digit1(), Digit1(), Digit1()),
+				parser: Sequence(Digit1(), Alpha0(), Digit1()),
 			},
 			wantErr:       true,
 			wantOutput:    nil,
@@ -77,8 +77,8 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(1, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 

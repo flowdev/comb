@@ -217,6 +217,9 @@ func SpacedTokens(state gomme.State, count int) gomme.State {
 	found := 0
 	space := false
 
+	if count <= 0 { // don't delete at all
+		return state
+	}
 	byteCount := strings.IndexFunc(state.CurrentString(), func(r rune) bool {
 		if unicode.IsSpace(r) != space {
 			space = !space

@@ -318,7 +318,9 @@ func (st State) ParsingMode() ParsingMode {
 // This should only be used by the pcb.Optional parser.
 func (st State) Succeed(subState State) State {
 	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
-	st.mode = subState.mode
+	if st.mode != ParsingModeHappy || subState.mode != ParsingModeError {
+		st.mode = subState.mode
+	}
 	return st
 }
 
@@ -329,6 +331,24 @@ func (st State) Preserve(subState State) State {
 	st.mode = subState.mode
 
 	if subState.errHand.err != nil || subState.errHand.witnessID > 0 { // should be true
+		st.errHand = subState.errHand
+	}
+
+	return st
+}
+
+// Fail returns the State with the error (without handling) kept from the
+// subState. The mode will be set to `error`.
+// The NoWayBack mark is intentionally not kept.
+// This is useful for branch parsers that are leaf parsers to the outside.
+func (st State) Fail(subState State) State {
+	if st.mode == ParsingModeHappy {
+		st.mode = ParsingModeError
+		if subState.errHand.err != nil { // should be true
+			st.errHand.err = subState.errHand.err
+		}
+	} else {
+		st.mode = subState.mode
 		st.errHand = subState.errHand
 	}
 
@@ -392,6 +412,9 @@ func (st State) NewSemanticError(message string) State {
 }
 
 // Failed returns whether this state is in a failed state or not.
+// The state is only failed if the last parser failed.
+// Old errors that have been handled already don't count.
+// Use State.HasError to check that (or just call State.Error).
 func (st State) Failed() bool {
 	return st.errHand.err != nil
 }
@@ -408,6 +431,9 @@ func (st State) CurrentSourceLine() string {
 }
 
 func (st State) where(pos int) (line, col int, srcLine string) {
+	if pos < 0 {
+		pos = 0
+	}
 	if len(st.input.bytes) == 0 {
 		return 1, 0, ""
 	}
@@ -463,11 +489,17 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 	return 1, 0, "", false
 }
 
+// HasError returns true if any handled errors are registered.
+// (Errors that would be returned by State.Error())
+func (st State) HasError() bool {
+	return len(st.oldErrors) > 0
+}
+
 // Error returns a human readable error string.
 func (st State) Error() string {
-	slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
-		return cmp.Compare(a.pos, b.pos)
-	})
+	//slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
+	//	return cmp.Compare(a.pos, b.pos)
+	//})
 
 	fullMsg := strings.Builder{}
 	for _, pcbErr := range st.oldErrors {

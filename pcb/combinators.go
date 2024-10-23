@@ -15,18 +15,22 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		}
 		return newState, output
 	}
-	optParser := gomme.NewParser[Output](
-		"Optional",
+	noWayBack := parse.ContainsNoWayBack()
+	if noWayBack == gomme.TernaryYes { // optional is never sure
+		noWayBack = gomme.TernaryMaybe
+	}
+	return gomme.NewParser[Output](
+		"optional "+parse.Expected(),
 		optParse,
-		true,
+		parse.PossibleWitness(),
 		Forbidden("Optional"),
-		parse.ContainsNoWayBack(),
+		noWayBack,
 		parse.NoWayBackRecoverer,
 	)
-	return MapN[Output, interface{}, interface{}, interface{}, interface{}](
-		optParser, nil, nil, nil, nil, 1, func(o Output) (Output, error) {
-			return o, nil
-		}, nil, nil, nil, nil)
+	//return MapN[Output, interface{}, interface{}, interface{}, interface{}](
+	//	optParser, nil, nil, nil, nil, 1, func(o Output) (Output, error) {
+	//		return o, nil
+	//	}, nil, nil, nil, nil)
 }
 
 // Peek tries to apply the provided parser without consuming any input.
@@ -40,8 +44,8 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
 		if newState.Failed() {
-			// avoid NoWayBack because we only peek; error message and consumption don't matter anyway
-			return state.NewError("Peek"), output
+			// avoid NoWayBack and consumption because we only peek
+			return state.Fail(newState), output
 		}
 
 		return state, output

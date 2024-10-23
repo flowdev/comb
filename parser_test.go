@@ -59,7 +59,7 @@ func TestNoWayBack(t *testing.T) {
 			},
 			wantErr:       true,
 			wantOutput:    "",
-			wantRemaining: "abc",
+			wantRemaining: "bc",
 		},
 		{
 			name:  "Many0: tail matching parser after failing NoWayBack head parser should fail",

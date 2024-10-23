@@ -85,12 +85,12 @@ type Parser[Output any] interface {
 }
 
 type prsr[Output any] struct {
-	expected          string
-	it                func(State) (State, Output)
-	possibleWitness   bool
-	recoverer         Recoverer // will be requested only by the NoWayBack parser
-	containsNoWayBack Ternary
-	refugeRecoverer   Recoverer // will be requested in choose mode to find the right NoWayBack parser
+	expected           string
+	it                 func(State) (State, Output)
+	possibleWitness    bool
+	recoverer          Recoverer // will be requested only by the NoWayBack parser
+	containsNoWayBack  Ternary
+	noWayBackRecoverer Recoverer // will be requested in choose mode to find the right NoWayBack parser
 }
 
 // NewParser is THE way to create parsers.
@@ -100,15 +100,15 @@ func NewParser[Output any](
 	possibleWitness bool,
 	recover Recoverer,
 	containsNoWayBack Ternary,
-	refugeRecoverer Recoverer,
+	noWayBackRecoverer Recoverer,
 ) Parser[Output] {
 	p := prsr[Output]{
-		expected:          expected,
-		it:                parse,
-		possibleWitness:   possibleWitness,
-		recoverer:         recover,
-		containsNoWayBack: containsNoWayBack,
-		refugeRecoverer:   refugeRecoverer,
+		expected:           expected,
+		it:                 parse,
+		possibleWitness:    possibleWitness,
+		recoverer:          recover,
+		containsNoWayBack:  containsNoWayBack,
+		noWayBackRecoverer: noWayBackRecoverer,
 	}
 	if recover == nil {
 		p.recoverer = DefaultRecoverer(p)
@@ -134,11 +134,11 @@ func (p prsr[Output]) MyRecoverer() Recoverer {
 
 func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
 	return prsr[Output]{ // make it concurrency safe without locking
-		expected:          p.expected,
-		it:                p.it,
-		recoverer:         newRecoverer,
-		containsNoWayBack: p.containsNoWayBack,
-		refugeRecoverer:   p.refugeRecoverer,
+		expected:           p.expected,
+		it:                 p.it,
+		recoverer:          newRecoverer,
+		containsNoWayBack:  p.containsNoWayBack,
+		noWayBackRecoverer: p.noWayBackRecoverer,
 	}
 }
 
@@ -147,7 +147,7 @@ func (p prsr[Output]) ContainsNoWayBack() Ternary {
 }
 
 func (p prsr[Output]) NoWayBackRecoverer(state State) int {
-	return p.refugeRecoverer(state)
+	return p.noWayBackRecoverer(state)
 }
 
 type lazyprsr[Output any] struct {
@@ -219,22 +219,70 @@ func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
 
 // RunOnString runs a parser on text input and returns the output and error(s).
 func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser[Output]) (Output, error) {
-	return run(NewFromString(maxDel, del, input), parse)
+	newState, output := RunOnState(NewFromString(maxDel, del, input), parse)
+	if len(newState.oldErrors) == 0 {
+		return output, nil
+	}
+	return ZeroOf[Output](), pcbErrorsToGoErrors(newState.oldErrors)
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](maxDel int, del Deleter, input []byte, parse Parser[Output]) (Output, error) {
-	return run(NewState(maxDel, del, input), parse)
-}
-
-func run[Output any](state State, parse Parser[Output]) (Output, error) {
-	// TODO: handle errors at this level???
-	newState, output := parse.It(state)
+	newState, output := RunOnState(NewState(maxDel, del, input), parse)
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}
 	return ZeroOf[Output](), pcbErrorsToGoErrors(newState.oldErrors)
+}
+
+func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
+	var output Output
+
+	id := NewBranchParserID()
+	newState := state
+	oldMode := state.mode
+
+	for {
+		switch newState.ParsingMode() {
+		case ParsingModeHappy: // normal parsing
+			newState, output = parse.It(state)
+		case ParsingModeError: // find previous NoWayBack (backward)
+			state = IWitnessed(state, id, 0, newState)
+			state.mode = ParsingModeHandle
+			if newState.errHand.err != nil {
+				state.oldErrors = append(state.oldErrors, *state.errHand.err)
+			}
+			newState, output = parse.It(state)
+		case ParsingModeHandle: // find error again (forward)
+			state = state.Preserve(newState)
+			newState, output = HandleWitness(state, id, 0, parse)
+		case ParsingModeRewind: // go back to error / witness parser (1) (backward)
+			state = state.Preserve(newState)
+			newState, output = HandleWitness(state, id, 0, parse)
+		case ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
+			if parse.ContainsNoWayBack() == TernaryNo {
+				return state.NewSemanticError(
+					"grammar error: unable to recover from error; " +
+						"you didn't use the NoWayBack parser",
+				), ZeroOf[Output]()
+			}
+			if oldMode == ParsingModeEscape { // prevent endless loop
+				return state.NewSemanticError(
+					"grammar error: unable to recover from error; " +
+						"did you forget to use the NoWayBack parser?",
+				), ZeroOf[Output]()
+			}
+			newState, output = parse.It(state.Preserve(newState))
+		}
+		if newState.mode == ParsingModeHappy {
+			return newState, output
+		}
+		if newState.mode == ParsingModeEscape && parse.ContainsNoWayBack() == TernaryNo { // we can't escape anyway
+			return newState, output
+		}
+		oldMode = state.ParsingMode()
+	}
 }
 
 // ============================================================================
@@ -275,6 +323,7 @@ func NewState(maxDel int, del Deleter, input []byte) State {
 		input:                  Input{bytes: input, line: 1, prevNl: -1},
 		noWayBackMark:          -1,
 		maxDel:                 maxDel,
+		deleter:                del,
 		recovererWasteCache:    make(map[uint64][]cachedWaste),
 		recovererWasteIdxCache: make(map[uint64][]cachedWasteIdx),
 		parserCache:            make(map[uint64][]ParserResult),

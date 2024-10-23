@@ -71,9 +71,9 @@ func (seq *sequenceData[Output]) any(
 	outputs []Output,
 ) (gomme.State, []Output) {
 	if startIdx >= len(seq.parsers) {
-		return state, outputs
+		return remaining, outputs
 	}
-	switch state.ParsingMode() {
+	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
 		return seq.happy(state, remaining, startIdx, noWayBackStart, noWayBackIdx, outputs)
 	case gomme.ParsingModeError: // find previous NoWayBack (backward)
@@ -113,7 +113,7 @@ func (seq *sequenceData[Output]) happy( // normal parsing (forward)
 		newState, output := parse.It(remaining)
 		if newState.Failed() {
 			state.CacheParserResult(seq.id, i, noWayBackIdx, noWayBackStart, newState, outputs)
-			state = gomme.IWitnessed(state, seq.id, i, newState)
+			state = gomme.IWitnessed(remaining, seq.id, i, newState)
 			if noWayBackStart < 0 { // we can't do anything here
 				return state, nil
 			}

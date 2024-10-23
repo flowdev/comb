@@ -177,8 +177,7 @@ func UntilString(stop string) gomme.Parser[string] {
 //
 // If the provided parser is not successful or the predicate doesn't match
 // `atLeast` times, the parser fails and goes back to the start.
-func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool) gomme.Parser[string] {
-	// TODO: change order of atMost and atLeast
+func SatisfyMN(expected string, atLeast, atMost uint, predicate func(rune) bool) gomme.Parser[string] {
 	parse := func(state gomme.State) (gomme.State, string) {
 		current := state
 		count := uint(0)
@@ -222,77 +221,77 @@ func SatisfyMN(expected string, atMost, atLeast uint, predicate func(rune) bool)
 
 // AlphaMN parses at least `atLeast` and at most `atMost` Unicode letters.
 func AlphaMN(atLeast, atMost uint) gomme.Parser[string] {
-	return SatisfyMN("letter", atMost, atLeast, unicode.IsLetter)
+	return SatisfyMN("letter", atLeast, atMost, unicode.IsLetter)
 }
 
 // Alpha0 parses a zero or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input is empty, or no character is found, the parser
 // returns the input as is.
 func Alpha0() gomme.Parser[string] {
-	return SatisfyMN("letter", math.MaxUint, 0, unicode.IsLetter)
+	return SatisfyMN("letter", 0, math.MaxUint, unicode.IsLetter)
 }
 
 // Alpha1 parses one or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alpha1() gomme.Parser[string] {
-	return SatisfyMN("letter", math.MaxUint, 1, unicode.IsLetter)
+	return SatisfyMN("letter", 1, math.MaxUint, unicode.IsLetter)
 }
 
 // Alphanumeric0 parses zero or more alphabetical or numerical Unicode characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Alphanumeric0() gomme.Parser[string] {
-	return SatisfyMN("letter or numeral", math.MaxUint, 0, IsAlphanumeric)
+	return SatisfyMN("letter or numeral", 0, math.MaxUint, IsAlphanumeric)
 }
 
 // Alphanumeric1 parses one or more alphabetical or numerical Unicode characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alphanumeric1() gomme.Parser[string] {
-	return SatisfyMN("letter or numeral", math.MaxUint, 1, IsAlphanumeric)
+	return SatisfyMN("letter or numeral", 1, math.MaxUint, IsAlphanumeric)
 }
 
 // Digit0 parses zero or more ASCII numerical characters: 0-9.
 // In the cases where the input is empty, or no digit character is found, the parser
 // returns the input as is.
 func Digit0() gomme.Parser[string] {
-	return SatisfyMN("digit", math.MaxUint, 0, IsDigit)
+	return SatisfyMN("digit", 0, math.MaxUint, IsDigit)
 }
 
 // Digit1 parses one or more numerical characters: 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Digit1() gomme.Parser[string] {
-	return SatisfyMN("digit", math.MaxUint, 1, IsDigit)
+	return SatisfyMN("digit", 1, math.MaxUint, IsDigit)
 }
 
 // HexDigit0 parses zero or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input is empty, or no terminating character is found, the parser
 // returns the input as is.
 func HexDigit0() gomme.Parser[string] {
-	return SatisfyMN("hexadecimal digit", math.MaxUint, 0, IsHexDigit)
+	return SatisfyMN("hexadecimal digit", 0, math.MaxUint, IsHexDigit)
 }
 
 // HexDigit1 parses one or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func HexDigit1() gomme.Parser[string] {
-	return SatisfyMN("hexadecimal digit", math.MaxUint, 1, IsHexDigit)
+	return SatisfyMN("hexadecimal digit", 1, math.MaxUint, IsHexDigit)
 }
 
 // Whitespace0 parses zero or more Unicode whitespace characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Whitespace0() gomme.Parser[string] {
-	return SatisfyMN("whitespace", math.MaxUint, 0, unicode.IsSpace)
+	return SatisfyMN("whitespace", 0, math.MaxUint, unicode.IsSpace)
 }
 
 // Whitespace1 parses one or more Unicode whitespace characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Whitespace1() gomme.Parser[string] {
-	return SatisfyMN("whitespace", math.MaxUint, 1, unicode.IsSpace)
+	return SatisfyMN("whitespace", 1, math.MaxUint, unicode.IsSpace)
 }
 
 // OneOfRunes parses a single character from the given set of characters.
@@ -359,50 +358,6 @@ func Space() gomme.Parser[rune] {
 // Tab parses an ASCII tab character ('\t').
 func Tab() gomme.Parser[rune] {
 	return Char('\t')
-}
-
-// Int64 parses an integer from the input, and returns it plus the remaining input.
-// Only decimal integers are supported. It may start with a 0.
-func Int64() gomme.Parser[int64] {
-	return Map2(Optional(OneOfRunes('-', '+')), Digit1(), func(optSign rune, digits string) (int64, error) {
-		i, err := strconv.ParseInt(digits, 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		if optSign == '-' {
-			i = -i
-		}
-		return i, nil
-	})
-}
-
-// Int8 parses an 8-bit integer from the input,
-// and returns the part of the input that matched the integer.
-// Only decimal integers are supported. It may start with a 0.
-func Int8() gomme.Parser[int8] {
-	return Map2(Optional(OneOfRunes('-', '+')), Digit1(), func(optSign rune, digits string) (int8, error) {
-		i, err := strconv.ParseInt(digits, 10, 8)
-		if err != nil {
-			return 0, err
-		}
-		if optSign == '-' {
-			i = -i
-		}
-		return int8(i), nil
-	})
-}
-
-// UInt8 parses an 8-bit integer from the input,
-// and returns the part of the input that matched the integer.
-// Only decimal integers are supported. It may start with a 0.
-func UInt8() gomme.Parser[uint8] {
-	return Map2(Optional(Char('+')), Digit1(), func(optSign rune, digits string) (uint8, error) {
-		ui, err := strconv.ParseUint(digits, 10, 8)
-		if err != nil {
-			return 0, err
-		}
-		return uint8(ui), nil
-	})
 }
 
 // IsAlphanumeric returns true if the rune is a Unicode letter,

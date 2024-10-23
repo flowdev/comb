@@ -58,17 +58,25 @@ func SeparatedMN[Output any, S gomme.Separator](
 		panic("SeparatedMN is unable to handle negative `atMost`")
 	}
 
+	var sep1N gomme.Parser[[]Output]
+
 	parseManySP := ManyMN(Prefixed(separator, parse), max(atLeast-1, 0), max(atMost-1, 0))
-	sep1N := Prefixed(parse, parseManySP)
+	if parseSeparatorAtEnd {
+		sep1N = Map3(parse, parseManySP, Optional(separator), func(out1 Output, outMany []Output, _ S) ([]Output, error) {
+			outAll := make([]Output, 0, len(outMany)+1)
+			outAll = append(outAll, out1)
+			return append(outAll, outMany...), nil
+		})
+	} else {
+		sep1N = Map2(parse, parseManySP, func(out1 Output, outMany []Output) ([]Output, error) {
+			outAll := make([]Output, 0, len(outMany)+1)
+			outAll = append(outAll, out1)
+			return append(outAll, outMany...), nil
+		})
+	}
 
 	if atLeast > 0 {
-		if parseSeparatorAtEnd {
-			return Suffixed(sep1N, Optional(separator))
-		}
 		return sep1N
-	}
-	if parseSeparatorAtEnd {
-		return Optional(Suffixed(sep1N, Optional(separator)))
 	}
 	return Optional(sep1N)
 }

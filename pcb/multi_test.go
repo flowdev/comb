@@ -39,7 +39,7 @@ func TestCount(t *testing.T) {
 			parser:        Count(String("abc"), 2),
 			input:         "abc123",
 			wantErr:       true,
-			wantOutput:    []string{},
+			wantOutput:    nil,
 			wantRemaining: "abc123",
 		},
 		{
@@ -47,7 +47,7 @@ func TestCount(t *testing.T) {
 			parser:        Count(String("abc"), 2),
 			input:         "123123",
 			wantErr:       true,
-			wantOutput:    []string{},
+			wantOutput:    nil,
 			wantRemaining: "123123",
 		},
 		{
@@ -55,7 +55,7 @@ func TestCount(t *testing.T) {
 			parser:        Count(String("abc"), 2),
 			input:         "",
 			wantErr:       true,
-			wantOutput:    []string{},
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 	}
@@ -230,7 +230,7 @@ func TestMany1(t *testing.T) {
 				p: Many1(Char('#')),
 			},
 			wantErr:       true,
-			wantOutput:    []rune{},
+			wantOutput:    nil,
 			wantRemaining: "a##",
 		},
 		{
@@ -240,7 +240,7 @@ func TestMany1(t *testing.T) {
 				p: Many1(Char('#')),
 			},
 			wantErr:       true,
-			wantOutput:    []rune{},
+			wantOutput:    nil,
 			wantRemaining: "abc",
 		},
 		{
@@ -250,7 +250,7 @@ func TestMany1(t *testing.T) {
 				p: Many1(Char('#')),
 			},
 			wantErr:       true,
-			wantOutput:    []rune{},
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 	}
@@ -354,7 +354,7 @@ func TestSeparated0(t *testing.T) {
 				p: Separated0(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
-			wantOutput:    []string{},
+			wantOutput:    nil,
 			wantRemaining: "def,abc",
 		},
 		{
@@ -364,7 +364,7 @@ func TestSeparated0(t *testing.T) {
 				p: Separated0(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
-			wantOutput:    []string{},
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 		{
@@ -381,10 +381,10 @@ func TestSeparated0(t *testing.T) {
 			name:  "parsing empty input with *0 parser should succeed",
 			input: "",
 			args: args{
-				p: Separated0(Digit0(), Char(','), true),
+				p: Separated0(Digit1(), Char(','), true),
 			},
 			wantErr:       false,
-			wantOutput:    []string{},
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 	}
@@ -395,7 +395,7 @@ func TestSeparated0(t *testing.T) {
 			t.Parallel()
 
 			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
@@ -427,7 +427,7 @@ func TestSeparated1(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[[]string]
+		parser gomme.Parser[[]string]
 	}
 	testCases := []struct {
 		name          string
@@ -441,7 +441,7 @@ func TestSeparated1(t *testing.T) {
 			name:  "matching parser should succeed",
 			input: "abc,abc,abc",
 			args: args{
-				p: Separated1(String("abc"), Char(','), false),
+				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc", "abc", "abc"},
@@ -451,7 +451,7 @@ func TestSeparated1(t *testing.T) {
 			name:  "matching parser and missing separator should succeed",
 			input: "abc123abc",
 			args: args{
-				p: Separated1(String("abc"), Char(','), false),
+				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -461,7 +461,7 @@ func TestSeparated1(t *testing.T) {
 			name:  "parser with separator but non-matching right side should succeed",
 			input: "abc,def",
 			args: args{
-				p: Separated1(String("abc"), Char(','), false),
+				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
 			wantOutput:    []string{"abc"},
@@ -471,20 +471,20 @@ func TestSeparated1(t *testing.T) {
 			name:  "parser matching on the right of the separator should fail",
 			input: "def,abc",
 			args: args{
-				p: Separated1(String("abc"), Char(','), false),
+				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    []string{},
-			wantRemaining: "def,abc",
+			wantOutput:    []string{"abc"},
+			wantRemaining: "",
 		},
 		{
 			name:  "empty input should fail",
 			input: "",
 			args: args{
-				p: Separated1(String("abc"), Char(','), false),
+				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    []string{},
+			wantOutput:    []string{""},
 			wantRemaining: "",
 		},
 	}
@@ -494,8 +494,8 @@ func TestSeparated1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
-			if newState.Failed() != tc.wantErr {
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
 
