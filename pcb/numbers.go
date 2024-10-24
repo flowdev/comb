@@ -14,8 +14,10 @@ import (
 // `signAllowed` can be false to parse only unsigned integers.
 // `radix` can be 0 to honor prefixes "0x", "0X", "0b", "0B", "0o", "0O" and "0"
 // according to the Go language specification.
-// '_' characters are allowed, too. Go parse functions will do more checks on this.
-func Integer(signAllowed bool, base int) gomme.Parser[string] {
+// `underscoreAllowed` can be true to allow '_' characters.
+// No check on position or number of (consecutive) underscores is done.
+// The Go parse functions will do more checks on this.
+func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[string] {
 	if base != 0 && (base < 2 || base > 36) {
 		panic(fmt.Sprintf(
 			"The base has to be 0 or between 2 and 36, but is: %d", base,
@@ -62,16 +64,14 @@ func Integer(signAllowed bool, base int) gomme.Parser[string] {
 		input, base, n = rebaseInput(input, base, n)
 		digits := allDigits[:base]
 		good := false
-		underscore := false // TODO: add underscoreAllowed parameter
 
 	ForLoop:
 		for _, digit := range input {
 			switch {
 			case digit == '_':
-				if underscore {
-					return state.NewError(expected), ""
+				if !underscoreAllowed {
+					break ForLoop // don't break switch but for
 				}
-				underscore = true
 				n++
 			case strings.IndexRune(digits, unicode.ToLower(digit)) >= 0:
 				n++
@@ -137,33 +137,40 @@ func digitsToRunes(digits string) []rune {
 	return runes
 }
 
-// Int64 parses an integer from the input, and returns it plus the remaining input.
-// Only decimal integers are supported. It may start with a 0.
+// Int64 parses an integer from the input using `strconv.ParseInt`.
 func Int64(signAllowed bool, base int) gomme.Parser[int64] {
-	return Map(Integer(signAllowed, base), func(integer string) (int64, error) {
+	underscoreAllowed := false
+	if base == 0 {
+		underscoreAllowed = true
+	}
+	return Map(Integer(signAllowed, base, underscoreAllowed), func(integer string) (int64, error) {
 		return strconv.ParseInt(integer, base, 64)
 	})
 }
 
-// Int8 parses an 8-bit integer from the input,
-// and returns the part of the input that matched the integer.
-// Only decimal integers are supported. It may start with a 0.
+// Int8 parses an integer from the input using `strconv.ParseInt`.
 func Int8(signAllowed bool, base int) gomme.Parser[int8] {
-	return Map(Integer(signAllowed, base), func(integer string) (int8, error) {
+	underscoreAllowed := false
+	if base == 0 {
+		underscoreAllowed = true
+	}
+	return Map(Integer(signAllowed, base, underscoreAllowed), func(integer string) (int8, error) {
 		i, err := strconv.ParseInt(integer, base, 8)
 		return int8(i), err
 	})
 }
 
-// UInt8 parses an 8-bit integer from the input,
-// and returns the part of the input that matched the integer.
-// Only decimal integers are supported. It may start with a 0.
+// UInt8 parses an integer from the input using `strconv.ParseUint`.
 func UInt8(signAllowed bool, base int) gomme.Parser[uint8] {
-	return Map(Integer(signAllowed, base), func(integer string) (uint8, error) {
-		if signAllowed && integer[0] == '+' {
+	underscoreAllowed := false
+	if base == 0 {
+		underscoreAllowed = true
+	}
+	return Map(Integer(signAllowed, base, underscoreAllowed), func(integer string) (uint8, error) {
+		if integer[0] == '+' {
 			integer = integer[1:]
 		}
-		ui, err := strconv.ParseUint(integer, 10, 8)
+		ui, err := strconv.ParseUint(integer, base, 8)
 		return uint8(ui), err
 	})
 }

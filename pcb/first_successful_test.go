@@ -66,7 +66,7 @@ func TestFirstSuccessful(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := gomme.NewFromString(0, nil, tc.input)
+			state := gomme.NewFromString(-1, nil, tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)

@@ -3,10 +3,11 @@
 package hexcolor
 
 import (
-	"github.com/oleiade/gomme/pcb"
 	"strconv"
 
 	"github.com/oleiade/gomme"
+	. "github.com/oleiade/gomme/cute"
+	"github.com/oleiade/gomme/pcb"
 )
 
 // RGBColor stores the three bytes describing a color in the RGB space.
@@ -19,17 +20,17 @@ type RGBColor struct {
 // ParseRGBColor creates a new RGBColor from a hexadecimal color string.
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
-	parse := pcb.Prefixed(
-		pcb.Char('#'),
-		pcb.Map(
-			pcb.Count(HexColorComponent(), 3),
-			func(components []uint8) (RGBColor, error) {
-				return RGBColor{components[0], components[1], components[2]}, nil
-			},
-		),
+	parse := pcb.Map4(
+		NoWayBack(C('#')),
+		HexColorComponent("red hex color"),
+		HexColorComponent("green hex color"),
+		HexColorComponent("blue hex color"),
+		func(_ rune, r, g, b string) (RGBColor, error) {
+			return RGBColor{fromHex(r), fromHex(g), fromHex(b)}, nil
+		},
 	)
 
-	output, err := gomme.RunOnString(0, nil, input, parse)
+	output, err := gomme.RunOnString(-1, nil, input, parse)
 	if err != nil {
 		return RGBColor{}, err
 	}
@@ -39,19 +40,12 @@ func ParseRGBColor(input string) (RGBColor, error) {
 
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
-func HexColorComponent() gomme.Parser[uint8] {
-	return pcb.Map(
-		pcb.SatisfyMN("hex digit", 2, 2, pcb.IsHexDigit),
-		fromHex,
-	)
+func HexColorComponent(expected string) gomme.Parser[string] {
+	return NoWayBack(pcb.SatisfyMN(expected, 2, 2, pcb.IsHexDigit))
 }
 
 // fromHex converts a two digits hexadecimal number to its decimal value.
-func fromHex(input string) (uint8, error) {
-	res, err := strconv.ParseUint(input, 16, 8)
-	if err != nil {
-		return 0, err
-	}
-
-	return uint8(res), nil
+func fromHex(input string) uint8 {
+	res, _ := strconv.ParseUint(input, 16, 8) // errors have been caught by the parser
+	return uint8(res)
 }

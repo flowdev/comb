@@ -77,7 +77,7 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}

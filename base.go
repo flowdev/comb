@@ -293,7 +293,7 @@ func NewFromString(maxDel int, del Deleter, input string) State {
 
 // NewState creates a new parser state from the input data.
 func NewState(maxDel int, del Deleter, input []byte) State {
-	if maxDel <= 0 {
+	if maxDel < 0 {
 		maxDel = DefaultMaxDel
 	}
 	if del == nil {

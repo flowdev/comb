@@ -45,6 +45,7 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 		errState.errHand.culpritIdx = idx
 	} else if errState.errHand.ignoreErrParser || errState.errHand.curDel > 0 { // we try to recover
 		state.mode = ParsingModeRewind
+		return state
 	}
 	state.errHand = errState.errHand
 	return state

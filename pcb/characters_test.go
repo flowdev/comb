@@ -58,7 +58,7 @@ func TestChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -144,7 +144,7 @@ func TestAlpha0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -238,7 +238,7 @@ func TestAlpha1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -324,7 +324,7 @@ func TestDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -418,7 +418,7 @@ func TestDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -504,7 +504,7 @@ func TestHexDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -598,7 +598,7 @@ func TestHexDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -724,7 +724,7 @@ func TestWhitespace0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -851,7 +851,7 @@ func TestWhitespace1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -978,7 +978,7 @@ func TestAlphanumeric0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1112,7 +1112,7 @@ func TestAlphanumeric1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1198,7 +1198,7 @@ func TestLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1284,7 +1284,7 @@ func TestCR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1378,7 +1378,7 @@ func TestCRLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1448,7 +1448,7 @@ func TestOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1526,7 +1526,7 @@ func TestSatisfy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1612,7 +1612,7 @@ func TestSpace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1698,7 +1698,7 @@ func TestTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1768,7 +1768,7 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -1875,7 +1875,7 @@ func TestSatisfyMN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}

@@ -66,7 +66,7 @@ func TestCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -146,7 +146,7 @@ func TestMany0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -260,7 +260,7 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -394,7 +394,7 @@ func TestSeparated0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.args.p.It(gomme.NewFromString(0, nil, tc.input))
+			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, tc.input))
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -474,7 +474,7 @@ func TestSeparated1(t *testing.T) {
 				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    []string{"abc"},
+			wantOutput:    []string{"", "abc"},
 			wantRemaining: "",
 		},
 		{
@@ -484,7 +484,7 @@ func TestSeparated1(t *testing.T) {
 				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    []string{""},
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 	}
@@ -494,7 +494,7 @@ func TestSeparated1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := gomme.RunOnState(gomme.NewFromString(0, nil, tc.input), tc.args.parser)
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
