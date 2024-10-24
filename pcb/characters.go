@@ -35,7 +35,7 @@ func Char(char rune) gomme.Parser[rune] {
 		return state.MoveBy(size), r
 	}
 
-	return gomme.NewParser[rune](expected, parse, false, IndexOf(char), gomme.TernaryNo, nil)
+	return gomme.NewParser[rune](expected, parse, false, IndexOf(char), nil)
 }
 
 // Byte parses a single byte and matches it with
@@ -59,7 +59,7 @@ func Byte(byt byte) gomme.Parser[byte] {
 		return state.MoveBy(1), b
 	}
 
-	return gomme.NewParser[byte](expected, parse, false, IndexOf(byt), gomme.TernaryNo, nil)
+	return gomme.NewParser[byte](expected, parse, false, IndexOf(byt), nil)
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
@@ -86,7 +86,7 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 		return strings.IndexFunc(state.CurrentString(), predicate)
 	}
 
-	return gomme.NewParser[rune](expected, parse, false, recoverer, gomme.TernaryNo, nil)
+	return gomme.NewParser[rune](expected, parse, false, recoverer, nil)
 }
 
 // String parses a token from the input, and returns the part of the input that
@@ -106,7 +106,7 @@ func String(token string) gomme.Parser[string] {
 		return newState, token
 	}
 
-	return gomme.NewParser[string](expected, parse, false, IndexOf(token), gomme.TernaryNo, nil)
+	return gomme.NewParser[string](expected, parse, false, IndexOf(token), nil)
 }
 
 // Bytes parses a token from the input, and returns the part of the input that
@@ -125,7 +125,7 @@ func Bytes(token []byte) gomme.Parser[[]byte] {
 		return newState, token
 	}
 
-	return gomme.NewParser[[]byte](expected, parse, false, IndexOf(token), gomme.TernaryNo, nil)
+	return gomme.NewParser[[]byte](expected, parse, false, IndexOf(token), nil)
 }
 
 // UntilString parses until it finds a token in the input, and returns
@@ -167,7 +167,6 @@ func UntilString(stop string) gomme.Parser[string] {
 			}
 			return -1
 		},
-		gomme.TernaryNo,
 		nil,
 	)
 }
@@ -216,7 +215,7 @@ func SatisfyMN(expected string, atLeast, atMost uint, predicate func(rune) bool)
 		return current, output
 	}
 
-	return gomme.NewParser[string](expected, parse, false, nil, gomme.TernaryNo, nil)
+	return gomme.NewParser[string](expected, parse, false, nil, nil)
 }
 
 // AlphaMN parses at least `atLeast` and at most `atMost` Unicode letters.
@@ -331,8 +330,7 @@ func OneOf(collection ...string) gomme.Parser[string] {
 		return state.NewError(expected), ""
 	}
 
-	return gomme.NewParser[string](expected, parse, false, IndexOfAny(collection...),
-		gomme.TernaryNo, nil)
+	return gomme.NewParser[string](expected, parse, false, IndexOfAny(collection...), nil)
 }
 
 // LF parses a line feed `\n` character.

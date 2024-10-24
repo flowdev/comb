@@ -62,11 +62,16 @@ func Integer(signAllowed bool, base int) gomme.Parser[string] {
 		input, base, n = rebaseInput(input, base, n)
 		digits := allDigits[:base]
 		good := false
+		underscore := false // TODO: add underscoreAllowed parameter
 
 	ForLoop:
 		for _, digit := range input {
 			switch {
 			case digit == '_':
+				if underscore {
+					return state.NewError(expected), ""
+				}
+				underscore = true
 				n++
 			case strings.IndexRune(digits, unicode.ToLower(digit)) >= 0:
 				n++
@@ -89,8 +94,7 @@ func Integer(signAllowed bool, base int) gomme.Parser[string] {
 	}
 	allRunes := digitsToRunes(allDigits)
 	return gomme.NewParser[string](expected, parse, false,
-		IndexOfAny(allRunes[:recovererBase]...),
-		gomme.TernaryNo, nil)
+		IndexOfAny(allRunes[:recovererBase]...), nil)
 }
 
 func rebaseInput(input string, base, n int) (string, int, int) {

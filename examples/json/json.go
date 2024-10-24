@@ -20,8 +20,8 @@ func init() {
 	members = gomme.LazyParser(membersParser)
 	elements = gomme.LazyParser(elementsParser)
 	objectp = gomme.LazyParser(parseObject)
-	arrayp = gomme.LazyParser(parseArray)
-	valuep = gomme.LazyParser(parseValue)
+	arrayp = parseArray()
+	valuep = parseValue()
 }
 
 func main() {

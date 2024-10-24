@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/oleiade/gomme"
 	"slices"
-	"strings"
 )
 
 // MapN is a helper for easily implementing Map like parsers.
@@ -14,6 +13,7 @@ import (
 // Only parsers up to `p`n have to be provided.
 // All higher numbered parsers are expected to be nil.
 func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
+	expected string,
 	p1 gomme.Parser[PO1], p2 gomme.Parser[PO2], p3 gomme.Parser[PO3], p4 gomme.Parser[PO4], p5 gomme.Parser[PO5],
 	n int,
 	fn1 func(PO1) (MO, error), fn2 func(PO1, PO2) (MO, error), fn3 func(PO1, PO2, PO3) (MO, error),
@@ -25,34 +25,25 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	var zero4 PO4
 	var zero5 PO5
 
-	expected := strings.Builder{}
-	expected.WriteString(p1.Expected())
-	if n > 1 {
-		expected.WriteString(" + ")
-		expected.WriteString(p2.Expected())
-		if n > 2 {
-			expected.WriteString(" + ")
-			expected.WriteString(p3.Expected())
-			if n > 3 {
-				expected.WriteString(" + ")
-				expected.WriteString(p4.Expected())
-				if n > 4 {
-					expected.WriteString(" + ")
-					expected.WriteString(p5.Expected())
-				}
-			}
-		}
+	if p1 == nil {
+		panic("MapN: p1 is nil")
 	}
-
-	containsNoWayBack := p1.ContainsNoWayBack()
-	if n > 1 {
-		containsNoWayBack = max(containsNoWayBack, p2.ContainsNoWayBack())
-		if n > 2 {
-			containsNoWayBack = max(containsNoWayBack, p3.ContainsNoWayBack())
-			if n > 3 {
-				containsNoWayBack = max(containsNoWayBack, p4.ContainsNoWayBack())
-				if n > 4 {
-					containsNoWayBack = max(containsNoWayBack, p5.ContainsNoWayBack())
+	if n >= 2 {
+		if p2 == nil {
+			panic("MapN: p2 is nil (n >= 2)")
+		}
+		if n >= 3 {
+			if p3 == nil {
+				panic("MapN: p3 is nil (n >= 3)")
+			}
+			if n >= 4 {
+				if p4 == nil {
+					panic("MapN: p4 is nil (n >= 4)")
+				}
+				if n >= 5 {
+					if p5 == nil {
+						panic("MapN: p5 is nil (n >= 5)")
+					}
 				}
 			}
 		}
@@ -60,25 +51,15 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 
 	// Construct myNoWayBackRecoverer from the sub-parsers
 	subRecoverers := make([]gomme.Recoverer, n)
-	if p1.ContainsNoWayBack() > gomme.TernaryNo {
-		subRecoverers[0] = p1.NoWayBackRecoverer
-	}
+	subRecoverers[0] = p1.NoWayBackRecoverer
 	if n > 1 {
-		if p2.ContainsNoWayBack() > gomme.TernaryNo {
-			subRecoverers[1] = p2.NoWayBackRecoverer
-		}
+		subRecoverers[1] = p2.NoWayBackRecoverer
 		if n > 2 {
-			if p3.ContainsNoWayBack() > gomme.TernaryNo {
-				subRecoverers[2] = p3.NoWayBackRecoverer
-			}
+			subRecoverers[2] = p3.NoWayBackRecoverer
 			if n > 3 {
-				if p4.ContainsNoWayBack() > gomme.TernaryNo {
-					subRecoverers[3] = p4.NoWayBackRecoverer
-				}
+				subRecoverers[3] = p4.NoWayBackRecoverer
 				if n > 4 {
-					if p5.ContainsNoWayBack() > gomme.TernaryNo {
-						subRecoverers[4] = p5.NoWayBackRecoverer
-					}
+					subRecoverers[4] = p5.NoWayBackRecoverer
 				}
 			}
 		}
@@ -86,10 +67,9 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
 	md := &mapData[PO1, PO2, PO3, PO4, PO5, MO]{
-		id:                gomme.NewBranchParserID(),
-		expected:          expected.String(),
-		containsNoWayBack: containsNoWayBack,
-		p1:                p1, p2: p2, p3: p3, p4: p4, p5: p5,
+		id:       gomme.NewBranchParserID(),
+		expected: expected,
+		p1:       p1, p2: p2, p3: p3, p4: p4, p5: p5,
 		n:   n,
 		fn1: fn1, fn2: fn2, fn3: fn3, fn4: fn4, fn5: fn5,
 		noWayBackRecoverer: myNoWayBackRecoverer,
@@ -106,11 +86,10 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	}
 
 	return gomme.NewParser[MO](
-		expected.String(),
+		expected,
 		mapParse,
 		true,
 		BasicRecovererFunc(mapParse),
-		containsNoWayBack,
 		myNoWayBackRecoverer.Recover,
 	)
 }
@@ -118,7 +97,6 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	id                 uint64
 	expected           string
-	containsNoWayBack  gomme.Ternary
 	p1                 gomme.Parser[PO1]
 	p2                 gomme.Parser[PO2]
 	p3                 gomme.Parser[PO3]
@@ -498,11 +476,10 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 		idx = crc.LastIndex()
 	}
 
-	if idx < 0 { // TODO: Remove and just return to give up???
-		return state.Preserve(remaining.NewSemanticError(fmt.Sprintf(
-			"programming error: no recoverer found in `MapN(escape)` parser "+
-				"and `startIdx`: %d", startIdx,
-		))), zeroMO
+	if idx < 0 { // give up
+		return remaining.NewSemanticError(
+			"grammar error: found no way to recover from previous error",
+		).MoveBy(remaining.BytesRemaining()), zeroMO
 	}
 
 	var newState gomme.State
@@ -519,9 +496,20 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 		newState, out5 = md.p5.It(remaining)
 	}
 	if newState.ParsingMode() == gomme.ParsingModeHappy {
-		return md.mapn(state, out1, out2, out3, out4, out5)
+		result, ok := state.CachedParserResult(md.id)
+		if !ok {
+			result.NoWayBackIdx = -1
+			result.NoWayBackStart = -1
+		}
+		return md.any(state, newState, idx+1, result.NoWayBackIdx, result.NoWayBackStart,
+			out1, out2, out3, out4, out5)
 	}
-	return state, zeroMO // we can't do anything
+	if newState.ParsingMode() == gomme.ParsingModeEscape && !state.Moved(newState) {
+		return newState.NewSemanticError(
+			"grammar error: found no way to recover from previous error",
+		).MoveBy(newState.BytesRemaining()), zeroMO
+	}
+	return newState, zeroMO // we can't do anything
 }
 
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) mapn(

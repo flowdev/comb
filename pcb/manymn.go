@@ -34,8 +34,8 @@ func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.P
 	if atLeast > 0 {
 		recoverer = BasicRecovererFunc(parseMany)
 	}
-	return gomme.NewParser[[]Output]("ManyMN", parseMany, true, recoverer,
-		parse.ContainsNoWayBack(), parse.NoWayBackRecoverer)
+	return gomme.NewParser[[]Output]("ManyMN", parseMany, true,
+		recoverer, parse.NoWayBackRecoverer)
 }
 
 type manyData[Output any] struct {
@@ -195,10 +195,6 @@ func (md *manyData[Output]) rewind(state gomme.State, outputs []Output) (gomme.S
 }
 
 func (md *manyData[Output]) escape(state, remaining gomme.State, outputs []Output) (gomme.State, []Output) {
-	if md.parse.ContainsNoWayBack() == gomme.TernaryNo {
-		return state.Preserve(remaining.NewSemanticError(
-			"programming error: no recoverer found in `ManyMN(escape)` parser ")), nil
-	}
 	newState, output := md.parse.It(remaining)
 	if newState.ParsingMode() == gomme.ParsingModeHappy {
 		outputs = append(outputs, output)

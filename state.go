@@ -44,6 +44,8 @@ type ParserResult struct {
 	Error          *pcbError   // the error if the parser failed (nil if it succeeded)
 }
 
+var callIDs = &atomic.Uint64{} // used for endless loop prevention
+
 // State represents the current state of a parser.
 type State struct {
 	mode                   ParsingMode // one of: happy, error, handle, record, choose, play
@@ -133,6 +135,21 @@ func (st State) Delete(countToken int) State {
 // ============================================================================
 // Caching
 //
+
+// NewBranchParserID returns a new ID for a combining parser.
+// This ID should be retrieved in the construction phase of the parsers and
+// used in the runtime phase for caching.
+func NewBranchParserID() uint64 {
+	return combiningParserIDs.Add(1)
+}
+
+// NewCallID returns a new ID for a function call that might run into an
+// endless loop.
+// This ID should be retrieved for every call and passed on if calling
+// functions of sub-parsers.
+func NewCallID() uint64 {
+	return callIDs.Add(1)
+}
 
 // cacheRecovererWaste remembers the `waste` at the current input position
 // for the CachingRecoverer with ID `id`.
@@ -229,9 +246,9 @@ func (st State) CacheParserResult(
 		mark = newState.noWayBackMark
 	}
 
-	errPos := 0
+	errStart := 0
 	if newState.errHand.err != nil {
-		errPos = newState.errHand.err.pos
+		errStart = st.ByteCount(newState)
 	}
 	result := ParserResult{
 		pos:            st.input.pos,
@@ -242,7 +259,7 @@ func (st State) CacheParserResult(
 		NoWayBackStart: noWayBackStart,
 		NoWayBackMark:  mark,
 		Error:          newState.errHand.err,
-		ErrorStart:     errPos,
+		ErrorStart:     errStart,
 		Output:         output,
 	}
 
@@ -277,13 +294,6 @@ func (st State) CachedParserResult(id uint64) (result ParserResult, ok bool) {
 		return ParserResult{}, false
 	}
 	return cache[i], true
-}
-
-// NewBranchParserID returns a new ID for a combining parser.
-// This ID should be retrieved in the construction phase of the parsers and
-// used in the runtime phase for caching.
-func NewBranchParserID() uint64 {
-	return combiningParserIDs.Add(1)
 }
 
 // ClearAllCaches empties all caches of this state.
@@ -504,6 +514,11 @@ func (st State) Error() string {
 	fullMsg := strings.Builder{}
 	for _, pcbErr := range st.oldErrors {
 		fullMsg.WriteString(singleErrorMsg(pcbErr))
+		fullMsg.WriteRune('\n')
+	}
+	n := len(st.oldErrors)
+	if st.errHand.err != nil && (n == 0 || st.errHand.err.pos != st.oldErrors[n-1].pos) {
+		fullMsg.WriteString(singleErrorMsg(*st.errHand.err))
 		fullMsg.WriteRune('\n')
 	}
 

@@ -10,17 +10,10 @@ import (
 // returns either a slice of results or an error if any parser fails.
 // Use one of the MapX parsers for differently typed parsers.
 func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output] {
-	containsNoWayBack := parsers[0].ContainsNoWayBack()
-	for i := 1; i < len(parsers); i++ {
-		containsNoWayBack = max(containsNoWayBack, parsers[i].ContainsNoWayBack())
-	}
-
 	// Construct myNoWayBackRecoverer from the sub-parsers
 	subRecoverers := make([]gomme.Recoverer, len(parsers))
 	for i, parser := range parsers {
-		if parser.ContainsNoWayBack() > gomme.TernaryNo {
-			subRecoverers[i] = parser.NoWayBackRecoverer
-		}
+		subRecoverers[i] = parser.NoWayBackRecoverer
 	}
 	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
@@ -52,7 +45,6 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 		parseSeq,
 		true,
 		myRecoverer,
-		containsNoWayBack,
 		myNoWayBackRecoverer.Recover,
 	)
 }
@@ -248,10 +240,9 @@ func (seq *sequenceData[Output]) escape(
 	}
 
 	if idx < 0 {
-		return state.Preserve(remaining.NewSemanticError(fmt.Sprintf(
-			"programming error: no recoverer found in `Sequence(escape)` parser "+
-				"and `startIdx`: %d", startIdx,
-		))), nil
+		return remaining.NewSemanticError(
+			"grammar error: unable to recover; did you forget to use the NoWayBack parser?",
+		).MoveBy(remaining.BytesRemaining()), nil // give up!
 	}
 	newState, output := seq.parsers[idx].It(remaining)
 	if newState.ParsingMode() == gomme.ParsingModeHappy {

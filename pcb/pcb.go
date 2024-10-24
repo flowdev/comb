@@ -27,6 +27,6 @@ func EOF() gomme.Parser[interface{}] {
 	return gomme.NoWayBack(
 		gomme.NewParser[interface{}](expected, parse, false, func(state gomme.State) int {
 			return state.BytesRemaining()
-		}, gomme.TernaryNo, nil),
+		}, nil),
 	)
 }

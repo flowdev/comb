@@ -313,7 +313,7 @@ func Array() gomme.Parser[RESPMessage] {
 func sizePrefix(prefix gomme.Parser[string]) gomme.Parser[int64] {
 	return pcb.Delimited(
 		prefix,
-		pcb.Int64(false, 10),
+		pcb.Int64(true, 10),
 		pcb.CRLF(),
 	)
 }

@@ -16,45 +16,18 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 	}
 
 	//
-	// Are we a real NoWayBack parser? Yes? No? Maybe?
-	//
-	noWayBacks := 0
-	maxNoWayBacks := len(parsers)
-	for _, parser := range parsers {
-		switch parser.ContainsNoWayBack() {
-		case gomme.TernaryYes:
-			noWayBacks++
-		case gomme.TernaryMaybe:
-			noWayBacks++
-			maxNoWayBacks++
-			break // it will be a Maybe anyway
-		default:
-			// intentionally left blank
-		}
-	}
-	containingNoWayBack := gomme.TernaryNo
-	if noWayBacks >= maxNoWayBacks {
-		containingNoWayBack = gomme.TernaryYes
-	} else if noWayBacks > 0 {
-		containingNoWayBack = gomme.TernaryMaybe
-	}
-
-	//
 	// Construct myNoWayBackRecoverer from the sub-parsers
 	//
 	subRecoverers := make([]gomme.Recoverer, len(parsers))
 	for i, parser := range parsers {
-		if parser.ContainsNoWayBack() != gomme.TernaryNo {
-			subRecoverers[i] = parser.NoWayBackRecoverer
-		}
+		subRecoverers[i] = parser.NoWayBackRecoverer
 	}
 	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
 	fsd := &firstSuccessfulData[Output]{
-		id:                  gomme.NewBranchParserID(),
-		parsers:             parsers,
-		containingNoWayBack: containingNoWayBack,
-		noWayBackRecoverer:  myNoWayBackRecoverer,
+		id:                 gomme.NewBranchParserID(),
+		parsers:            parsers,
+		noWayBackRecoverer: myNoWayBackRecoverer,
 	}
 
 	//
@@ -84,16 +57,14 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		newParse,
 		true,
 		gomme.DefaultRecovererFunc(newParse), // you really shouldn't use this parser as a Recoverer
-		containingNoWayBack,
 		myNoWayBackRecoverer.Recover,
 	)
 }
 
 type firstSuccessfulData[Output any] struct {
-	id                  uint64
-	parsers             []gomme.Parser[Output]
-	containingNoWayBack gomme.Ternary
-	noWayBackRecoverer  gomme.CombiningRecoverer
+	id                 uint64
+	parsers            []gomme.Parser[Output]
+	noWayBackRecoverer gomme.CombiningRecoverer
 }
 
 func (fsd *firstSuccessfulData[Output]) happy(state gomme.State) (gomme.State, Output) {
@@ -210,17 +181,16 @@ func (fsd *firstSuccessfulData[Output]) rewind(state gomme.State) (gomme.State, 
 
 func (fsd *firstSuccessfulData[Output]) escape(state gomme.State) (gomme.State, Output) {
 	var zero Output
-	if fsd.containingNoWayBack == gomme.TernaryNo { // we can't help
-		return state, zero
-	}
 
 	idx, ok := fsd.noWayBackRecoverer.CachedIndex(state)
 	if !ok {
-		return state.NewSemanticError(
-			"grammar error: cache was empty in `FirstSuccessful(escape)` parser",
-		), zero
+		fsd.noWayBackRecoverer.Recover(state)
+		idx = fsd.noWayBackRecoverer.LastIndex()
 	}
 
+	if idx < 0 {
+		return state.MoveBy(state.BytesRemaining()), zero // give up
+	}
 	parse := fsd.parsers[idx]
 	newState, output := parse.It(state)
 	// this parser has the best recoverer; so it MUST make us happy again

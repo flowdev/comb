@@ -15,22 +15,13 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		}
 		return newState, output
 	}
-	noWayBack := parse.ContainsNoWayBack()
-	if noWayBack == gomme.TernaryYes { // optional is never sure
-		noWayBack = gomme.TernaryMaybe
-	}
 	return gomme.NewParser[Output](
-		"optional "+parse.Expected(),
+		"Optional",
 		optParse,
 		parse.PossibleWitness(),
 		Forbidden("Optional"),
-		noWayBack,
 		parse.NoWayBackRecoverer,
 	)
-	//return MapN[Output, interface{}, interface{}, interface{}, interface{}](
-	//	optParser, nil, nil, nil, nil, 1, func(o Output) (Output, error) {
-	//		return o, nil
-	//	}, nil, nil, nil, nil)
 }
 
 // Peek tries to apply the provided parser without consuming any input.
@@ -50,7 +41,8 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 
 		return state, output
 	}
-	return gomme.NewParser[Output]("Peek", peekParse, false, Forbidden("Peek"), gomme.TernaryNo, nil)
+	return gomme.NewParser[Output]("Peek", peekParse, false,
+		Forbidden("Peek"), nil)
 }
 
 // Not tries to apply the provided parser without consuming any input.
@@ -70,11 +62,10 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 			return state, true
 		}
 
-		// avoid NoWayBack because we only peek; error message and consumption don't matter either
+		// avoid NoWayBack because we only peek; error message and consumption don't really matter
 		return state.NewError(expected), false
 	}
-	return gomme.NewParser[bool](expected, notParse, false, Forbidden("Not"),
-		gomme.TernaryNo, nil)
+	return gomme.NewParser[bool](expected, notParse, false, Forbidden("Not"), nil)
 }
 
 // Recognize returns the consumed input (instead of the original parsers output)
@@ -96,21 +87,28 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 		recParse,
 		parse.PossibleWitness(),
 		parse.MyRecoverer(),
-		parse.ContainsNoWayBack(),
 		parse.NoWayBackRecoverer,
 	)
-	return MapN[[]byte, interface{}, interface{}, interface{}, interface{}](recParser, nil, nil, nil, nil, 1, func(bs []byte) ([]byte, error) {
-		return bs, nil
-	}, nil, nil, nil, nil)
+	return MapN[[]byte, interface{}, interface{}, interface{}, interface{}](
+		"Recognize",
+		recParser, nil, nil, nil, nil,
+		1,
+		func(bs []byte) ([]byte, error) {
+			return bs, nil
+		}, nil, nil, nil, nil)
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
 func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) gomme.Parser[Output1] {
 	return MapN[Output2, interface{}, interface{}, interface{}, interface{}](
-		parse, nil, nil, nil, nil, 1, func(_ Output2) (Output1, error) {
+		"Assign",
+		parse, nil, nil, nil, nil,
+		1,
+		func(_ Output2) (Output1, error) {
 			return value, nil
-		}, nil, nil, nil, nil)
+		}, nil, nil, nil, nil,
+	)
 }
 
 // Delimited parses and discards the result from the prefix parser, then
@@ -118,6 +116,7 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 // the result of the suffix parser.
 func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
 	return MapN[OP, O, OS, interface{}, interface{}](
+		"Delimited",
 		prefix, parse, suffix, nil, nil, 3, nil, nil,
 		func(output1 OP, output2 O, output3 OS) (O, error) {
 			return output2, nil
@@ -128,6 +127,7 @@ func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parse gomme.Parser[O], su
 // then parses a result from the main parser and returns its result.
 func Prefixed[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.Parser[O] {
 	return MapN[OP, O, interface{}, interface{}, interface{}](
+		"Prefixed",
 		prefix, parse, nil, nil, nil, 2, nil,
 		func(output1 OP, output2 O) (O, error) {
 			return output2, nil
@@ -139,6 +139,7 @@ func Prefixed[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 // returning the result of the main parser.
 func Suffixed[O, OS any](parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
 	return MapN[O, OS, interface{}, interface{}, interface{}](
+		"Suffixed",
 		parse, suffix, nil, nil, nil, 2, nil,
 		func(output1 O, output2 OS) (O, error) {
 			return output1, nil
@@ -150,6 +151,7 @@ func Suffixed[O, OS any](parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.P
 // The other MapX parsers are provided for convenience.
 func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gomme.Parser[MO] {
 	return MapN[PO1, interface{}, interface{}, interface{}, interface{}](
+		"Map",
 		parse, nil, nil, nil, nil, 1, fn, nil, nil, nil, nil)
 }
 
@@ -159,6 +161,7 @@ func Map[PO1 any, MO any](parse gomme.Parser[PO1], fn func(PO1) (MO, error)) gom
 func Map2[PO1, PO2 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO2], fn func(PO1, PO2) (MO, error),
 ) gomme.Parser[MO] {
 	return MapN[PO1, PO2, interface{}, interface{}, interface{}](
+		"Map2",
 		parse1, parse2, nil, nil, nil, 2, nil, fn, nil, nil, nil)
 }
 
@@ -169,6 +172,7 @@ func Map3[PO1, PO2, PO3 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme.Pars
 	fn func(PO1, PO2, PO3) (MO, error),
 ) gomme.Parser[MO] {
 	return MapN[PO1, PO2, PO3, interface{}, interface{}](
+		"Map3",
 		parse1, parse2, parse3, nil, nil, 3, nil, nil, fn, nil, nil)
 }
 
@@ -179,6 +183,7 @@ func Map4[PO1, PO2, PO3, PO4 any, MO any](parse1 gomme.Parser[PO1], parse2 gomme
 	fn func(PO1, PO2, PO3, PO4) (MO, error),
 ) gomme.Parser[MO] {
 	return MapN[PO1, PO2, PO3, PO4, interface{}](
+		"Map4",
 		parse1, parse2, parse3, parse4, nil, 4, nil, nil, nil, fn, nil)
 }
 
@@ -189,5 +194,5 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	parse1 gomme.Parser[PO1], parse2 gomme.Parser[PO2], parse3 gomme.Parser[PO3], parse4 gomme.Parser[PO4], parse5 gomme.Parser[PO5],
 	fn func(PO1, PO2, PO3, PO4, PO5) (MO, error),
 ) gomme.Parser[MO] {
-	return MapN(parse1, parse2, parse3, parse4, parse5, 5, nil, nil, nil, nil, fn)
+	return MapN("Map5", parse1, parse2, parse3, parse4, parse5, 5, nil, nil, nil, nil, fn)
 }
