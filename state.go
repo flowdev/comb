@@ -154,80 +154,46 @@ func NewCallID() uint64 {
 // cacheRecovererWaste remembers the `waste` at the current input position
 // for the CachingRecoverer with ID `id`.
 func (st State) cacheRecovererWaste(id uint64, waste int) {
-	cacheSize := max(8, st.maxDel+1)
-	cache, ok := st.recovererWasteCache[id]
-	if !ok {
-		cache = make([]cachedWaste, 0, cacheSize)
-		st.recovererWasteCache[id] = cache
-	}
-
-	if len(cache) < cacheSize {
-		st.recovererWasteCache[id] = append(cache, cachedWaste{pos: st.input.pos, waste: waste})
-		return
-	}
-
-	idx := MinFuncIdx(cache, func(a, b cachedWaste) int { // idx will never be -1
-		return cmp.Compare(a.pos, b.pos)
-	})
-	cache[idx] = cachedWaste{pos: st.input.pos, waste: waste}
+	cacheValue(st.recovererWasteCache, id, cachedWaste{pos: st.input.pos, waste: waste},
+		func(a, b cachedWaste) int {
+			return cmp.Compare(a.pos, b.pos)
+		}, st.maxDel)
 }
 
 // cachedRecovererWaste returns the saved waste for the current
 // input position and CachingRecoverer ID `id` or (-1, false) if not found.
 func (st State) cachedRecovererWaste(id uint64) (waste int, ok bool) {
-	var cache []cachedWaste
-	if cache, ok = st.recovererWasteCache[id]; !ok {
-		return -1, false
-	}
+	var wasteData cachedWaste
 
-	idx := slices.IndexFunc(cache, func(wasteData cachedWaste) bool {
+	wasteData, ok = cachedValue(st.recovererWasteCache, id, func(wasteData cachedWaste) bool {
 		return wasteData.pos == st.input.pos
 	})
-
-	if idx < 0 {
+	if !ok {
 		return -1, false
 	}
-	return cache[idx].waste, true
+	return wasteData.waste, true
 }
 
 // cacheRecovererWasteIdx remembers the `waste` and index at the
 // current input position for the CombiningRecoverer with ID `crID`.
 func (st State) cacheRecovererWasteIdx(crID uint64, waste, idx int) {
-	cacheSize := max(8, st.maxDel+1)
-	cache, ok := st.recovererWasteIdxCache[crID]
-	if !ok {
-		cache = make([]cachedWasteIdx, 0, cacheSize)
-		st.recovererWasteIdxCache[crID] = cache
-	}
-
-	if len(cache) < cacheSize {
-		st.recovererWasteIdxCache[crID] = append(cache, cachedWasteIdx{pos: st.input.pos, waste: waste})
-		return
-	}
-
-	i := MinFuncIdx(cache, func(a, b cachedWasteIdx) int { // i will never be -1
-		return cmp.Compare(a.pos, b.pos)
-	})
-	cache[i] = cachedWasteIdx{pos: st.input.pos, waste: waste, idx: idx}
+	cacheValue(st.recovererWasteIdxCache, crID, cachedWasteIdx{pos: st.input.pos, waste: waste, idx: idx},
+		func(a, b cachedWasteIdx) int {
+			return cmp.Compare(a.pos, b.pos)
+		}, st.maxDel)
 }
 
 // cachedRecovererWasteIdx returns the saved waste and index for the current
 // input position and CombiningRecoverer ID or (-1, -1, false) if not found.
 func (st State) cachedRecovererWasteIdx(crID uint64) (waste, idx int, ok bool) {
-	var cache []cachedWasteIdx
-	if cache, ok = st.recovererWasteIdxCache[crID]; !ok {
-		return -1, -1, false
-	}
+	var wasteData cachedWasteIdx
 
-	i := slices.IndexFunc(cache, func(wasteData cachedWasteIdx) bool {
+	wasteData, ok = cachedValue(st.recovererWasteIdxCache, crID, func(wasteData cachedWasteIdx) bool {
 		return wasteData.pos == st.input.pos
 	})
-
-	if i < 0 {
+	if !ok {
 		return -1, -1, false
 	}
-
-	wasteData := cache[i]
 	return wasteData.waste, wasteData.idx, true
 }
 
@@ -239,8 +205,6 @@ func (st State) CacheParserResult(
 	newState State,
 	output interface{},
 ) {
-	cacheSize := max(st.maxDel+1, 8)
-
 	mark := -1
 	if noWayBackStart >= 0 {
 		mark = newState.noWayBackMark
@@ -263,37 +227,56 @@ func (st State) CacheParserResult(
 		Output:         output,
 	}
 
-	cache, ok := st.parserCache[id]
-	if !ok {
-		cache = make([]ParserResult, 0, cacheSize)
-		st.parserCache[id] = cache
-	}
-
-	if len(cache) < cacheSize {
-		st.parserCache[id] = append(cache, result)
-		return
-	}
-
-	i := MinFuncIdx(cache, func(a, b ParserResult) int { // i will never be -1
+	cacheValue(st.parserCache, id, result, func(a, b ParserResult) int {
 		return cmp.Compare(a.pos, b.pos)
-	})
-	cache[i] = result
+	}, st.maxDel)
 }
 
 func (st State) CachedParserResult(id uint64) (result ParserResult, ok bool) {
-	var cache []ParserResult
-	if cache, ok = st.parserCache[id]; !ok {
-		return ParserResult{}, false
-	}
-
-	i := slices.IndexFunc(cache, func(data ParserResult) bool {
+	return cachedValue(st.parserCache, id, func(data ParserResult) bool {
 		return data.pos == st.input.pos
 	})
+}
 
-	if i < 0 {
-		return ParserResult{}, false
+func cacheValue[T any](cache map[uint64][]T, id uint64, value T, f func(T, T) int, maxDel int) {
+	cacheSize := max(maxDel+1, 8)
+
+	scache, ok := cache[id]
+	if !ok {
+		scache = make([]T, 0, cacheSize)
+		cache[id] = append(scache, value)
+		return
 	}
-	return cache[i], true
+
+	if len(scache) < cacheSize {
+		i := slices.IndexFunc(scache, func(t T) bool {
+			return f(t, value) == 0
+		})
+		if i < 0 {
+			cache[id] = append(scache, value)
+			return
+		}
+		scache[i] = value
+		return
+	}
+
+	i := IndexOrMinFunc(scache, value, f) // will never be -1
+	scache[i] = value
+}
+
+func cachedValue[T any](cache map[uint64][]T, id uint64, f func(T) bool) (result T, ok bool) {
+	var zero T
+	var scache []T
+
+	if scache, ok = cache[id]; !ok {
+		return zero, false
+	}
+
+	i := slices.IndexFunc(scache, f)
+	if i < 0 {
+		return zero, false
+	}
+	return scache[i], true
 }
 
 // ClearAllCaches empties all caches of this state.
@@ -429,6 +412,18 @@ func (st State) Failed() bool {
 	return st.errHand.err != nil
 }
 
+// HasError returns true if any handled errors are registered.
+// (Errors that would be returned by State.Error())
+func (st State) HasError() bool {
+	return len(st.oldErrors) > 0 || st.errHand.err != nil
+}
+
+// StillHandlingError returns true if we are still handling an error
+// as opposed to witnessing a new error.
+func (st State) StillHandlingError() bool {
+	return st.errHand.ignoreErrParser || st.errHand.curDel > 1
+}
+
 // ============================================================================
 // Produce error messages and give them back
 //
@@ -499,12 +494,6 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 	return 1, 0, "", false
 }
 
-// HasError returns true if any handled errors are registered.
-// (Errors that would be returned by State.Error())
-func (st State) HasError() bool {
-	return len(st.oldErrors) > 0
-}
-
 // Error returns a human readable error string.
 func (st State) Error() string {
 	//slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
@@ -523,14 +512,6 @@ func (st State) Error() string {
 	}
 
 	return fullMsg.String()
-}
-
-// handlingNewError is currently only comparing the error position.
-func (st State) handlingNewError(newErr *pcbError) bool {
-	if st.errHand.err == nil || newErr == nil {
-		return false
-	}
-	return st.errHand.err.pos == newErr.pos
 }
 
 // NoWayBack is true iff we crossed a noWayBackMark.

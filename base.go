@@ -212,7 +212,7 @@ func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}
-	return ZeroOf[Output](), pcbErrorsToGoErrors(newState.oldErrors)
+	return ZeroOf[Output](), pcbErrorsToGoErrors(newState)
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
@@ -222,7 +222,7 @@ func RunOnBytes[Output any](maxDel int, del Deleter, input []byte, parse Parser[
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}
-	return ZeroOf[Output](), pcbErrorsToGoErrors(newState.oldErrors)
+	return ZeroOf[Output](), pcbErrorsToGoErrors(newState)
 }
 
 func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
@@ -230,7 +230,6 @@ func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
 
 	id := NewBranchParserID()
 	newState := state
-	oldMode := state.mode
 
 	for {
 		switch newState.ParsingMode() {
@@ -250,16 +249,12 @@ func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
 			state = state.Preserve(newState)
 			newState, output = HandleWitness(state, id, 0, parse)
 		case ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
-			if oldMode == ParsingModeEscape { // prevent endless loop
-				return state.NewSemanticError(
-					"grammar error: unable to recover from error; " +
-						"did you forget to use the NoWayBack parser?",
-				), ZeroOf[Output]()
-			}
-			oldMode = newState.ParsingMode()
 			newState, output = parse.It(state.Preserve(newState))
 		}
 		if newState.mode == ParsingModeHappy {
+			return newState, output
+		}
+		if newState.mode == ParsingModeEscape && newState.AtEnd() { // stop riding a dead horse
 			return newState, output
 		}
 	}
@@ -330,11 +325,12 @@ func ZeroOf[T any]() T {
 	return t
 }
 
-// MinFuncIdx returns the index of the minimal value in x,
+// IndexOrMinFunc returns the index of the matching value in x,
 // using cmp to compare elements.
-// It returns -1 if x is empty. If there is more than one minimal element
-// according to the cmp function, MinFunc returns the first one.
-func MinFuncIdx[S ~[]E, E any](x S, cmp func(a, b E) int) int {
+// It will return the index of the minimal value in x, if no match was found.
+// It returns -1 if x is empty. If there is more than one minimal or
+// matching element according to the cmp function, it returns the first one.
+func IndexOrMinFunc[S ~[]E, E any](x S, match E, cmp func(a, b E) int) int {
 	switch len(x) {
 	case 0:
 		return -1
@@ -344,8 +340,12 @@ func MinFuncIdx[S ~[]E, E any](x S, cmp func(a, b E) int) int {
 	m := x[0]
 	idx := 0
 	for i := 1; i < len(x); i++ {
-		if cmp(x[i], m) < 0 {
-			m = x[i]
+		v := x[i]
+		if cmp(v, match) == 0 {
+			return i
+		}
+		if cmp(v, m) < 0 {
+			m = v
 			idx = i
 		}
 	}

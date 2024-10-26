@@ -45,6 +45,7 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 		errState.errHand.culpritIdx = idx
 	} else if errState.errHand.ignoreErrParser || errState.errHand.curDel > 0 { // we try to recover
 		state.mode = ParsingModeRewind
+		state.errHand.err = errState.errHand.err
 		return state
 	}
 	state.errHand = errState.errHand
@@ -53,11 +54,19 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 
 // HandleWitness returns the advanced state and output if the parser is
 // the witness parser (1).
-// If the branch parser isn't the witness (or there is no error case),
-// the unmodified `state` and zero output are returned.
-// The returned index should be used for distinguishing between the cases.
+// If the branch parser isn't the witness, the sub-parser with index `idx` is used.
+// If `state.maxDel` is 0, error handling is turned off and the state is returned
+// with mode `escape` at EOF position.
 func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parser[Output]) (State, Output) {
 	var output, zero Output
+
+	if state.maxDel <= 0 { // error handling is turned off
+		state.mode = ParsingModeEscape
+		return state.MoveBy(state.BytesRemaining()), zero
+	}
+	if state.mode == ParsingModeEscape && state.AtEnd() { // stop riding a dead horse
+		return state, output
+	}
 
 	if state.errHand.witnessID != id || state.errHand.witnessPos != state.input.pos {
 		parse := parsers[idx]
@@ -318,7 +327,13 @@ func formatSrcLine(line, col int, srcLine string) string {
 		line, utf8.RuneCountInString(lineStart)+1, result.String()) // columns for the user start at 1
 }
 
-func pcbErrorsToGoErrors(pcbErrors []pcbError) error {
+func pcbErrorsToGoErrors(state State) error {
+	pcbErrors := slices.Clone(state.oldErrors)
+	n := len(pcbErrors)
+	if state.errHand.err != nil && (n == 0 || state.errHand.err.pos != pcbErrors[n-1].pos) {
+		pcbErrors = append(pcbErrors, *state.errHand.err)
+	}
+
 	if len(pcbErrors) == 0 {
 		return nil
 	}

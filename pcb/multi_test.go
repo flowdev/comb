@@ -474,7 +474,7 @@ func TestSeparated1(t *testing.T) {
 				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    []string{"", "abc"},
+			wantOutput:    []string{"abc"}, // one value after deleting 2 tokens
 			wantRemaining: "",
 		},
 		{
@@ -484,7 +484,7 @@ func TestSeparated1(t *testing.T) {
 				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    nil,
+			wantOutput:    []string{""}, // the "inserted" value
 			wantRemaining: "",
 		},
 	}

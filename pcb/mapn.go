@@ -441,9 +441,16 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) rewind(
 				state.MoveBy(result.ErrorStart), md.id, 0, md.p5,
 			)
 		}
+
+		if !newState.StillHandlingError() {
+			result.Idx++
+		}
+		if newState.ParsingMode() == gomme.ParsingModeRewind && newState.StillHandlingError() {
+			return newState, zeroMO
+		}
 		return md.any(
 			state, newState,
-			result.Idx+1,
+			result.Idx,
 			result.NoWayBackStart, result.NoWayBackIdx,
 			out1, out2, out3, out4, out5,
 		)
