@@ -320,11 +320,37 @@ func singleErrorMsg(pcbErr pcbError) string {
 func formatSrcLine(line, col int, srcLine string) string {
 	result := strings.Builder{}
 	lineStart := srcLine[:col]
-	result.WriteString(lineStart)
+	result.WriteString(lastNRunes(lineStart, 10))
 	result.WriteRune(0x25B6) // easy to spot marker (▶) for exact error position
-	result.WriteString(srcLine[col:])
-	return fmt.Sprintf(" [%d:%d] %q",
+	result.WriteString(firstNRunes(srcLine, 20))
+	return fmt.Sprintf(` [%d:%d] %s`,
 		line, utf8.RuneCountInString(lineStart)+1, result.String()) // columns for the user start at 1
+}
+func firstNRunes(s string, n int) string {
+	l := len(s)
+	if n >= l {
+		return s
+	}
+	i := 0
+	j := 0
+	for ; i < n && j < l; i++ { // i counts runes and j bytes
+		_, size := utf8.DecodeRuneInString(s[j:])
+		j += size
+	}
+	return s[:j]
+}
+func lastNRunes(s string, n int) string {
+	l := len(s)
+	if n >= l {
+		return s
+	}
+	i := 0
+	j := l
+	for ; i < n && j > 0; i++ { // i counts runes and j bytes
+		_, size := utf8.DecodeLastRuneInString(s[:j])
+		j -= size
+	}
+	return s[j:]
 }
 
 func pcbErrorsToGoErrors(state State) error {

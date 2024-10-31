@@ -220,7 +220,7 @@ In those cases an entry of 'happy, escape' means:
            Parse normally again starting with the next (sub-)parser.
 - `escape`: Use the (best of the) next `Resolverer`(s) to escape the mess.
             Only `NoWayBack-Resolverer`s from later (sub-)parsers must be
-            considered. Sequential parsers only consider one `Resolverer`.
+            considered. Sequential parsers might only consider one `Resolverer`.
 
 So all parsers working sequentially that really do error handling
 (`Sequence`, `MapN` and `MultiMN`) have to have a `startIdx` parameter

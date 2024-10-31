@@ -3,8 +3,6 @@ package hexcolor
 import "testing"
 
 func TestParseRGBColor(t *testing.T) {
-	t.Parallel()
-
 	testCases := []struct {
 		name      string
 		input     string
@@ -52,9 +50,8 @@ func TestParseRGBColor(t *testing.T) {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			gotColor, gotErr := ParseRGBColor(tc.input)
+
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error %v", gotErr, tc.wantErr)
 			}
