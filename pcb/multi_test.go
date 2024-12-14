@@ -484,7 +484,7 @@ func TestSeparated1(t *testing.T) {
 				parser: Separated1(String("abc"), Char(','), false),
 			},
 			wantErr:       true,
-			wantOutput:    []string{""}, // the "inserted" value
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 	}

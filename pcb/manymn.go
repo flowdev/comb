@@ -52,10 +52,11 @@ func (md *manyData[Output]) any(
 ) (gomme.State, []Output) {
 	count := len(outputs)
 
+	gomme.Debugf("ManyMN - mode=%s, pos=%d, count=%d", remaining.ParsingMode(), remaining.CurrentPos(), count)
 	if count >= md.atMost {
 		return remaining, outputs
 	}
-	switch state.ParsingMode() {
+	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
 		return md.happy(state, remaining, count, noWayBackIdx, noWayBackStart, outputs)
 	case gomme.ParsingModeError: // find previous NoWayBack (backward)
@@ -194,7 +195,7 @@ func (md *manyData[Output]) rewind(state gomme.State, outputs []Output) (gomme.S
 	return state, nil // we can't do anything
 }
 
-func (md *manyData[Output]) escape(state, remaining gomme.State, outputs []Output) (gomme.State, []Output) {
+func (md *manyData[Output]) escape(_, remaining gomme.State, outputs []Output) (gomme.State, []Output) {
 	newState, output := md.parse.It(remaining)
 	if newState.ParsingMode() == gomme.ParsingModeHappy {
 		outputs = append(outputs, output)

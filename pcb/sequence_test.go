@@ -67,7 +67,7 @@ func TestSequence(t *testing.T) {
 				parser: Sequence(Digit1(), Alpha0(), Digit1()),
 			},
 			wantErr:       true,
-			wantOutput:    []string{"", "", ""},
+			wantOutput:    nil,
 			wantRemaining: "",
 		},
 	}

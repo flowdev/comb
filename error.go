@@ -44,9 +44,7 @@ func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
 		errState.errHand.witnessPos = state.input.pos
 		errState.errHand.culpritIdx = idx
 	} else if errState.errHand.ignoreErrParser || errState.errHand.curDel > 0 { // we try to recover
-		state.mode = ParsingModeRewind
-		state.errHand.err = errState.errHand.err
-		return state
+		errState.mode = ParsingModeRewind
 	}
 	state.errHand = errState.errHand
 	return state
@@ -82,6 +80,16 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 		state.errHand.orgLine = state.input.line
 		state.errHand.orgPrevNl = state.input.prevNl
 	}
+	if state.AtEnd() { // we can't do anything -> give up
+		state.input.pos = state.errHand.orgPos
+		state.input.line = state.errHand.orgLine
+		state.input.prevNl = state.errHand.orgPrevNl
+		state.errHand.curDel = state.maxDel
+		state.errHand.ignoreErrParser = true
+		state.mode = ParsingModeEscape
+		Debugf("HandleWitness - EOF -> escape: curDel=%d, ignoreErrParser=%t", state.errHand.curDel, state.errHand.ignoreErrParser)
+		return state, zero
+	}
 	if state.errHand.culpritIdx >= len(parsers) {
 		state = state.NewSemanticError(fmt.Sprintf(
 			"programming error: length of sub-parsers is only %d but index of culprit sub-parser is %d",
@@ -95,6 +103,7 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 		case ParsingModeHandle:
 			state.errHand.curDel = 1
 			state.errHand.ignoreErrParser = false
+			Debugf("HandleWitness - handle: curDel=%d, ignoreErrParser=%t", state.errHand.curDel, state.errHand.ignoreErrParser)
 		case ParsingModeRewind:
 			state.errHand.curDel++
 			if state.errHand.curDel > state.maxDel {
@@ -109,10 +118,13 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 					state.input.line = state.errHand.orgLine
 					state.input.prevNl = state.errHand.orgPrevNl
 					state.mode = ParsingModeEscape // give up and go the hard way
+					Debugf("HandleWitness - rewind -> escape: curDel=%d, ignoreErrParser=%t", state.errHand.curDel, state.errHand.ignoreErrParser)
 					return state, zero
 				}
 			}
+			Debugf("HandleWitness - rewind: curDel=%d, ignoreErrParser=%t", state.errHand.curDel, state.errHand.ignoreErrParser)
 		default:
+			Debugf("HandleWitness - %s: curDel=%d, ignoreErrParser=%t", state.mode, state.errHand.curDel, state.errHand.ignoreErrParser)
 			return state, zero // we are witness parser but there is nothing to do
 		}
 		state.mode = ParsingModeHappy // try again
@@ -121,16 +133,19 @@ func HandleWitness[Output any](state State, id uint64, idx int, parsers ...Parse
 		state = state.deleter(state, min(state.errHand.curDel, 1))
 		if oldRemaining > state.BytesRemaining() || state.errHand.curDel == 0 {
 			if state.errHand.ignoreErrParser {
+				Debugf("HandleWitness - return -> %s: curDel=%d, ignoreErrParser=%t", state.mode, state.errHand.curDel, state.errHand.ignoreErrParser)
 				return state, zero
 			}
 			state, output = parse.It(state)
 			if !state.Failed() {
+				Debugf("HandleWitness - SUCCESS - %s: curDel=%d, ignoreErrParser=%t", state.mode, state.errHand.curDel, state.errHand.ignoreErrParser)
 				return state, output // first parser succeeded, now try the rest
 			}
 		} else { // speed up since we don't get further anyway
 			state.errHand.curDel = state.maxDel
 		}
 		state.mode = ParsingModeRewind
+		Debugf("HandleWitness - One More Round - %s: curDel=%d, ignoreErrParser=%t", state.mode, state.errHand.curDel, state.errHand.ignoreErrParser)
 	}
 }
 

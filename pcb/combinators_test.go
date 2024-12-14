@@ -188,13 +188,13 @@ func TestRecognize(t *testing.T) {
 			wantRemaining: "",
 		},
 		{
-			name:  "no parser match should fail",
+			name:  "no postfix match should fail",
 			input: "123",
 			args: args{
 				parser: Recognize(Map2(Digit1(), Alpha1(), pairMapFunc)),
 			},
 			wantErr:       true,
-			wantOutput:    "123",
+			wantOutput:    "",
 			wantRemaining: "",
 		},
 		{
@@ -438,8 +438,8 @@ func TestPrefixed(t *testing.T) {
 				parser: Prefixed(Char('-'), Digit1()),
 			},
 			wantErr:       true,
-			wantOutput:    "123",
-			wantRemaining: "",
+			wantOutput:    "",
+			wantRemaining: "123",
 		},
 		{
 			name:  "no parser match should fail",

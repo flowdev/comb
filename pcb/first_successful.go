@@ -30,33 +30,11 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		noWayBackRecoverer: myNoWayBackRecoverer,
 	}
 
-	//
-	// Finally the parsing function
-	//
-	newParse := func(state gomme.State) (gomme.State, Output) {
-		switch state.ParsingMode() {
-		case gomme.ParsingModeHappy: // normal parsing (forward)
-			return fsd.happy(state)
-		case gomme.ParsingModeError: // find previous NoWayBack (backward)
-			return fsd.error(state)
-		case gomme.ParsingModeHandle: // find error again (forward)
-			return fsd.handle(state)
-		case gomme.ParsingModeRewind: // go back to the witness parser (1)
-			return fsd.rewind(state)
-		case gomme.ParsingModeEscape: // find the NoWayBack recoverer with the least waste
-			return fsd.escape(state)
-		}
-
-		return state.NewSemanticError(fmt.Sprintf(
-			"parsing mode `%s` hasn't been handled in `FirstSuccessful`", state.ParsingMode(),
-		)), gomme.ZeroOf[Output]()
-	}
-
 	return gomme.NewParser[Output](
 		"FirstSuccessful",
-		newParse,
+		fsd.any,
 		true,
-		gomme.DefaultRecovererFunc(newParse), // you really shouldn't use this parser as a Recoverer
+		gomme.DefaultRecovererFunc(fsd.any), // you really shouldn't use this parser as a Recoverer
 		myNoWayBackRecoverer.Recover,
 	)
 }
@@ -65,6 +43,28 @@ type firstSuccessfulData[Output any] struct {
 	id                 uint64
 	parsers            []gomme.Parser[Output]
 	noWayBackRecoverer gomme.CombiningRecoverer
+}
+
+func (fsd *firstSuccessfulData[Output]) any(state gomme.State) (gomme.State, Output) {
+	var zero Output
+
+	gomme.Debugf("FirstSuccessful - mode=%s, pos=%d", state.ParsingMode(), state.CurrentPos())
+	switch state.ParsingMode() {
+	case gomme.ParsingModeHappy: // normal parsing (forward)
+		return fsd.happy(state)
+	case gomme.ParsingModeError: // find previous NoWayBack (backward)
+		return fsd.error(state)
+	case gomme.ParsingModeHandle: // find error again (forward)
+		return fsd.handle(state)
+	case gomme.ParsingModeRewind: // go back to the witness parser (1)
+		return fsd.rewind(state)
+	case gomme.ParsingModeEscape: // find the NoWayBack recoverer with the least waste
+		return fsd.escape(state)
+	}
+
+	return state.NewSemanticError(fmt.Sprintf(
+		"parsing mode `%s` hasn't been handled in `FirstSuccessful`", state.ParsingMode(),
+	)), zero
 }
 
 func (fsd *firstSuccessfulData[Output]) happy(state gomme.State) (gomme.State, Output) {

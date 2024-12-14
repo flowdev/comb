@@ -6,6 +6,9 @@
 package gomme
 
 import (
+	"context"
+	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -237,10 +240,14 @@ func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
 			newState, output = parse.It(state)
 		case ParsingModeError: // find previous NoWayBack (backward)
 			state = IWitnessed(state, id, 0, newState)
-			state.mode = ParsingModeHandle
-			if newState.errHand.err != nil {
-				state.oldErrors = append(state.oldErrors, *state.errHand.err)
+			if state.ParsingMode() == ParsingModeError {
+				state.mode = ParsingModeHandle
+				if newState.errHand.err != nil {
+					state.oldErrors = append(state.oldErrors, *state.errHand.err)
+					state.errHand.err = nil
+				}
 			}
+			Debugf("RunOnState - error -> %s: curDel=%d, ignoreErrParser=%t", state.mode, state.errHand.curDel, state.errHand.ignoreErrParser)
 			newState, output = parse.It(state)
 		case ParsingModeHandle: // find error again (forward)
 			state = state.Preserve(newState)
@@ -257,6 +264,7 @@ func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
 		if newState.mode == ParsingModeEscape && newState.AtEnd() { // stop riding a dead horse
 			return newState, output
 		}
+		Debugf("RunOnState - %s: curDel=%d, ignoreErrParser=%t", state.mode, state.errHand.curDel, state.errHand.ignoreErrParser)
 	}
 }
 
@@ -323,6 +331,22 @@ func BetterOf(state, other State) State {
 func ZeroOf[T any]() T {
 	var t T
 	return t
+}
+
+// SetDebug sets the log level to debug if enabled or info otherwise.
+func SetDebug(enable bool) {
+	if enable {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		return
+	}
+	slog.SetLogLoggerLevel(slog.LevelInfo)
+}
+
+// Debugf logs the given message using `log.Printf` if the debug level is enabled.
+func Debugf(msg string, args ...interface{}) {
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		log.Printf("DEBUG: "+msg, args...)
+	}
 }
 
 // IndexOrMinFunc returns the index of the matching value in x,

@@ -64,6 +64,7 @@ func Byte(byt byte) gomme.Parser[byte] {
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
 // `expected` is used in error messages to tell the user what is expected at the current position.
+//
 // This parser is a good candidate for NoWayBack and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
 func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
@@ -176,6 +177,9 @@ func UntilString(stop string) gomme.Parser[string] {
 //
 // If the provided parser is not successful or the predicate doesn't match
 // `atLeast` times, the parser fails and goes back to the start.
+//
+// This parser is a good candidate for NoWayBack and has an optimized Recoverer.
+// An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
 func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) gomme.Parser[string] {
 	if atLeast < 0 {
 		panic("SatisfyMN is unable to handle negative `atLeast` argument")
@@ -230,10 +234,10 @@ func satisfyMNRecoverer(atLeast int, predicate func(rune2 rune) bool) gomme.Reco
 		count := 0
 		for i, r := range state.CurrentString() {
 			if predicate(r) {
-				count++
 				if count >= atLeast {
 					return i - count
 				}
+				count++
 			} else {
 				count = 0
 			}

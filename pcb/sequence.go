@@ -62,6 +62,7 @@ func (seq *sequenceData[Output]) any(
 	noWayBackIdx, noWayBackStart int,
 	outputs []Output,
 ) (gomme.State, []Output) {
+	gomme.Debugf("Sequence - mode=%s, pos=%d, startIdx=%d", remaining.ParsingMode(), remaining.CurrentPos(), startIdx)
 	if startIdx >= len(seq.parsers) {
 		return remaining, outputs
 	}

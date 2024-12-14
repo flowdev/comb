@@ -120,6 +120,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) any(
 ) (gomme.State, MO) {
 	var zero MO
 
+	gomme.Debugf("MapN - mode=%s, pos=%d, startIdx=%d", remaining.ParsingMode(), remaining.CurrentPos(), startIdx)
 	if startIdx >= md.n {
 		if remaining.ParsingMode() == gomme.ParsingModeHappy {
 			return md.mapn(remaining, out1, out2, out3, out4, out5)
@@ -359,7 +360,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) error(
 
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) handle(
 	state gomme.State,
-	startIdx int,
+	_ int,
 	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
 ) (gomme.State, MO) {
 	var zeroMO MO
@@ -411,6 +412,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) rewind(
 ) (gomme.State, MO) {
 	var zeroMO MO
 
+	gomme.Debugf("MapN.rewind - startIdx=%d", startIdx)
 	// use cache to know result immediately (Failed, Idx, ErrorStart)
 	result, ok := state.CachedParserResult(md.id)
 	if !ok {
@@ -420,6 +422,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) rewind(
 	}
 	// found in cache
 	if result.Failed { // we should be able to switch to mode=happy (or escape)
+		gomme.Debugf("MapN.rewind - result.Idx=%d", result.Idx)
 		var newState gomme.State
 		switch result.Idx {
 		case 0:
@@ -443,8 +446,10 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) rewind(
 		}
 
 		if newState.ParsingMode() == gomme.ParsingModeRewind && newState.StillHandlingError() {
+			gomme.Debugf("MapN.rewind - return (zeroMO): mode=%s", newState.ParsingMode())
 			return newState, zeroMO
 		}
+		gomme.Debugf("MapN.rewind - return (New Round): mode=%s", newState.ParsingMode())
 		return md.any(
 			state, newState,
 			result.Idx+1,

@@ -1,6 +1,8 @@
 package hexcolor
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestParseRGBColor(t *testing.T) {
 	testCases := []struct {

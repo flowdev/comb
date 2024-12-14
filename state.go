@@ -80,6 +80,10 @@ func (st State) CurrentBytes() []byte {
 	return st.input.bytes[st.input.pos:]
 }
 
+func (st State) CurrentPos() int {
+	return st.input.pos
+}
+
 func (st State) StringTo(remaining State) string {
 	return string(st.BytesTo(remaining))
 }

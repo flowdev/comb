@@ -75,6 +75,7 @@ func noWayBackHappy[Output any](id uint64, parse Parser[Output], state State) (S
 func noWayBackError[Output any](_ uint64, _ Parser[Output], state State) (State, Output) {
 	state.mode = ParsingModeHandle
 	state.oldErrors = append(state.oldErrors, *state.errHand.err)
+	state.errHand.err = nil
 	return state, ZeroOf[Output]()
 }
 func noWayBackHandle[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
