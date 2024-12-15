@@ -86,6 +86,25 @@ type Parser[Output any] interface {
 	NoWayBackRecoverer(State) int
 }
 
+// ParserToZeroOutput converts a parser of one output type to a different
+// output type with zero value.
+// So only use this if the output of the parser is waste.
+func ParserToZeroOutput[Output, S any](other Parser[S]) Parser[Output] {
+	var zero Output
+
+	parse := func(state State) (State, Output) {
+		state, _ = other.It(state)
+		return state, zero
+	}
+	return NewParser[Output](
+		other.Expected(),
+		parse,
+		other.PossibleWitness(),
+		other.MyRecoverer(),
+		other.NoWayBackRecoverer,
+	)
+}
+
 type prsr[Output any] struct {
 	expected           string
 	it                 func(State) (State, Output)

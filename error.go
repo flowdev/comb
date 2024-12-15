@@ -252,12 +252,12 @@ func (crc CombiningRecoverer) LastIndex() int {
 	return crc.lastIdx
 }
 
-func (crc CombiningRecoverer) CachedIndex(state State) (idx int, ok bool) {
-	_, idx, ok = state.cachedRecovererWasteIdx(crc.id)
+func (crc CombiningRecoverer) CachedIndex(state State) (waste, idx int, ok bool) {
+	waste, idx, ok = state.cachedRecovererWasteIdx(crc.id)
 	if !ok {
-		return -1, false
+		return 0, -1, false
 	}
-	return idx, true
+	return waste, idx, true
 }
 
 // ============================================================================

@@ -467,12 +467,12 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 ) (gomme.State, MO) {
 	var zeroMO MO
 
-	idx := 0
+	idx, waste := 0, 0
 	if startIdx <= 0 { // use md.noWayBackRecoverer
 		ok := false
-		idx, ok = md.noWayBackRecoverer.CachedIndex(state)
+		waste, idx, ok = md.noWayBackRecoverer.CachedIndex(state)
 		if !ok {
-			md.noWayBackRecoverer.Recover(state)
+			waste = md.noWayBackRecoverer.Recover(state)
 			idx = md.noWayBackRecoverer.LastIndex()
 		}
 	} else { // we have to use seq.subRecoverers
@@ -481,7 +481,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 			recoverers[i] = nil
 		}
 		crc := gomme.NewCombiningRecoverer(false, recoverers...)
-		crc.Recover(remaining) // find best Recoverer
+		waste = crc.Recover(remaining) // find best Recoverer
 		idx = crc.LastIndex()
 	}
 
@@ -491,6 +491,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) escape(
 		).MoveBy(remaining.BytesRemaining()), zeroMO
 	}
 
+	remaining = state.MoveBy(waste)
 	var newState gomme.State
 	switch idx {
 	case 0:

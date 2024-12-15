@@ -222,12 +222,12 @@ func (seq *sequenceData[Output]) escape(
 	startIdx int,
 	outputs []Output,
 ) (gomme.State, []Output) {
-	idx := 0
+	idx, waste := 0, 0
 	if startIdx <= 0 { // use seq.noWayBackRecoverer
 		ok := false
-		idx, ok = seq.noWayBackRecoverer.CachedIndex(state)
+		waste, idx, ok = seq.noWayBackRecoverer.CachedIndex(state)
 		if !ok {
-			seq.noWayBackRecoverer.Recover(state)
+			waste = seq.noWayBackRecoverer.Recover(state)
 			idx = seq.noWayBackRecoverer.LastIndex()
 		}
 	} else { // we have to use seq.subRecoverers
@@ -236,7 +236,7 @@ func (seq *sequenceData[Output]) escape(
 			recoverers[i] = nil
 		}
 		crc := gomme.NewCombiningRecoverer(false, recoverers...)
-		crc.Recover(remaining) // find best Recoverer
+		waste = crc.Recover(remaining) // find best Recoverer
 		idx = crc.LastIndex()
 	}
 
@@ -245,7 +245,7 @@ func (seq *sequenceData[Output]) escape(
 			"grammar error: unable to recover; did you forget to use the NoWayBack parser?",
 		).MoveBy(remaining.BytesRemaining()), nil // give up!
 	}
-	newState, output := seq.parsers[idx].It(remaining)
+	newState, output := seq.parsers[idx].It(remaining.MoveBy(waste))
 	if newState.ParsingMode() == gomme.ParsingModeHappy {
 		outputs = saveOutput(outputs, output, idx)
 	}

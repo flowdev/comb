@@ -37,48 +37,19 @@ func Many1[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 	return ManyMN(parse, 1, math.MaxInt)
 }
 
-// SeparatedMN applies an element parser and a separator parser repeatedly in order
-// to produce a slice of elements.
+// ManyMN applies a parser repeatedly until it fails, and returns a slice of all
+// the results as the Result's Output.
 //
-// Because the `SeparatedListMN` is really looking to produce a list of elements resulting
-// from the provided main parser, it will succeed even if the separator parser fails to
-// match at the end.
-//
-// The parser will fail if both parsers together accepted an empty input
-// in order to prevent infinite loops.
-func SeparatedMN[Output any, S gomme.Separator](
-	parse gomme.Parser[Output], separator gomme.Parser[S],
-	atLeast, atMost int,
-	parseSeparatorAtEnd bool,
-) gomme.Parser[[]Output] {
+// Note that ManyMN fails if the provided parser accepts empty inputs (such as
+// `Digit0`, or `Alpha0`) in order to prevent infinite loops.
+func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.Parser[[]Output] {
 	if atLeast < 0 {
-		panic("SeparatedMN is unable to handle negative `atLeast`")
+		panic("ManyMN is unable to handle negative `atLeast` argument")
 	}
 	if atMost < 0 {
-		panic("SeparatedMN is unable to handle negative `atMost`")
+		panic("ManyMN is unable to handle negative `atMost` argument")
 	}
-
-	var sep1N gomme.Parser[[]Output]
-
-	parseManySP := ManyMN(Prefixed(separator, parse), max(atLeast-1, 0), max(atMost-1, 0))
-	if parseSeparatorAtEnd {
-		sep1N = Map3(parse, parseManySP, Optional(separator), func(out1 Output, outMany []Output, _ S) ([]Output, error) {
-			outAll := make([]Output, 0, len(outMany)+1)
-			outAll = append(outAll, out1)
-			return append(outAll, outMany...), nil
-		})
-	} else {
-		sep1N = Map2(parse, parseManySP, func(out1 Output, outMany []Output) ([]Output, error) {
-			outAll := make([]Output, 0, len(outMany)+1)
-			outAll = append(outAll, out1)
-			return append(outAll, outMany...), nil
-		})
-	}
-
-	if atLeast > 0 {
-		return sep1N
-	}
-	return Optional(sep1N)
+	return SeparatedMN(parse, noSeparator, atLeast, atMost, false)
 }
 
 // Separated0 applies an element parser and a separator parser repeatedly in order

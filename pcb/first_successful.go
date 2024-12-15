@@ -182,9 +182,9 @@ func (fsd *firstSuccessfulData[Output]) rewind(state gomme.State) (gomme.State, 
 func (fsd *firstSuccessfulData[Output]) escape(state gomme.State) (gomme.State, Output) {
 	var zero Output
 
-	idx, ok := fsd.noWayBackRecoverer.CachedIndex(state)
+	waste, idx, ok := fsd.noWayBackRecoverer.CachedIndex(state)
 	if !ok {
-		fsd.noWayBackRecoverer.Recover(state)
+		waste = fsd.noWayBackRecoverer.Recover(state)
 		idx = fsd.noWayBackRecoverer.LastIndex()
 	}
 
@@ -192,7 +192,7 @@ func (fsd *firstSuccessfulData[Output]) escape(state gomme.State) (gomme.State, 
 		return state.MoveBy(state.BytesRemaining()), zero // give up
 	}
 	parse := fsd.parsers[idx]
-	newState, output := parse.It(state)
+	newState, output := parse.It(state.MoveBy(waste))
 	// this parser has the best recoverer; so it MUST make us happy again
 	if newState.ParsingMode() != gomme.ParsingModeHappy && newState.ParsingMode() != gomme.ParsingModeEscape {
 		return state.NewSemanticError(fmt.Sprintf(

@@ -354,7 +354,7 @@ func TestSeparated0(t *testing.T) {
 				p: Separated0(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
-			wantOutput:    nil,
+			wantOutput:    []string{},
 			wantRemaining: "def,abc",
 		},
 		{
@@ -364,7 +364,7 @@ func TestSeparated0(t *testing.T) {
 				p: Separated0(String("abc"), Char(','), false),
 			},
 			wantErr:       false,
-			wantOutput:    nil,
+			wantOutput:    []string{},
 			wantRemaining: "",
 		},
 		{
@@ -384,7 +384,7 @@ func TestSeparated0(t *testing.T) {
 				p: Separated0(Digit1(), Char(','), true),
 			},
 			wantErr:       false,
-			wantOutput:    nil,
+			wantOutput:    []string{},
 			wantRemaining: "",
 		},
 	}
