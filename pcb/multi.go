@@ -43,12 +43,6 @@ func Many1[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.Parser[[]Output] {
-	if atLeast < 0 {
-		panic("ManyMN is unable to handle negative `atLeast` argument")
-	}
-	if atMost < 0 {
-		panic("ManyMN is unable to handle negative `atMost` argument")
-	}
 	return SeparatedMN(parse, noSeparator, atLeast, atMost, false)
 }
 
