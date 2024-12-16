@@ -1,7 +1,7 @@
 # Error Handling
 
 The handling of (syntax) errors is the by far hardest part of this project.
-I had to refactor the project **three** times to get it right and
+I had to refactor the project **four** times to get it right and
 almost made a PhD in computer science understanding all those
 scientific papers about error handling in parsers
 with their extremely concise notation that is explained nowhere
@@ -32,6 +32,16 @@ Semantic and miscellaneous errors are always reported in the form:
 Calculating the correct line and column of the error and setting the marker
 correctly are the hardest problems here.
 And they bring the most benefit to the user.
+
+For binary input the message including prefix (`expected` or `programming error:`)
+stay exactly the same but the source and position part changes to:
+> message:
+>  00000002  6e 74 65 6e 74 0a 6c 69  ▶6e 65 32 0a 6c 69 6e 65  |ntent.li▶ne2.line|
+
+So it's reported in the canonical hex+ASCII display format of the
+UNIX `hexdump` command (`hexdump -C` to be exact).
+The first number is the offset of the first byte displayed.
+And it is in **hex** format!
 
 ## Recovering From Errors
 
