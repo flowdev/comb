@@ -1,92 +1,91 @@
-package gomme
+package gomme_test
 
 import (
+	"github.com/oleiade/gomme"
 	"testing"
 )
 
-func TestWhere(t *testing.T) {
-	st := NewFromString(-1, nil, "content\nline2\nline3\nand4\n").MoveBy(15)
+func TestErrorReporting(t *testing.T) {
+	input := "content\nline2\nline3\nand4\n"
+	input2 := "line1\nline2"
+	txtState := gomme.NewFromString(-1, nil, input)
+	binState := gomme.NewFromBytes(-1, nil, []byte(input))
 
 	specs := []struct {
-		name            string
-		givenState      State
-		givenPosition   int
-		expectedLine    int
-		expectedCol     int
-		expectedSrcLine string
+		name          string
+		givenState    gomme.State
+		givenPosition int
+		expectedError string
 	}{
 		{
-			name:            "at start of line in the middle",
-			givenState:      st,
-			givenPosition:   14,
-			expectedLine:    3,
-			expectedCol:     0,
-			expectedSrcLine: "line3",
+			name:          "at start of line in the middle",
+			givenState:    txtState,
+			givenPosition: 14,
+			expectedError: "error [3:1] ▶line3\n",
 		}, {
-			name:            "at end of input with last NL",
-			givenState:      st,
-			givenPosition:   len(st.input.bytes) - 1,
-			expectedLine:    4,
-			expectedCol:     4,
-			expectedSrcLine: "and4",
+			name:          "at end of input with last NL",
+			givenState:    txtState,
+			givenPosition: len(input),
+			expectedError: "error [5:1] ▶\n",
 		}, {
-			name:            "at NL in the middle",
-			givenState:      st,
-			givenPosition:   13,
-			expectedLine:    2,
-			expectedCol:     5,
-			expectedSrcLine: "line2",
+			name:          "at NL in the middle",
+			givenState:    txtState,
+			givenPosition: 13,
+			expectedError: "error [2:6] line2▶\n",
 		}, {
-			givenState:      st,
-			givenPosition:   0,
-			expectedLine:    1,
-			expectedCol:     0,
-			expectedSrcLine: "content",
+			name:          "at start of input",
+			givenState:    txtState,
+			givenPosition: 0,
+			expectedError: "error [1:1] ▶content\n",
 		}, {
-			name: "empty input",
-			givenState: State{
-				input: Input{
-					bytes:  []byte{},
-					pos:    0,
-					prevNl: -1,
-					line:   1,
-				},
-				noWayBackMark: -1,
-			},
-			givenPosition:   0,
-			expectedLine:    1,
-			expectedCol:     0,
-			expectedSrcLine: "",
+			name:          "empty input",
+			givenState:    gomme.NewFromString(-1, nil, ""),
+			givenPosition: 0,
+			expectedError: "error [1:1] ▶\n",
 		}, {
-			name: "at end of input without last NL",
-			givenState: State{
-				input: Input{
-					bytes:  []byte("line1\nline2"),
-					pos:    7,
-					prevNl: 5,
-					line:   2,
-				},
-				noWayBackMark: -1,
-			},
-			givenPosition:   10,
-			expectedLine:    2,
-			expectedCol:     4,
-			expectedSrcLine: "line2",
+			name:          "at end of input without last NL",
+			givenState:    gomme.NewFromString(-1, nil, input2),
+			givenPosition: len(input2),
+			expectedError: "error [2:6] line2▶\n",
+		}, {
+			name:          "binary: at start of input",
+			givenState:    binState,
+			givenPosition: 0,
+			expectedError: "error:\n 00000000  ▶63 6f 6e 74 65 6e 74 0a  6c 69 6e 65 32 0a 6c 69  |▶content.line2.li|\n",
+		}, {
+			name:          "binary: in middle of input",
+			givenState:    binState,
+			givenPosition: 10,
+			expectedError: "error:\n 00000002  6e 74 65 6e 74 0a 6c 69  ▶6e 65 32 0a 6c 69 6e 65  |ntent.li▶ne2.line|\n",
+		}, {
+			name:          "binary: at end of input",
+			givenState:    binState,
+			givenPosition: len(input),
+			expectedError: "error:\n 00000009  69 6e 65 32 0a 6c 69 6e  65 33 0a 61 6e 64 34 0a ▶ |ine2.line3.and4.▶|\n",
+		}, {
+			name:          "binary: at start of short input",
+			givenState:    gomme.NewFromBytes(-1, nil, []byte(input2)),
+			givenPosition: 0,
+			expectedError: "error:\n 00000000  ▶6c 69 6e 65 31 0a 6c 69  6e 65 32                 |▶line1.line2|\n",
+		}, {
+			name:          "binary: in middle of short input",
+			givenState:    gomme.NewFromBytes(-1, nil, []byte(input2)),
+			givenPosition: 8,
+			expectedError: "error:\n 00000000  6c 69 6e 65 31 0a 6c 69  ▶6e 65 32                 |line1.li▶ne2|\n",
+		}, {
+			name:          "binary: at end of short input",
+			givenState:    gomme.NewFromBytes(-1, nil, []byte(input2)),
+			givenPosition: len(input2) - 1,
+			expectedError: "error:\n 00000000  6c 69 6e 65 31 0a 6c 69  6e 65 ▶32                 |line1.line▶2|\n",
 		},
 	}
 
 	for _, spec := range specs {
 		t.Run(spec.name, func(t *testing.T) {
-			gotLine, gotCol, gotSrcLine := spec.givenState.where(spec.givenPosition)
+			gotError := spec.givenState.MoveBy(spec.givenPosition).NewSemanticError("error").Error()
 
-			if gotLine != spec.expectedLine {
-				t.Errorf("Expected line %d, got: %d", spec.expectedLine, gotLine)
-			}
-			if gotCol != spec.expectedCol {
-				t.Errorf("Expected col %d, got: %d", spec.expectedCol, gotCol)
-			}
-			if gotSrcLine != spec.expectedSrcLine {
-				t.Errorf("Expected source line %q, got: %q", spec.expectedSrcLine, gotSrcLine)
+			if gotError != spec.expectedError {
+				t.Errorf("Expected error %q, got: %q", spec.expectedError, gotError)
 			}
 
 		})

@@ -240,7 +240,7 @@ func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](maxDel int, del Deleter, input []byte, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewState(maxDel, del, input), parse)
+	newState, output := RunOnState(NewFromBytes(maxDel, del, input), parse)
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}
@@ -296,12 +296,24 @@ func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
 // The parsers store and advance the position within the data but never change the data itself.
 // This allows good error reporting including the full line of text containing the error.
 type Input struct {
-	// Go is fundamentally working with bytes and can interpret them as strings or as containing runes.
-	// There are no standard library functions for handling []rune or the like.
-	bytes  []byte
-	pos    int // current position in the sequence a.k.a. the *byte* index
-	prevNl int // position of newline preceding 'pos' (-1 for line==1)
-	line   int // current line number
+	binary bool   // type of input (general)
+	bytes  []byte // for binary input and parsers
+	text   string // for string input and text parsers
+	n      int    // length of the bytes or text
+	pos    int    // current position in the sequence a.k.a. the *byte* index
+	prevNl int    // position of newline preceding 'pos' (-1 for line==1)
+	line   int    // current line number
+}
+
+func newInput(binary bool, bytes []byte, text string) Input {
+	n := len(text)
+	if binary {
+		n = len(bytes)
+	}
+	return Input{
+		binary: binary, bytes: bytes, text: text, n: n,
+		pos: 0, prevNl: -1, line: 1,
+	}
 }
 
 // NewFromString creates a new parser state from the input data.
@@ -309,12 +321,19 @@ func NewFromString(maxDel int, del Deleter, input string) State {
 	if del == nil {
 		del = DefaultTextDeleter
 	}
-	state := NewState(maxDel, del, []byte(input))
-	return state
+	return newState(maxDel, del, false, nil, input)
 }
 
-// NewState creates a new parser state from the input data.
-func NewState(maxDel int, del Deleter, input []byte) State {
+// NewFromBytes creates a new parser state from the input data.
+func NewFromBytes(maxDel int, del Deleter, input []byte) State {
+	if del == nil {
+		del = DefaultTextDeleter
+	}
+	return newState(maxDel, del, true, input, "")
+}
+
+// newState creates a new parser state from the input data.
+func newState(maxDel int, del Deleter, binary bool, bytes []byte, text string) State {
 	if maxDel < 0 {
 		maxDel = DefaultMaxDel
 	}
@@ -322,7 +341,7 @@ func NewState(maxDel int, del Deleter, input []byte) State {
 		del = DefaultBinaryDeleter
 	}
 	return State{
-		input:                  Input{bytes: input, line: 1, prevNl: -1},
+		input:                  newInput(binary, bytes, text),
 		noWayBackMark:          -1,
 		maxDel:                 maxDel,
 		deleter:                del,

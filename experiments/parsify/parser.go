@@ -59,7 +59,7 @@ func Char(char rune) Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
 	return func(state gomme.State) (gomme.State, rune) {
-		r, size := utf8.DecodeRune(state.CurrentBytes())
+		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
 				return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), utf8.RuneError
@@ -80,7 +80,7 @@ func Char2[Output rune](char rune) Parser[Output] {
 	expected := strconv.QuoteRune(char)
 
 	return func(state gomme.State) (gomme.State, Output) {
-		r, size := utf8.DecodeRune(state.CurrentBytes())
+		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
 				return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), utf8.RuneError

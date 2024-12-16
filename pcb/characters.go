@@ -21,7 +21,7 @@ func Char(char rune) gomme.Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
 	parse := func(state gomme.State) (gomme.State, rune) {
-		r, size := utf8.DecodeRune(state.CurrentBytes())
+		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
 				return state.NewError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
@@ -69,7 +69,7 @@ func Byte(byt byte) gomme.Parser[byte] {
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
 func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 	parse := func(state gomme.State) (gomme.State, rune) {
-		r, size := utf8.DecodeRune(state.CurrentBytes())
+		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
 				return state.NewError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
@@ -191,7 +191,7 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 		current := state
 		count := 0
 		for atMost > count {
-			r, size := utf8.DecodeRune(current.CurrentBytes())
+			r, size := utf8.DecodeRuneInString(current.CurrentString())
 			if r == utf8.RuneError {
 				if count >= atLeast {
 					output := state.StringTo(current)

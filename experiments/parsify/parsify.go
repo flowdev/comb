@@ -31,7 +31,7 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 			oruneErr, _ := iruneErr.(Output)
 			expected := strconv.QuoteRune(ap)
 			return func(state gomme.State) (gomme.State, Output) {
-				r, size := utf8.DecodeRune(state.CurrentBytes())
+				r, size := utf8.DecodeRuneInString(state.CurrentString())
 				if r == utf8.RuneError {
 					if size == 0 {
 						return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), oruneErr

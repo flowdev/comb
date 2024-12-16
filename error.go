@@ -1,6 +1,7 @@
 package gomme
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -8,6 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 )
+
+const errorMarker = 0x25B6 // easy to spot marker (▶) for exact error position
 
 // pcbError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
@@ -324,19 +327,40 @@ func DefaultTextDeleter(state State, count int) State {
 // Error Reporting
 //
 
-func singleErrorMsg(pcbErr pcbError) string {
+func singleErrorMsg(pcbErr pcbError, binary bool) string {
 	fullMsg := strings.Builder{}
 	fullMsg.WriteString(pcbErr.text)
-	fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
+	if binary {
+		fullMsg.WriteString(formatBinaryLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
+	} else {
+		fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
+	}
 
 	return fullMsg.String()
+}
+
+func formatBinaryLine(line, col int, srcLine string) string {
+	start := line
+	text := hex.Dump([]byte(srcLine))
+	text = text[10:] // remove wrong offset and spaces
+
+	m1 := col * 3
+	if col >= 8 {
+		m1++
+	}
+	// first hex + space + second hex + space + bar + col
+	m2 := 8*3 + 1 + 8*3 + 1 + 1 + col
+	return fmt.Sprintf(":\n %08x  %s%c%s%c%s",
+		// offset, first hex, marker, last hex + ASCII, marker, last ASCII
+		start, text[:m1], errorMarker, text[m1:m2], errorMarker, text[m2:len(text)-1])
 }
 
 func formatSrcLine(line, col int, srcLine string) string {
 	result := strings.Builder{}
 	lineStart := srcLine[:col]
+	srcLine = srcLine[col:]
 	result.WriteString(lastNRunes(lineStart, 10))
-	result.WriteRune(0x25B6) // easy to spot marker (▶) for exact error position
+	result.WriteRune(errorMarker)
 	result.WriteString(firstNRunes(srcLine, 20))
 	return fmt.Sprintf(` [%d:%d] %s`,
 		line, utf8.RuneCountInString(lineStart)+1, result.String()) // columns for the user start at 1
@@ -381,7 +405,7 @@ func pcbErrorsToGoErrors(state State) error {
 
 	goErrors := make([]error, len(pcbErrors))
 	for i, pe := range pcbErrors {
-		goErrors[i] = errors.New(singleErrorMsg(pe))
+		goErrors[i] = errors.New(singleErrorMsg(pe, state.input.binary))
 	}
 
 	return errors.Join(goErrors...)

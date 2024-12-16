@@ -65,18 +65,24 @@ type State struct {
 //
 
 func (st State) AtEnd() bool {
-	return st.input.pos >= len(st.input.bytes)
+	return st.input.pos >= st.input.n
 }
 
 func (st State) BytesRemaining() int {
-	return len(st.input.bytes) - st.input.pos
+	return st.input.n - st.input.pos
 }
 
 func (st State) CurrentString() string {
-	return string(st.input.bytes[st.input.pos:])
+	if st.input.binary && len(st.input.text) < st.input.n {
+		st.input.text = string(st.input.bytes)
+	}
+	return st.input.text[st.input.pos:]
 }
 
 func (st State) CurrentBytes() []byte {
+	if !st.input.binary && len(st.input.bytes) < st.input.n {
+		st.input.bytes = []byte(st.input.text)
+	}
 	return st.input.bytes[st.input.pos:]
 }
 
@@ -85,12 +91,24 @@ func (st State) CurrentPos() int {
 }
 
 func (st State) StringTo(remaining State) string {
-	return string(st.BytesTo(remaining))
+	if remaining.input.pos < st.input.pos {
+		return ""
+	}
+	if st.input.binary && len(st.input.text) < st.input.n {
+		st.input.text = string(st.input.bytes)
+	}
+	if remaining.input.pos > len(st.input.text) {
+		return st.input.text[st.input.pos:]
+	}
+	return st.input.text[st.input.pos:remaining.input.pos]
 }
 
 func (st State) BytesTo(remaining State) []byte {
 	if remaining.input.pos < st.input.pos {
 		return []byte{}
+	}
+	if !st.input.binary && len(st.input.bytes) < st.input.n {
+		st.input.bytes = []byte(st.input.text)
 	}
 	if remaining.input.pos > len(st.input.bytes) {
 		return st.input.bytes[st.input.pos:]
@@ -102,7 +120,7 @@ func (st State) ByteCount(remaining State) int {
 	if remaining.input.pos < st.input.pos {
 		return 0 // we never go back so we don't give negative count back
 	}
-	n := len(st.input.bytes)
+	n := st.input.n
 	if remaining.input.pos > n {
 		return n - st.input.pos
 	}
@@ -115,14 +133,16 @@ func (st State) MoveBy(countBytes int) State {
 	}
 
 	pos := st.input.pos
-	n := min(len(st.input.bytes), pos+countBytes)
+	n := min(st.input.n, pos+countBytes)
 	st.input.pos = n
 
-	moveText := string(st.input.bytes[pos:n])
-	lastNlPos := strings.LastIndexByte(moveText, '\n') // this is Unicode safe!!!
-	if lastNlPos >= 0 {
-		st.input.prevNl += lastNlPos + 1 // this works even if '\n' wasn't found at all
-		st.input.line += strings.Count(moveText, "\n")
+	if !st.input.binary {
+		moveText := st.input.text[pos:n]
+		lastNlPos := strings.LastIndexByte(moveText, '\n') // this is Unicode safe!!!
+		if lastNlPos >= 0 {
+			st.input.prevNl += lastNlPos + 1 // this works even if '\n' wasn't found at all
+			st.input.line += strings.Count(moveText, "\n")
+		}
 	}
 
 	return st
@@ -382,14 +402,10 @@ func (st State) ErrorAgain(newErr *pcbError) State {
 // For syntax errors `expected ` is prepended to the message and the usual
 // position and source line including marker are appended.
 func (st State) NewError(message string) State {
-	line, col, srcLine := st.where(st.input.pos)
-	newErr := &pcbError{
-		text: "expected " + message,
-		pos:  st.input.pos, line: line, col: col,
-		srcLine: srcLine,
-	}
+	newErr := st.newPcbError()
+	newErr.text = "expected " + message
 
-	return st.ErrorAgain(newErr)
+	return st.ErrorAgain(&newErr)
 }
 
 // NewSemanticError sets a semantic error with the messages in this state at the
@@ -397,15 +413,20 @@ func (st State) NewError(message string) State {
 // For semantic errors `expected ` is NOT prepended to the message but the usual
 // position and source line including marker are appended.
 func (st State) NewSemanticError(message string) State {
-	line, col, srcLine := st.where(st.input.pos)
-	err := pcbError{
-		text: message,
-		pos:  st.input.pos, line: line, col: col,
-		srcLine: srcLine,
-	}
-
+	err := st.newPcbError()
+	err.text = message
 	st.oldErrors = append(st.oldErrors, err)
 	return st
+}
+
+func (st State) newPcbError() pcbError {
+	newErr := pcbError{pos: st.input.pos}
+	if st.input.binary { // the rare binary case is misusing the text case data a bit...
+		newErr.line, newErr.col, newErr.srcLine = st.bytesAround(st.input.pos)
+	} else {
+		newErr.line, newErr.col, newErr.srcLine = st.where(st.input.pos)
+	}
+	return newErr
 }
 
 // Failed returns whether this state is in a failed state or not.
@@ -435,15 +456,30 @@ func (st State) StillHandlingError() bool {
 // CurrentSourceLine returns the source line corresponding to the current position
 // including [line:column] at the start and a marker at the exact error position.
 // This should be used for reporting errors that are detected later.
+// The binary case is handled accordingly.
 func (st State) CurrentSourceLine() string {
-	return formatSrcLine(st.where(st.input.pos))
+	if st.input.binary {
+		return formatBinaryLine(st.bytesAround(st.input.pos))
+	} else {
+		return formatSrcLine(st.where(st.input.pos))
+	}
+}
+
+func (st State) bytesAround(pos int) (line, col int, srcLine string) {
+	start := max(0, pos-8)
+	end := min(start+16, st.input.n)
+	if end-start < 16 { // try to fill up from the other end...
+		start = max(0, end-16)
+	}
+	srcLine = string(st.input.bytes[start:end])
+	return start, pos - start, srcLine
 }
 
 func (st State) where(pos int) (line, col int, srcLine string) {
 	if pos < 0 {
 		pos = 0
 	}
-	if len(st.input.bytes) == 0 {
+	if len(st.input.text) == 0 {
 		return 1, 0, ""
 	}
 	if pos > st.input.prevNl { // pos is ahead of prevNL => search forward
@@ -455,7 +491,7 @@ func (st State) where(pos int) (line, col int, srcLine string) {
 	}
 }
 func (st State) whereForward(pos, lineNum, prevNl int) (line, col int, srcLine string) {
-	text := string(st.input.bytes)
+	text := st.input.text
 	var nextNl int // Position of next newline or end
 
 	for {
@@ -476,7 +512,7 @@ func (st State) whereForward(pos, lineNum, prevNl int) (line, col int, srcLine s
 	}
 }
 func (st State) whereBackward(pos, lineNum, nextNl int) (line, col int, srcLine string) {
-	text := string(st.input.bytes)
+	text := st.input.text
 	var prevNl int // Line start (position of preceding newline)
 
 	for {
@@ -493,7 +529,7 @@ func (st State) whereBackward(pos, lineNum, nextNl int) (line, col int, srcLine 
 }
 func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, col int, srcLine string, stop bool) {
 	if prevNl < pos && pos <= nextNl {
-		return lineNum, pos - prevNl - 1, string(st.input.bytes[prevNl+1 : nextNl]), true
+		return lineNum, pos - prevNl - 1, string(st.input.text[prevNl+1 : nextNl]), true
 	}
 	return 1, 0, "", false
 }
@@ -506,12 +542,12 @@ func (st State) Error() string {
 
 	fullMsg := strings.Builder{}
 	for _, pcbErr := range st.oldErrors {
-		fullMsg.WriteString(singleErrorMsg(pcbErr))
+		fullMsg.WriteString(singleErrorMsg(pcbErr, st.input.binary))
 		fullMsg.WriteRune('\n')
 	}
 	n := len(st.oldErrors)
 	if st.errHand.err != nil && (n == 0 || st.errHand.err.pos != st.oldErrors[n-1].pos) {
-		fullMsg.WriteString(singleErrorMsg(*st.errHand.err))
+		fullMsg.WriteString(singleErrorMsg(*st.errHand.err, st.input.binary))
 		fullMsg.WriteRune('\n')
 	}
 
