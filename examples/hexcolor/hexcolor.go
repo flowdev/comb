@@ -30,7 +30,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 		},
 	)
 
-	output, err := gomme.RunOnString(-1, nil, input, parse)
+	output, err := gomme.RunOnString(-1, nil, -1, input, parse)
 	if err != nil {
 		return RGBColor{}, err
 	}

@@ -32,7 +32,7 @@ func NoWayBack[Output any](parse Parser[Output]) Parser[Output] {
 	// call Recoverer to make a Forbidden recoverer panic during the construction phase
 	recoverer := parse.MyRecoverer()
 	if recoverer != nil {
-		recoverer(NewFromBytes(-1, DefaultBinaryDeleter, []byte{}))
+		recoverer(NewFromBytes(-1, DefaultBinaryDeleter, -1, []byte{}))
 	}
 
 	newParse := func(state State) (State, Output) {

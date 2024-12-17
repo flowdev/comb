@@ -72,7 +72,7 @@ func TestInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -91,7 +91,7 @@ func TestInt64(t *testing.T) {
 
 func BenchmarkInt64(b *testing.B) {
 	parser := Int64(false, 10)
-	input := gomme.NewFromString(1, nil, "123")
+	input := gomme.NewFromString(1, nil, -1, "123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -166,7 +166,7 @@ func TestInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -185,7 +185,7 @@ func TestInt8(t *testing.T) {
 
 func BenchmarkInt8(b *testing.B) {
 	parser := Int8(false, 10)
-	input := gomme.NewFromString(1, nil, "123")
+	input := gomme.NewFromString(1, nil, -1, "123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -244,7 +244,7 @@ func TestUInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, tc.input))
+			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -263,7 +263,7 @@ func TestUInt8(t *testing.T) {
 
 func BenchmarkUInt8(b *testing.B) {
 	parser := UInt8(false, 10)
-	input := gomme.NewFromString(1, nil, "253")
+	input := gomme.NewFromString(1, nil, -1, "253")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

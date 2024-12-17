@@ -66,7 +66,7 @@ func TestFirstSuccessful(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := gomme.NewFromString(-1, nil, tc.input)
+			state := gomme.NewFromString(-1, nil, -1, tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
@@ -85,7 +85,7 @@ func TestFirstSuccessful(t *testing.T) {
 
 func BenchmarkFirstSuccessful(b *testing.B) {
 	p := FirstSuccessful(Char('b'), Char('a'))
-	input := gomme.NewFromString(1, nil, "abc")
+	input := gomme.NewFromString(1, nil, -1, "abc")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

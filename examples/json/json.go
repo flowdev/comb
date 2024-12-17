@@ -25,7 +25,7 @@ func init() {
 }
 
 func main() {
-	output, err := gomme.RunOnString(1, nil, testJSON, valuep)
+	output, err := gomme.RunOnString(1, nil, -1, testJSON, valuep)
 	if err != nil {
 		log.Fatal(err.Error())
 		return

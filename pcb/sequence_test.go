@@ -77,7 +77,7 @@ func TestSequence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, tc.input), tc.args.parser)
+			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
 			}
@@ -98,7 +98,7 @@ func TestSequence(t *testing.T) {
 
 func BenchmarkSequence(b *testing.B) {
 	parser := Sequence(Digit1(), Alpha0(), Digit1())
-	input := gomme.NewFromString(1, nil, "123A45")
+	input := gomme.NewFromString(1, nil, -1, "123A45")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

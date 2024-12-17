@@ -114,7 +114,7 @@ func TestNoWayBack(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := gomme.NewFromString(-1, nil, tc.input)
+			state := gomme.NewFromString(-1, nil, -1, tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
 				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
@@ -133,7 +133,7 @@ func TestNoWayBack(t *testing.T) {
 
 func BenchmarkNoWayBack(b *testing.B) {
 	p := gomme.NoWayBack(pcb.Char('1'))
-	input := gomme.NewFromString(1, nil, "123")
+	input := gomme.NewFromString(1, nil, -1, "123")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

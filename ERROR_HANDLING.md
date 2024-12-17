@@ -48,13 +48,8 @@ And it is in **hex** format!
 In general, we distinguish between simple **leaf** parsers that don't use
 any sub-parsers and **branch** parsers that do use one or more sub-parsers.
 
-For recovering from errors the parser uses a minimal set of modes. \
-Great care has to be taken by all branch parsers because we not only
-have to find a safe point to recover to, but also have to have the correct
-Go call stack to be able to parse correctly after recovering.
-Furthermore, we need to use the parsers more often than other (e.g. LR-) parsers. \
-This is a downside of all parser combinators.
-We mitigate it with some helpers and by caching as much as reasonable.
+For recovering from errors the parser uses `NoWayBack` parsers and their `Recoverer`s.
+
 
 The `NoWayBack` parser plays a key role in error recovery.
 It is the one to conclude that an error has indeed to be handled
@@ -238,7 +233,7 @@ for modes `happy` and `escape` to be able to use only later sub-parsers.
 
 The following sections detail some error recovery scenarios.
 
-### Example Scenarios Or Error Recovery
+### Example Scenarios For Error Recovery
 
 Before we can dive into the scenarios themselves we have to define
 a few abbreviations (or the diagrams would go beyond the screen).

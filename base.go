@@ -19,6 +19,9 @@ import (
 // (ANTLR is using 1)
 const DefaultMaxDel = 3
 
+// DefaultMaxRecover of 3 is a compromise between speed and minimal waste by recoverers.
+const DefaultMaxRecover = 3
+
 // ParsingMode is needed for error handling. See `ERROR_HANDLING.md` for details.
 type ParsingMode int
 
@@ -229,8 +232,8 @@ func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
 //
 
 // RunOnString runs a parser on text input and returns the output and error(s).
-func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewFromString(maxDel, del, input), parse)
+func RunOnString[Output any](maxDel int, del Deleter, maxRecover int, input string, parse Parser[Output]) (Output, error) {
+	newState, output := RunOnState(NewFromString(maxDel, del, maxRecover, input), parse)
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}
@@ -239,8 +242,8 @@ func RunOnString[Output any](maxDel int, del Deleter, input string, parse Parser
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
-func RunOnBytes[Output any](maxDel int, del Deleter, input []byte, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewFromBytes(maxDel, del, input), parse)
+func RunOnBytes[Output any](maxDel int, del Deleter, maxRecover int, input []byte, parse Parser[Output]) (Output, error) {
+	newState, output := RunOnState(NewFromBytes(maxDel, del, maxRecover, input), parse)
 	if len(newState.oldErrors) == 0 {
 		return output, nil
 	}
@@ -300,7 +303,7 @@ type Input struct {
 	bytes  []byte // for binary input and parsers
 	text   string // for string input and text parsers
 	n      int    // length of the bytes or text
-	pos    int    // current position in the sequence a.k.a. the *byte* index
+	pos    int    // current position in the input a.k.a. the *byte* index
 	prevNl int    // position of newline preceding 'pos' (-1 for line==1)
 	line   int    // current line number
 }
@@ -317,28 +320,28 @@ func newInput(binary bool, bytes []byte, text string) Input {
 }
 
 // NewFromString creates a new parser state from the input data.
-func NewFromString(maxDel int, del Deleter, input string) State {
+func NewFromString(maxDel int, del Deleter, maxRecover int, input string) State {
 	if del == nil {
 		del = DefaultTextDeleter
 	}
-	return newState(maxDel, del, false, nil, input)
+	return newState(maxDel, del, maxRecover, false, nil, input)
 }
 
 // NewFromBytes creates a new parser state from the input data.
-func NewFromBytes(maxDel int, del Deleter, input []byte) State {
+func NewFromBytes(maxDel int, del Deleter, maxRecover int, input []byte) State {
 	if del == nil {
 		del = DefaultTextDeleter
 	}
-	return newState(maxDel, del, true, input, "")
+	return newState(maxDel, del, maxRecover, true, input, "")
 }
 
 // newState creates a new parser state from the input data.
-func newState(maxDel int, del Deleter, binary bool, bytes []byte, text string) State {
+func newState(maxDel int, del Deleter, maxRecover int, binary bool, bytes []byte, text string) State {
 	if maxDel < 0 {
 		maxDel = DefaultMaxDel
 	}
-	if del == nil {
-		del = DefaultBinaryDeleter
+	if maxRecover < 0 {
+		maxRecover = DefaultMaxRecover
 	}
 	return State{
 		input:                  newInput(binary, bytes, text),

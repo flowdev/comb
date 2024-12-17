@@ -53,6 +53,7 @@ type State struct {
 	noWayBackMark          int        // mark set by the NoWayBack parser
 	maxDel                 int        // maximum number of tokens that should be deleted for error recovery
 	deleter                Deleter    // used to get back on track in error recovery
+	maxRecover             int        // maximum number of recoverers to consider for error recovery
 	errHand                errHand    // everything for handling one error
 	oldErrors              []pcbError // errors that are or have been handled
 	recovererWasteCache    map[uint64][]cachedWaste
@@ -536,22 +537,10 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 
 // Error returns a human readable error string.
 func (st State) Error() string {
-	//slices.SortFunc(st.oldErrors, func(a, b pcbError) int { // always keep them sorted
-	//	return cmp.Compare(a.pos, b.pos)
-	//})
-
-	fullMsg := strings.Builder{}
-	for _, pcbErr := range st.oldErrors {
-		fullMsg.WriteString(singleErrorMsg(pcbErr, st.input.binary))
-		fullMsg.WriteRune('\n')
+	if err := pcbErrorsToGoErrors(st); err != nil {
+		return err.Error()
 	}
-	n := len(st.oldErrors)
-	if st.errHand.err != nil && (n == 0 || st.errHand.err.pos != st.oldErrors[n-1].pos) {
-		fullMsg.WriteString(singleErrorMsg(*st.errHand.err, st.input.binary))
-		fullMsg.WriteRune('\n')
-	}
-
-	return fullMsg.String()
+	return ""
 }
 
 // NoWayBack is true iff we crossed a noWayBackMark.
