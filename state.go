@@ -32,17 +32,17 @@ type cachedWasteIdx struct {
 var combiningParserIDs = &atomic.Uint64{}
 
 type ParserResult struct {
-	pos            int         // position in the input
-	Idx            int         // index of the chosen branch or parser (success or fail)
-	HasNoWayBack   bool        // true if the NoWayBack mark has been moved
-	NoWayBackIdx   int         // index of last sub-parser that moved the mark
-	NoWayBackStart int         // start of the input (relative to `pos`) for the NoWayBack parser
-	NoWayBackMark  int         // the new NoWayBack mark (if HasNoWayBack) or -1
-	Failed         bool        // true if the sub-parser failed and provided the error to be handled
-	ErrorStart     int         // start of the input (relative to `pos`) for the failed sub-parser
-	Consumed       int         // number of bytes consumed from the input during successful parsing
-	Output         interface{} // the Output of the parser (nil if it failed)
-	Error          *pcbError   // the error if the parser failed (nil if it succeeded)
+	pos           int         // position in the input
+	Idx           int         // index of the chosen branch or parser (success or fail)
+	HasSaveSpot   bool        // true if the SaveSpot mark has been moved
+	SaveSpotIdx   int         // index of last sub-parser that moved the mark
+	SaveSpotStart int         // start of the input (relative to `pos`) for the SaveSpot parser
+	SaveSpot      int         // the new SaveSpot mark (if HasSaveSpot) or -1
+	Failed        bool        // true if the sub-parser failed and provided the error to be handled
+	ErrorStart    int         // start of the input (relative to `pos`) for the failed sub-parser
+	Consumed      int         // number of bytes consumed from the input during successful parsing
+	Output        interface{} // the Output of the parser (nil if it failed)
+	Error         *pcbError   // the error if the parser failed (nil if it succeeded)
 }
 
 var callIDs = &atomic.Uint64{} // used for endless loop prevention
@@ -51,7 +51,7 @@ var callIDs = &atomic.Uint64{} // used for endless loop prevention
 type State struct {
 	mode                   ParsingMode // one of: happy, error, handle, record, choose, play
 	input                  Input
-	noWayBackMark          int        // mark set by the NoWayBack parser
+	saveSpot               int        // mark set by the SaveSpot parser
 	maxDel                 int        // maximum number of tokens that should be deleted for error recovery
 	deleter                Deleter    // used to get back on track in error recovery
 	maxRecover             int        // maximum number of recoverers to consider for error recovery
@@ -226,14 +226,14 @@ func (st State) cachedRecovererWasteIdx(crID uint64) (waste, idx int, ok bool) {
 func (st State) CacheParserResult(
 	id uint64,
 	idx int,
-	noWayBackIdx int,
-	noWayBackStart int,
+	saveSpotIdx int,
+	saveSpotStart int,
 	newState State,
 	output interface{},
 ) {
 	mark := -1
-	if noWayBackStart >= 0 {
-		mark = newState.noWayBackMark
+	if saveSpotStart >= 0 {
+		mark = newState.saveSpot
 	}
 
 	errStart := 0
@@ -241,16 +241,16 @@ func (st State) CacheParserResult(
 		errStart = st.ByteCount(newState)
 	}
 	result := ParserResult{
-		pos:            st.input.pos,
-		Idx:            idx,
-		Failed:         newState.Failed(),
-		NoWayBackIdx:   noWayBackIdx,
-		HasNoWayBack:   noWayBackStart >= 0,
-		NoWayBackStart: noWayBackStart,
-		NoWayBackMark:  mark,
-		Error:          newState.errHand.err,
-		ErrorStart:     errStart,
-		Output:         output,
+		pos:           st.input.pos,
+		Idx:           idx,
+		Failed:        newState.Failed(),
+		SaveSpotIdx:   saveSpotIdx,
+		HasSaveSpot:   saveSpotStart >= 0,
+		SaveSpotStart: saveSpotStart,
+		SaveSpot:      mark,
+		Error:         newState.errHand.err,
+		ErrorStart:    errStart,
+		Output:        output,
 	}
 
 	cacheValue(st.parserCache, id, result, func(a, b ParserResult) int {
@@ -308,7 +308,7 @@ func cachedValue[T any](cache map[uint64][]T, id uint64, f func(T) bool) (result
 // ClearAllCaches empties all caches of this state.
 // It should be used after reaching a safe state.
 // So after successfully handling an error or at the end of a
-// successful NoWayBack parser.
+// successful SaveSpot parser.
 // This helps to keep the memory overhead of the parser to a minimum.
 // Since we reached a new position in the input and won't go back anymore,
 // the cache contains nothing useful anymore.
@@ -330,23 +330,23 @@ func (st State) ParsingMode() ParsingMode {
 	return st.mode
 }
 
-// Succeed returns the State with NoWayBack mark and mode saved from
+// Succeed returns the State with SaveSpot mark and mode saved from
 // the subState.
 // The error handling is not kept so it will turn a failed result into a
 // successful one.
 // This should only be used by the pcb.Optional parser.
 func (st State) Succeed(subState State) State {
-	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
+	st.saveSpot = max(st.saveSpot, subState.saveSpot)
 	if st.mode != ParsingModeHappy || subState.mode != ParsingModeError {
 		st.mode = subState.mode
 	}
 	return st
 }
 
-// Preserve returns the State with the error handling, noWayBackMark and
+// Preserve returns the State with the error handling, saveSpot and
 // mode kept from the subState.
 func (st State) Preserve(subState State) State {
-	st.noWayBackMark = max(st.noWayBackMark, subState.noWayBackMark)
+	st.saveSpot = max(st.saveSpot, subState.saveSpot)
 	st.mode = subState.mode
 
 	if subState.errHand.err != nil || subState.errHand.witnessID > 0 { // should be true
@@ -358,7 +358,7 @@ func (st State) Preserve(subState State) State {
 
 // Fail returns the State with the error (without handling) kept from the
 // subState. The mode will be set to `error`.
-// The NoWayBack mark is intentionally not kept.
+// The SaveSpot mark is intentionally not kept.
 // This is useful for branch parsers that are leaf parsers to the outside.
 func (st State) Fail(subState State) State {
 	if st.mode == ParsingModeHappy {
@@ -374,10 +374,10 @@ func (st State) Fail(subState State) State {
 	return st
 }
 
-// SucceedAgain sets the NoWayBack mark and input position from the result.
+// SucceedAgain sets the SaveSpot mark and input position from the result.
 func (st State) SucceedAgain(result ParserResult) State {
-	if result.NoWayBackMark >= 0 {
-		st.noWayBackMark = result.NoWayBackMark
+	if result.SaveSpot >= 0 {
+		st.saveSpot = result.SaveSpot
 	}
 	return st.MoveBy(result.Consumed)
 }
@@ -557,12 +557,12 @@ func (st State) Errors() error {
 	return errors.Join(goErrors...)
 }
 
-// NoWayBack is true iff we crossed a noWayBackMark.
-func (st State) NoWayBack() bool {
-	return st.noWayBackMark >= st.input.pos
+// SaveSpot is true iff we crossed a saveSpot.
+func (st State) SaveSpot() bool {
+	return st.saveSpot >= st.input.pos
 }
 
-// NoWayBackMoved is true iff the noWayBackMark is different between the 2 states.
-func (st State) NoWayBackMoved(other State) bool {
-	return st.noWayBackMark != other.noWayBackMark
+// SaveSpotMoved is true iff the saveSpot is different between the 2 states.
+func (st State) SaveSpotMoved(other State) bool {
+	return st.saveSpot != other.saveSpot
 }

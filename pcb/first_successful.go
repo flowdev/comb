@@ -16,18 +16,18 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 	}
 
 	//
-	// Construct myNoWayBackRecoverer from the sub-parsers
+	// Construct mySaveSpotRecoverer from the sub-parsers
 	//
 	subRecoverers := make([]gomme.Recoverer, len(parsers))
 	for i, parser := range parsers {
-		subRecoverers[i] = parser.NoWayBackRecoverer
+		subRecoverers[i] = parser.SaveSpotRecoverer
 	}
-	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
+	mySaveSpotRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
 	fsd := &firstSuccessfulData[Output]{
-		id:                 gomme.NewBranchParserID(),
-		parsers:            parsers,
-		noWayBackRecoverer: myNoWayBackRecoverer,
+		id:                gomme.NewBranchParserID(),
+		parsers:           parsers,
+		saveSpotRecoverer: mySaveSpotRecoverer,
 	}
 
 	return gomme.NewParser[Output](
@@ -35,14 +35,14 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		fsd.any,
 		true,
 		gomme.DefaultRecovererFunc(fsd.any), // you really shouldn't use this parser as a Recoverer
-		myNoWayBackRecoverer.Recover,
+		mySaveSpotRecoverer.Recover,
 	)
 }
 
 type firstSuccessfulData[Output any] struct {
-	id                 uint64
-	parsers            []gomme.Parser[Output]
-	noWayBackRecoverer gomme.CombiningRecoverer
+	id                uint64
+	parsers           []gomme.Parser[Output]
+	saveSpotRecoverer gomme.CombiningRecoverer
 }
 
 func (fsd *firstSuccessfulData[Output]) any(state gomme.State) (gomme.State, Output) {
@@ -52,13 +52,13 @@ func (fsd *firstSuccessfulData[Output]) any(state gomme.State) (gomme.State, Out
 	switch state.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing (forward)
 		return fsd.happy(state)
-	case gomme.ParsingModeError: // find previous NoWayBack (backward)
+	case gomme.ParsingModeError: // find previous SaveSpot (backward)
 		return fsd.error(state)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return fsd.handle(state)
 	case gomme.ParsingModeRewind: // go back to the witness parser (1)
 		return fsd.rewind(state)
-	case gomme.ParsingModeEscape: // find the NoWayBack recoverer with the least waste
+	case gomme.ParsingModeEscape: // find the SaveSpot recoverer with the least waste
 		return fsd.escape(state)
 	}
 
@@ -85,7 +85,7 @@ func (fsd *firstSuccessfulData[Output]) happy(state gomme.State) (gomme.State, O
 	for i, parse := range fsd.parsers {
 		newState, output := parse.It(state)
 		if !newState.Failed() {
-			if state.NoWayBackMoved(newState) {
+			if state.SaveSpotMoved(newState) {
 				state.CacheParserResult(fsd.id, i, i, 0, newState, output)
 			} else {
 				state.CacheParserResult(fsd.id, i, -1, -1, newState, output)
@@ -93,7 +93,7 @@ func (fsd *firstSuccessfulData[Output]) happy(state gomme.State) (gomme.State, O
 			return newState, output
 		}
 
-		if state.NoWayBackMoved(newState) { // don't look further than this
+		if state.SaveSpotMoved(newState) { // don't look further than this
 			state.CacheParserResult(fsd.id, i, i, 0, newState, output)
 			return gomme.IWitnessed(state, fsd.id, i, newState), zero
 		}
@@ -112,14 +112,14 @@ func (fsd *firstSuccessfulData[Output]) happy(state gomme.State) (gomme.State, O
 
 func (fsd *firstSuccessfulData[Output]) error(state gomme.State) (gomme.State, Output) {
 	var zero Output
-	// use cache to know right parser immediately (Idx, HasNoWayBack)
+	// use cache to know right parser immediately (Idx, HasSaveSpot)
 	result, ok := state.CachedParserResult(fsd.id)
 	if !ok {
 		return state.NewSemanticError(
 			"grammar error: cache was empty in `FirstSuccessful(error)` parser",
 		), zero
 	}
-	if result.HasNoWayBack {
+	if result.HasSaveSpot {
 		parse := fsd.parsers[result.Idx]
 		newState, _ := parse.It(state)
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
@@ -182,10 +182,10 @@ func (fsd *firstSuccessfulData[Output]) rewind(state gomme.State) (gomme.State, 
 func (fsd *firstSuccessfulData[Output]) escape(state gomme.State) (gomme.State, Output) {
 	var zero Output
 
-	waste, idx, ok := fsd.noWayBackRecoverer.CachedIndex(state)
+	waste, idx, ok := fsd.saveSpotRecoverer.CachedIndex(state)
 	if !ok {
-		waste = fsd.noWayBackRecoverer.Recover(state)
-		idx = fsd.noWayBackRecoverer.LastIndex()
+		waste = fsd.saveSpotRecoverer.Recover(state)
+		idx = fsd.saveSpotRecoverer.LastIndex()
 	}
 
 	if idx < 0 {

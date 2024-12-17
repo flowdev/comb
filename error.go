@@ -36,7 +36,7 @@ type errHand struct {
 // IWitnessed lets a branch parser report an error that it witnessed in
 // the sub-parser with index `idx` (0 if it has only 1 sub-parser).
 func IWitnessed(state State, witnessID uint64, idx int, errState State) State {
-	state.noWayBackMark = max(state.noWayBackMark, errState.noWayBackMark)
+	state.saveSpot = max(state.saveSpot, errState.saveSpot)
 	state.mode = errState.mode
 	if errState.errHand.witnessID == 0 { // error hasn't been witnessed yet
 		if idx < 0 {
@@ -180,7 +180,7 @@ func DefaultRecovererFunc[Output any](parse func(State) (State, Output)) Recover
 
 // CachingRecoverer should only be used in places where the Recoverer
 // will be used multiple times with the exact same input position.
-// The NoWayBack parser is such a case.
+// The SaveSpot parser is such a case.
 func CachingRecoverer(recoverer Recoverer) Recoverer {
 	id := cachingRecovererIDs.Add(1)
 

@@ -6,11 +6,11 @@ import (
 
 // Optional applies an optional child parser. Will return a zero value
 // if not successful.
-// Optional will ignore any parsing error except if a NoWayBack is active.
+// Optional will ignore any parsing error except if a SaveSpot is active.
 func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	optParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
-		if newState.Failed() && !state.NoWayBackMoved(newState) {
+		if newState.Failed() && !state.SaveSpotMoved(newState) {
 			return state.Succeed(newState), gomme.ZeroOf[Output]()
 		}
 		return newState, output
@@ -20,7 +20,7 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		optParse,
 		parse.PossibleWitness(),
 		Forbidden("Optional"),
-		parse.NoWayBackRecoverer,
+		parse.SaveSpotRecoverer,
 	)
 }
 
@@ -28,14 +28,14 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // It effectively allows to look ahead in the input.
 //
 // NOTE:
-//   - NoWayBack isn't honored here because we aren't officially parsing anything.
+//   - SaveSpot isn't honored here because we aren't officially parsing anything.
 //   - Even though Peek accepts a parser as argument it behaves like a leaf parser
 //     to the outside. So it doesn't need to use MapN or the like.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output) {
 		newState, output := parse.It(state)
 		if newState.Failed() {
-			// avoid NoWayBack and consumption because we only peek
+			// avoid SaveSpot and consumption because we only peek
 			return state.Fail(newState), output
 		}
 
@@ -51,7 +51,7 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // The returned boolean value indicates its own success and not the given parsers.
 //
 // NOTE:
-//   - NoWayBack isn't honored here because we aren't officially parsing anything.
+//   - SaveSpot isn't honored here because we aren't officially parsing anything.
 //   - Even though Not accepts a parser as argument it behaves like a leaf parser
 //     to the outside. So it doesn't need to use MapN or the like.
 func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
@@ -62,7 +62,7 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 			return state, true
 		}
 
-		// avoid NoWayBack because we only peek; error message and consumption don't really matter
+		// avoid SaveSpot because we only peek; error message and consumption don't really matter
 		return state.NewError(expected), false
 	}
 	return gomme.NewParser[bool](expected, notParse, false, Forbidden("Not"), nil)
@@ -87,7 +87,7 @@ func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
 		recParse,
 		parse.PossibleWitness(),
 		parse.MyRecoverer(),
-		parse.NoWayBackRecoverer,
+		parse.SaveSpotRecoverer,
 	)
 	return MapN[[]byte, interface{}, interface{}, interface{}, interface{}](
 		"Recognize",

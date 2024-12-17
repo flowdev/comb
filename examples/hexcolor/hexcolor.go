@@ -21,7 +21,7 @@ type RGBColor struct {
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
 	parse := pcb.Map4(
-		NoWayBack(C('#')),
+		SaveSpot(C('#')),
 		HexColorComponent("red hex color"),
 		HexColorComponent("green hex color"),
 		HexColorComponent("blue hex color"),
@@ -41,7 +41,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
 func HexColorComponent(expected string) gomme.Parser[string] {
-	return NoWayBack(pcb.SatisfyMN(expected, 2, 2, pcb.IsHexDigit))
+	return SaveSpot(pcb.SatisfyMN(expected, 2, 2, pcb.IsHexDigit))
 }
 
 // fromHex converts a two digits hexadecimal number to its decimal value.

@@ -48,24 +48,24 @@ And it is in **hex** format!
 In general, we distinguish between simple **leaf** parsers that don't use
 any sub-parsers and **branch** parsers that do use one or more sub-parsers.
 
-For recovering from errors the parser uses `NoWayBack` parsers and their `Recoverer`s.
+For recovering from errors the parser uses `SaveSpot` parsers and their `Recoverer`s.
 
 
-The `NoWayBack` parser plays a key role in error recovery.
+The `SaveSpot` parser plays a key role in error recovery.
 It is the one to conclude that an error has indeed to be handled
 (if its position is before the error),
 and it also marks the next safe state to which we want to recover to
 (if its position is behind the error). \
-A `NoWayBack` parser at the exact error position isn't of help
+A `SaveSpot` parser at the exact error position isn't of help
 for that particular error. \
-Finally, the `NoWayBack` parser is used to prevent the `FirstSuccessful` parser
+Finally, the `SaveSpot` parser is used to prevent the `FirstSuccessful` parser
 from trying other sub-parsers even in case of an error.
 This way we prevent unnecessary backtracking.
 
-So please use the `NoWayBack` parser as much as reasonable for your grammar!
+So please use the `SaveSpot` parser as much as reasonable for your grammar!
 As it keeps the backtracking to a minimum, it also makes the parser perform better.
 
-The `FirstSuccessful` and `NoWayBack` parsers are special **branch** parsers. \
+The `FirstSuccessful` and `SaveSpot` parsers are special **branch** parsers. \
 In general, it's true that **all** branch parsers have to deal a lot with
 error recovery. But we have you covered, because the base parsers
 `FirstSuccessful`, `Sequence`, `MapN` and `ManyMN` are all doing the hard work
@@ -91,7 +91,7 @@ Normal parsing discovering and reporting errors
 (with `State.NewError` or `State.ErrorAgain` for cached results). \
 The error will be witnessed by the immediate parent branch parser.
 
-If we happen to handle an error and hit a `NoWayBack` parser then
+If we happen to handle an error and hit a `SaveSpot` parser then
 we will be very happy to clean up. \
 This means we were able to handle the error by modifying the input
 and didn't have to use any `Resolverer`.
@@ -99,22 +99,22 @@ and didn't have to use any `Resolverer`.
 ##### error:
 An error was found but might be mitigated by backtracking and the
 `FirstSuccessful` parser.
-In this mode the parser goes back to find the last `NoWayBack` parser or
+In this mode the parser goes back to find the last `SaveSpot` parser or
 trying later alternatives in the `FirstSuccessful` parser.
 
-The previous `NoWayBack` parser might be hidden deep in a sub-parser
+The previous `SaveSpot` parser might be hidden deep in a sub-parser
 that is earlier in sequence but not on the Go call stack anymore.
 
 So in this mode all parsers that use sub-parsers in sequence have to use them
-in reverse order to find the right `NoWayBack` parser. \
+in reverse order to find the right `SaveSpot` parser. \
 Funnily this also applies to parsers that use the *same* sub-parser
 multiple times. So if the second time the sub-parser was used, failed
 then it might very well be that the first (successful) time it applied
-a `NoWayBack` parser. And that would be the right one to find.
+a `SaveSpot` parser. And that would be the right one to find.
 
 Only the `FirstSuccessful` parser (not as parent parser but as sibling this time)
 is different. It has to find the first successful sub-parser and
-its `NoWayBack` parser again. \
+its `SaveSpot` parser again. \
 As parent parser (if the **error** mode is switched to while trying alternatives)
 it can just try another alternative (normal **happy** mode behaviour).
 
@@ -134,7 +134,7 @@ We failed again and have to try again with more deletion or
 without using the parser that failed originally.
 
 So we have to go backward similar to the **error** mode.
-But with the distinction that we aren't looking for a `NoWayBack` parser
+But with the distinction that we aren't looking for a `SaveSpot` parser
 before the error position, but instead for the immediate parent branch parser of
 the failing leaf parser that witnessed the error.
 
@@ -142,7 +142,7 @@ the failing leaf parser that witnessed the error.
 All deletion of input and inserting of good input didn't help.
 Now we are out of options and can just escape this using a `Resolverer`.
 
-So we find the best (least waste) `Resolverer` and its `NoWayBack` parser
+So we find the best (least waste) `Resolverer` and its `SaveSpot` parser
 executes it and finally cleans up and switches back to **happy** mode. \
 The best `Resolverer` to use can't be determined statically,
 because it depends on the input.
@@ -153,13 +153,13 @@ The direction of parsing changes with the mode.
 Normal parsing is forward of course but in some other modes we have to move backward.
 Here is the full table:
 
-|   Mode | Direction                                      |
-|-------:|:-----------------------------------------------|
-|  happy | forward (until a failure is witnessed)         |
-|  error | **backward** (to the **previous** `NoWayBack`) |
-| handle | forward (to the `witness parser (1)`)          |
-| rewind | **backward** (to the `witness parser (1)`)     |
-| escape | forward (to the (best) **next** `NoWayBack`)   |
+|   Mode | Direction                                     |
+|-------:|:----------------------------------------------|
+|  happy | forward (until a failure is witnessed)        |
+|  error | **backward** (to the **previous** `SaveSpot`) |
+| handle | forward (to the `witness parser (1)`)         |
+| rewind | **backward** (to the `witness parser (1)`)    |
+| escape | forward (to the (best) **next** `SaveSpot`)   |
 
 So the parsers move only in the **error** and **rewind** modes backward,
 and forward in all other modes.
@@ -186,13 +186,13 @@ stateDiagram-v2
 
     happy --> error: State.NewError + witness parser (1) (no error yet)
     error --> happy: FirstSuccessful (successful parser found)
-    error --> handle: NoWayBack (pos < errPos)
+    error --> handle: SaveSpot (pos < errPos)
     handle --> happy: witness parser (1)
     happy --> rewind: State.NewError + witness parser (2) (error exists)
     rewind --> happy: witness parser (1)
-    happy --> happy: NoWayBack (pos > errPos) clean up
+    happy --> happy: SaveSpot (pos > errPos) clean up
     rewind --> escape: witness parser (1)
-    escape --> happy: NoWayBack (pos > errPos) clean up
+    escape --> happy: SaveSpot (pos > errPos) clean up
 ```
 
 Next we will look at the changes in modes that are possible within sub-parsers.
@@ -202,7 +202,7 @@ Next we will look at the changes in modes that are possible within sub-parsers.
 The following table lists the mode changes that are possible in a leaf or
 branch sub-parser.
 
-The `NoWayBack` parser and the `witness parser`s can only have leaf parsers
+The `SaveSpot` parser and the `witness parser`s can only have leaf parsers
 as sub-parser. Every other branch parser can also have branch parsers as
 sub-parsers.
 
@@ -224,7 +224,7 @@ In those cases an entry of 'happy, escape' means:
 - `happy`: Error recovery has been successful.
            Parse normally again starting with the next (sub-)parser.
 - `escape`: Use the (best of the) next `Resolverer`(s) to escape the mess.
-            Only `NoWayBack-Resolverer`s from later (sub-)parsers must be
+            Only `SaveSpot-Resolverer`s from later (sub-)parsers must be
             considered. Sequential parsers might only consider one `Resolverer`.
 
 So all parsers working sequentially that really do error handling
@@ -239,8 +239,8 @@ Before we can dive into the scenarios themselves we have to define
 a few abbreviations (or the diagrams would go beyond the screen).
 
 - `Px`: any parser with no special role (`x` being a decimal number), e.g.: `P7`
-- `NWB`: a `NoWayBack` parser wrapping any leaf parser
-- `NWB3`: up to three `NoWayBack` parsers might be involved in a complex scenario
+- `NWB`: a `SaveSpot` parser wrapping any leaf parser
+- `NWB3`: up to three `SaveSpot` parsers might be involved in a complex scenario
 - `WP1`: `witness parser (1)` witnessing any sub-parser; it's the error handling parser
 - `WP2`: `witness parser (2)` witnessing any sub-parser; it just witnesses a secondary error
 - `FS`: a `FirstSuccessful` parser
@@ -248,9 +248,9 @@ a few abbreviations (or the diagrams would go beyond the screen).
 - `parser(mode)`: the parser is in a certain mode, e.g.: `WP1(handle)`
 - `parser(mode1, mode2)`: multiple possible modes are separated by a comma (','),
   e.g.: `WP2(error, rewind)`
-- `NWB(parser)`: the `NoWayBack` parser wraps a parser, e.g: `NWB(other parser)`
+- `NWB(parser)`: the `SaveSpot` parser wraps a parser, e.g: `NWB(other parser)`
 
-A complex example is: `NWB(WP1(happy, handle))` meaning a `NoWayBack` parser
+A complex example is: `NWB(WP1(happy, handle))` meaning a `SaveSpot` parser
 that also acts as `witness parser (1)` that is either in mode `happy` or
 in mode `handle`.
 
@@ -287,7 +287,7 @@ flowchart LR
 The last step can be in mode `happy` if the error could be resolved by deletion or insertion.
 It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
 
-#### Simple Sequence With Three `NoWayBack`s
+#### Simple Sequence With Three `SaveSpot`s
 
 A slight complication of the sequence above is the following (without failure):
 
@@ -326,7 +326,7 @@ The last two steps can be in mode `happy` if the error could be resolved by dele
 It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
 
 So this scenario is **really** the same as the most simple one above.
-It mainly illustrates that the `NoWayBack` parser 2 (`NWB2`) isn't of any help
+It mainly illustrates that the `SaveSpot` parser 2 (`NWB2`) isn't of any help
 but only serves as `witness parser (1)` in this scenario.
 And the error recovery is (sometimes) failing at the witness parser (2) (`WP2`).
 
@@ -465,4 +465,4 @@ evaluate and choose between alternatives only in **happy** mode.
 In modes **error**, **handle** and **rewind** it has to use the exact same
 alternative as before. \
 And in **escape** mode it has to choose the best of potentially multiple
-`NoWayBack` parsers and their `Recoverer`s.
+`SaveSpot` parsers and their `Recoverer`s.

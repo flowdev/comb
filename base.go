@@ -17,9 +17,15 @@ import (
 
 // DefaultMaxDel of 3 is a compromise between speed and optimal fault tolerance
 // (ANTLR is using 1)
+// It is the maximum number of times a deleter is called in order to recover from an error.
 const DefaultMaxDel = 3
 
 // DefaultMaxRecover of 3 is a compromise between speed and minimal waste by recoverers.
+// It is the number of times a recoverer is called in order to recover from an error.
+// The actual number will only be smaller if there aren't enough recoverers
+// to be found moving forward.
+// The actual number can be larger because the recoverers of the FirstSuccessful parser
+// are all tried or none.
 const DefaultMaxRecover = 3
 
 // ParsingMode is needed for error handling. See `ERROR_HANDLING.md` for details.
@@ -28,13 +34,13 @@ type ParsingMode int
 const (
 	// ParsingModeHappy - normal parsing until failure (forward)
 	ParsingModeHappy ParsingMode = iota // happy
-	// ParsingModeError - find previous NoWayBack (backward)
+	// ParsingModeError - find previous SaveSpot (backward)
 	ParsingModeError // error
 	// ParsingModeHandle - find witness parser (1) again (forward)
 	ParsingModeHandle // handle
 	// ParsingModeRewind - find witness parser (1) again (backward)
 	ParsingModeRewind // rewind
-	// ParsingModeEscape - find the (best) next NoWayBack (forward)
+	// ParsingModeEscape - find the (best) next SaveSpot (forward)
 	ParsingModeEscape // escape
 )
 
@@ -52,14 +58,14 @@ type Separator interface {
 }
 
 // Recoverer is a simplified parser that only returns the number of bytes
-// to reach a safe state (NoWayBack).
+// to reach a safe state (SaveSpot).
 // If it can't recover it should return -1.
 //
 // A Recoverer is used for recovering from an error in the input.
-// It helps to move forward to the next safe spot (NoWayBack).
-// A Recoverer will be used by the NoWayBack parser if it's sub-parser
+// It helps to move forward to the next safe spot (SaveSpot).
+// A Recoverer will be used by the SaveSpot parser if it's sub-parser
 // provides it.
-// Otherwise, NoWayBack will have to try the sub-parser until it succeeds moving
+// Otherwise, SaveSpot will have to try the sub-parser until it succeeds moving
 // forward 1 token at a time. :(
 type Recoverer func(state State) int
 
@@ -86,7 +92,7 @@ type Parser[Output any] interface {
 	PossibleWitness() bool
 	MyRecoverer() Recoverer
 	SwapMyRecoverer(Recoverer) Parser[Output]
-	NoWayBackRecoverer(State) int
+	SaveSpotRecoverer(State) int
 }
 
 // ParserToZeroOutput converts a parser of one output type to a different
@@ -104,16 +110,16 @@ func ParserToZeroOutput[Output, S any](other Parser[S]) Parser[Output] {
 		parse,
 		other.PossibleWitness(),
 		other.MyRecoverer(),
-		other.NoWayBackRecoverer,
+		other.SaveSpotRecoverer,
 	)
 }
 
 type prsr[Output any] struct {
-	expected           string
-	it                 func(State) (State, Output)
-	possibleWitness    bool
-	recoverer          Recoverer // will be requested only by the NoWayBack parser
-	noWayBackRecoverer Recoverer // will be requested in escape mode to find the best NoWayBack parser
+	expected          string
+	it                func(State) (State, Output)
+	possibleWitness   bool
+	recoverer         Recoverer // will be requested only by the SaveSpot parser
+	saveSpotRecoverer Recoverer // will be requested in escape mode to find the best SaveSpot parser
 }
 
 // NewParser is THE way to create parsers.
@@ -122,14 +128,14 @@ func NewParser[Output any](
 	parse func(State) (State, Output),
 	possibleWitness bool,
 	recover Recoverer,
-	noWayBackRecoverer Recoverer,
+	saveSpotRecoverer Recoverer,
 ) Parser[Output] {
 	p := prsr[Output]{
-		expected:           expected,
-		it:                 parse,
-		possibleWitness:    possibleWitness,
-		recoverer:          recover,
-		noWayBackRecoverer: noWayBackRecoverer,
+		expected:          expected,
+		it:                parse,
+		possibleWitness:   possibleWitness,
+		recoverer:         recover,
+		saveSpotRecoverer: saveSpotRecoverer,
 	}
 	if recover == nil {
 		p.recoverer = DefaultRecoverer(p)
@@ -155,18 +161,18 @@ func (p prsr[Output]) MyRecoverer() Recoverer {
 
 func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
 	return prsr[Output]{ // make it concurrency safe without locking
-		expected:           p.expected,
-		it:                 p.it,
-		recoverer:          newRecoverer,
-		noWayBackRecoverer: p.noWayBackRecoverer,
+		expected:          p.expected,
+		it:                p.it,
+		recoverer:         newRecoverer,
+		saveSpotRecoverer: p.saveSpotRecoverer,
 	}
 }
 
-func (p prsr[Output]) NoWayBackRecoverer(state State) int {
-	if p.noWayBackRecoverer == nil {
+func (p prsr[Output]) SaveSpotRecoverer(state State) int {
+	if p.saveSpotRecoverer == nil {
 		return -1
 	}
-	return p.noWayBackRecoverer(state)
+	return p.saveSpotRecoverer(state)
 }
 
 type lazyprsr[Output any] struct {
@@ -222,9 +228,9 @@ func (lp *lazyprsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Outpu
 	return lp.cachedPrsr.SwapMyRecoverer(newRecoverer)
 }
 
-func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
+func (lp *lazyprsr[Output]) SaveSpotRecoverer(state State) int {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.NoWayBackRecoverer(state)
+	return lp.cachedPrsr.SaveSpotRecoverer(state)
 }
 
 // ============================================================================
@@ -232,6 +238,8 @@ func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
 //
 
 // RunOnString runs a parser on text input and returns the output and error(s).
+// It uses default values for maximum number of "tokens" to delete for error handling,
+// the number of recoverers to try and the deleter to use.
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
 	newState, output := RunOnState(NewFromString(-1, nil, -1, input), parse)
 	if err := newState.Errors(); err != nil {
@@ -241,6 +249,8 @@ func RunOnString[Output any](input string, parse Parser[Output]) (Output, error)
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
+// It uses default values for maximum number of "tokens" to delete for error handling,
+// the number of recoverers to try and the deleter to use.
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
 	newState, output := RunOnState(NewFromBytes(-1, nil, -1, input), parse)
@@ -260,7 +270,7 @@ func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
 		switch newState.ParsingMode() {
 		case ParsingModeHappy: // normal parsing
 			newState, output = parse.It(state)
-		case ParsingModeError: // find previous NoWayBack (backward)
+		case ParsingModeError: // find previous SaveSpot (backward)
 			state = IWitnessed(state, id, 0, newState)
 			if state.ParsingMode() == ParsingModeError {
 				state.mode = ParsingModeHandle
@@ -345,7 +355,7 @@ func newState(maxDel int, del Deleter, maxRecover int, binary bool, bytes []byte
 	}
 	return State{
 		input:                  newInput(binary, bytes, text),
-		noWayBackMark:          -1,
+		saveSpot:               -1,
 		maxDel:                 maxDel,
 		deleter:                del,
 		recovererWasteCache:    make(map[uint64][]cachedWaste),

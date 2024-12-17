@@ -61,7 +61,7 @@ func SeparatedMN[Output any, S gomme.Separator](
 		recoverer = BasicRecovererFunc(parseSep)
 	}
 	return gomme.NewParser[[]Output]("SeparatedMN", parseSep, true,
-		recoverer, parse.NoWayBackRecoverer)
+		recoverer, parse.SaveSpotRecoverer)
 }
 
 type separatedData[Output any, S gomme.Separator] struct {
@@ -75,7 +75,7 @@ type separatedData[Output any, S gomme.Separator] struct {
 
 func (sd *separatedData[Output, S]) any(
 	state, remaining gomme.State,
-	noWayBackIdx, noWayBackStart int,
+	saveSpotIdx, saveSpotStart int,
 	outputs []Output,
 ) (gomme.State, []Output) {
 	count := len(outputs)
@@ -86,8 +86,8 @@ func (sd *separatedData[Output, S]) any(
 	}
 	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
-		return sd.happy(state, remaining, count, noWayBackIdx, noWayBackStart, outputs)
-	case gomme.ParsingModeError: // find previous NoWayBack (backward)
+		return sd.happy(state, remaining, count, saveSpotIdx, saveSpotStart, outputs)
+	case gomme.ParsingModeError: // find previous SaveSpot (backward)
 		return sd.error(state, outputs)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return sd.handle(state, outputs)
@@ -104,7 +104,7 @@ func (sd *separatedData[Output, S]) any(
 func (sd *separatedData[Output, S]) happy(
 	state, remaining gomme.State,
 	count int,
-	noWayBackIdx, noWayBackStart int,
+	saveSpotIdx, saveSpotStart int,
 	outputs []Output,
 ) (gomme.State, []Output) {
 	retState := remaining
@@ -116,26 +116,26 @@ func (sd *separatedData[Output, S]) happy(
 
 		newState, output := sd.parse.It(remaining)
 		if newState.Failed() {
-			if remaining.NoWayBackMoved(newState) { // fail because of NoWayBack
-				state.CacheParserResult(sd.id, 0, noWayBackIdx, noWayBackStart, newState, outputs)
+			if remaining.SaveSpotMoved(newState) { // fail because of SaveSpot
+				state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, newState, outputs)
 				state = gomme.IWitnessed(state, sd.id, 0, newState)
 				return sd.error(state, outputs)
 			}
 			if count >= sd.atLeast { // success!
-				state.CacheParserResult(sd.id, 0, noWayBackIdx, noWayBackStart, retState, outputs)
+				state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, retState, outputs)
 				return retState, outputs
 			}
 			// fail:
-			state.CacheParserResult(sd.id, 0, noWayBackIdx, noWayBackStart, newState, outputs)
+			state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, newState, outputs)
 			state = gomme.IWitnessed(state, sd.id, 0, newState)
-			if noWayBackStart < 0 { // we can't do anything here
+			if saveSpotStart < 0 { // we can't do anything here
 				return state, nil
 			}
 			return sd.error(state, outputs) // handle error locally
 		}
-		if remaining.NoWayBackMoved(newState) {
-			noWayBackIdx = 0
-			noWayBackStart = state.ByteCount(remaining)
+		if remaining.SaveSpotMoved(newState) {
+			saveSpotIdx = 0
+			saveSpotStart = state.ByteCount(remaining)
 		}
 		outputs = append(outputs, output)
 		count++
@@ -145,26 +145,26 @@ func (sd *separatedData[Output, S]) happy(
 		if sd.separator.Expected() != noSeparator.Expected() {
 			sepState, _ = sd.separator.It(newState)
 			if sepState.Failed() {
-				if newState.NoWayBackMoved(sepState) { // fail because of NoWayBack
-					state.CacheParserResult(sd.id, 1, noWayBackIdx, noWayBackStart, sepState, outputs)
+				if newState.SaveSpotMoved(sepState) { // fail because of SaveSpot
+					state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, sepState, outputs)
 					state = gomme.IWitnessed(state, sd.id, 1, sepState)
 					return sd.error(state, outputs)
 				}
 				if count >= sd.atLeast { // success!
-					state.CacheParserResult(sd.id, 1, noWayBackIdx, noWayBackStart, newState, outputs)
+					state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, newState, outputs)
 					return retState, outputs
 				}
 				// fail:
-				state.CacheParserResult(sd.id, 1, noWayBackIdx, noWayBackStart, sepState, outputs)
+				state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, sepState, outputs)
 				state = gomme.IWitnessed(state, sd.id, 1, sepState)
-				if noWayBackStart < 0 { // we can't do anything here
+				if saveSpotStart < 0 { // we can't do anything here
 					return state, nil
 				}
 				return sd.error(state, outputs) // handle error locally
 			}
-			if newState.NoWayBackMoved(sepState) {
-				noWayBackIdx = 1
-				noWayBackStart = state.ByteCount(newState)
+			if newState.SaveSpotMoved(sepState) {
+				saveSpotIdx = 1
+				saveSpotStart = state.ByteCount(newState)
 			}
 			if sd.parseSeparatorAtEnd {
 				retState = sepState
@@ -182,7 +182,7 @@ func (sd *separatedData[Output, S]) happy(
 }
 
 func (sd *separatedData[Output, S]) error(state gomme.State, outputs []Output) (gomme.State, []Output) {
-	// use cache to know result immediately (HasNoWayBack, NoWayBackIdx, NoWayBackStart)
+	// use cache to know result immediately (HasSaveSpot, SaveSpotIdx, SaveSpotStart)
 	result, ok := state.CachedParserResult(sd.id)
 	if !ok {
 		return state.NewSemanticError(
@@ -190,12 +190,12 @@ func (sd *separatedData[Output, S]) error(state gomme.State, outputs []Output) (
 		), nil
 	}
 	// found in cache
-	if result.HasNoWayBack { // we should be able to switch to mode=handle
+	if result.HasSaveSpot { // we should be able to switch to mode=handle
 		newState := state
 		if result.Idx == 0 {
-			newState, _ = sd.parse.It(state.MoveBy(result.NoWayBackStart))
+			newState, _ = sd.parse.It(state.MoveBy(result.SaveSpotStart))
 		} else {
-			newState, _ = sd.separator.It(state.MoveBy(result.NoWayBackStart))
+			newState, _ = sd.separator.It(state.MoveBy(result.SaveSpotStart))
 		}
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
@@ -229,8 +229,8 @@ func (sd *separatedData[Output, S]) handle(state gomme.State, outputs []Output) 
 		return sd.any(
 			state,
 			newState,
-			result.NoWayBackStart,
-			result.NoWayBackIdx,
+			result.SaveSpotStart,
+			result.SaveSpotIdx,
 			outputs,
 		)
 	}
@@ -254,7 +254,7 @@ func (sd *separatedData[Output, S]) rewind(state gomme.State, outputs []Output) 
 		outputs = append(outputs, output)
 		return sd.any(
 			state, newState,
-			result.NoWayBackStart, result.NoWayBackIdx,
+			result.SaveSpotStart, result.SaveSpotIdx,
 			outputs,
 		)
 	}
@@ -271,10 +271,10 @@ func (sd *separatedData[Output, S]) escape(state, remaining gomme.State, outputs
 	}
 
 	waste := 0
-	if result.NoWayBackIdx == 0 {
-		waste = sd.parse.NoWayBackRecoverer(remaining)
+	if result.SaveSpotIdx == 0 {
+		waste = sd.parse.SaveSpotRecoverer(remaining)
 	} else {
-		waste = sd.separator.NoWayBackRecoverer(remaining)
+		waste = sd.separator.SaveSpotRecoverer(remaining)
 	}
 
 	if waste < 0 { // give up
@@ -287,7 +287,7 @@ func (sd *separatedData[Output, S]) escape(state, remaining gomme.State, outputs
 	remaining = remaining.MoveBy(waste)
 	var newState gomme.State
 	var output Output
-	if result.NoWayBackIdx == 0 {
+	if result.SaveSpotIdx == 0 {
 		newState, output = sd.parse.It(remaining)
 		if newState.ParsingMode() == gomme.ParsingModeHappy {
 			outputs = append(outputs, output)

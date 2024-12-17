@@ -10,18 +10,18 @@ import (
 // returns either a slice of results or an error if any parser fails.
 // Use one of the MapX parsers for differently typed parsers.
 func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output] {
-	// Construct myNoWayBackRecoverer from the sub-parsers
+	// Construct mySaveSpotRecoverer from the sub-parsers
 	subRecoverers := make([]gomme.Recoverer, len(parsers))
 	for i, parser := range parsers {
-		subRecoverers[i] = parser.NoWayBackRecoverer
+		subRecoverers[i] = parser.SaveSpotRecoverer
 	}
-	myNoWayBackRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
+	mySaveSpotRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
 
 	seq := &sequenceData[Output]{
-		id:                 gomme.NewBranchParserID(),
-		parsers:            parsers,
-		noWayBackRecoverer: myNoWayBackRecoverer,
-		subRecoverers:      subRecoverers,
+		id:                gomme.NewBranchParserID(),
+		parsers:           parsers,
+		saveSpotRecoverer: mySaveSpotRecoverer,
+		subRecoverers:     subRecoverers,
 	}
 
 	// finally the parse function
@@ -45,21 +45,21 @@ func Sequence[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[[]Output
 		parseSeq,
 		true,
 		myRecoverer,
-		myNoWayBackRecoverer.Recover,
+		mySaveSpotRecoverer.Recover,
 	)
 }
 
 type sequenceData[Output any] struct {
-	id                 uint64
-	parsers            []gomme.Parser[Output]
-	noWayBackRecoverer gomme.CombiningRecoverer
-	subRecoverers      []gomme.Recoverer
+	id                uint64
+	parsers           []gomme.Parser[Output]
+	saveSpotRecoverer gomme.CombiningRecoverer
+	subRecoverers     []gomme.Recoverer
 }
 
 func (seq *sequenceData[Output]) any(
 	state, remaining gomme.State,
 	startIdx int,
-	noWayBackIdx, noWayBackStart int,
+	saveSpotIdx, saveSpotStart int,
 	outputs []Output,
 ) (gomme.State, []Output) {
 	gomme.Debugf("Sequence - mode=%s, pos=%d, startIdx=%d", remaining.ParsingMode(), remaining.CurrentPos(), startIdx)
@@ -68,8 +68,8 @@ func (seq *sequenceData[Output]) any(
 	}
 	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
-		return seq.happy(state, remaining, startIdx, noWayBackStart, noWayBackIdx, outputs)
-	case gomme.ParsingModeError: // find previous NoWayBack (backward)
+		return seq.happy(state, remaining, startIdx, saveSpotStart, saveSpotIdx, outputs)
+	case gomme.ParsingModeError: // find previous SaveSpot (backward)
 		return seq.error(state, startIdx, outputs)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return seq.handle(state, startIdx, outputs)
@@ -86,7 +86,7 @@ func (seq *sequenceData[Output]) any(
 func (seq *sequenceData[Output]) happy( // normal parsing (forward)
 	state, remaining gomme.State,
 	startIdx int,
-	noWayBackStart, noWayBackIdx int,
+	saveSpotStart, saveSpotIdx int,
 	outputs []Output,
 ) (gomme.State, []Output) {
 	if startIdx <= 0 { // caching only works if parsing from the start
@@ -105,23 +105,23 @@ func (seq *sequenceData[Output]) happy( // normal parsing (forward)
 		parse := seq.parsers[i]
 		newState, output := parse.It(remaining)
 		if newState.Failed() {
-			state.CacheParserResult(seq.id, i, noWayBackIdx, noWayBackStart, newState, outputs)
+			state.CacheParserResult(seq.id, i, saveSpotIdx, saveSpotStart, newState, outputs)
 			state = gomme.IWitnessed(remaining, seq.id, i, newState)
-			if noWayBackStart < 0 { // we can't do anything here
+			if saveSpotStart < 0 { // we can't do anything here
 				return state, nil
 			}
 			return seq.error(state, i, outputs) // handle error locally
 		}
 
-		if remaining.NoWayBackMoved(newState) {
-			noWayBackIdx = i
-			noWayBackStart = state.ByteCount(remaining)
+		if remaining.SaveSpotMoved(newState) {
+			saveSpotIdx = i
+			saveSpotStart = state.ByteCount(remaining)
 		}
 		outputs = saveOutput(outputs, output, i)
 		remaining = newState
 	}
 
-	state.CacheParserResult(seq.id, len(seq.parsers)-1, noWayBackIdx, noWayBackStart, remaining, outputs)
+	state.CacheParserResult(seq.id, len(seq.parsers)-1, saveSpotIdx, saveSpotStart, remaining, outputs)
 	return remaining, outputs
 }
 
@@ -130,7 +130,7 @@ func (seq *sequenceData[Output]) error(
 	_ int, // we don't need `startIdx` because we rely on the cache
 	outputs []Output,
 ) (gomme.State, []Output) {
-	// use cache to know result immediately (HasNoWayBack, NoWayBackIdx, NoWayBackStart)
+	// use cache to know result immediately (HasSaveSpot, SaveSpotIdx, SaveSpotStart)
 	result, ok := state.CachedParserResult(seq.id)
 	if !ok {
 		return state.NewSemanticError(
@@ -138,14 +138,14 @@ func (seq *sequenceData[Output]) error(
 		), nil
 	}
 	// found in cache
-	if result.HasNoWayBack { // we should be able to switch to mode=handle
-		parse := seq.parsers[result.NoWayBackIdx]
-		newState, _ := parse.It(state.MoveBy(result.NoWayBackStart))
+	if result.HasSaveSpot { // we should be able to switch to mode=handle
+		parse := seq.parsers[result.SaveSpotIdx]
+		newState, _ := parse.It(state.MoveBy(result.SaveSpotStart))
 		if newState.ParsingMode() != gomme.ParsingModeHandle {
 			return state.NewSemanticError(fmt.Sprintf(
 				"programming error: sub-parser (index: %d, expected: %q) didn't switch to "+
 					"parsing mode `handle` in `Sequence(error)` parser, but mode is: `%s`",
-				result.NoWayBackIdx, parse.Expected(), newState.ParsingMode())), nil
+				result.SaveSpotIdx, parse.Expected(), newState.ParsingMode())), nil
 		}
 		if result.Failed {
 			return seq.handle(newState, result.Idx, outputs)
@@ -178,8 +178,8 @@ func (seq *sequenceData[Output]) handle( // find error again (forward)
 			state,
 			newState,
 			result.Idx+1,
-			result.NoWayBackIdx,
-			result.NoWayBackStart,
+			result.SaveSpotIdx,
+			result.SaveSpotStart,
 			outputs,
 		)
 	}
@@ -209,8 +209,8 @@ func (seq *sequenceData[Output]) rewind(
 			state,
 			newState,
 			result.Idx+1,
-			result.NoWayBackIdx,
-			result.NoWayBackStart,
+			result.SaveSpotIdx,
+			result.SaveSpotStart,
 			outputs,
 		)
 	}
@@ -223,12 +223,12 @@ func (seq *sequenceData[Output]) escape(
 	outputs []Output,
 ) (gomme.State, []Output) {
 	idx, waste := 0, 0
-	if startIdx <= 0 { // use seq.noWayBackRecoverer
+	if startIdx <= 0 { // use seq.saveSpotRecoverer
 		ok := false
-		waste, idx, ok = seq.noWayBackRecoverer.CachedIndex(state)
+		waste, idx, ok = seq.saveSpotRecoverer.CachedIndex(state)
 		if !ok {
-			waste = seq.noWayBackRecoverer.Recover(state)
-			idx = seq.noWayBackRecoverer.LastIndex()
+			waste = seq.saveSpotRecoverer.Recover(state)
+			idx = seq.saveSpotRecoverer.LastIndex()
 		}
 	} else { // we have to use seq.subRecoverers
 		recoverers := slices.Clone(seq.subRecoverers) // make shallow copy, so we can set the first elements to nil
@@ -242,7 +242,7 @@ func (seq *sequenceData[Output]) escape(
 
 	if idx < 0 {
 		return remaining.NewSemanticError(
-			"grammar error: unable to recover; did you forget to use the NoWayBack parser?",
+			"grammar error: unable to recover; did you forget to use the SaveSpot parser?",
 		).MoveBy(remaining.BytesRemaining()), nil // give up!
 	}
 	newState, output := seq.parsers[idx].It(remaining.MoveBy(waste))
