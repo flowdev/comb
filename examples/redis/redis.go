@@ -39,7 +39,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		Array(),
 	)
 
-	return gomme.RunOnString(-1, nil, -1, input, parser)
+	return gomme.RunOnString(input, parser)
 }
 
 // ErrMessageTooShort is returned when a message is too short to be valid.

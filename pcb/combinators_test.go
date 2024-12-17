@@ -60,7 +60,7 @@ func TestOptional(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -128,7 +128,7 @@ func TestPeek(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -216,7 +216,7 @@ func TestRecognize(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if string(gotResult) != tc.wantOutput {
@@ -284,7 +284,7 @@ func TestAssign(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -382,7 +382,7 @@ func TestDelimited(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -470,7 +470,7 @@ func TestPrefixed(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -558,7 +558,7 @@ func TestSuffixed(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -658,7 +658,7 @@ func TestMap(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -765,7 +765,7 @@ func TestMap2(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {

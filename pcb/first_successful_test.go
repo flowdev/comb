@@ -69,7 +69,7 @@ func TestFirstSuccessful(t *testing.T) {
 			state := gomme.NewFromString(-1, nil, -1, tc.input)
 			newState, gotResult := tc.args.p.It(state)
 			if newState.Failed() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {

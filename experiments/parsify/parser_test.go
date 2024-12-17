@@ -48,7 +48,7 @@ func TestDelimitedByChar(t *testing.T) {
 			} else {
 				state, firstOutput = tc.basicParser1.It(gomme.NewFromString(-1, nil, -1, input[:1]))
 			}
-			t.Log("Error1? :", state.Error())
+			t.Log("Error1? :", state.Errors())
 
 			if firstOutput != '{' {
 				t.Errorf("got output %q, want output %q", firstOutput, '{')
@@ -69,7 +69,7 @@ func TestDelimitedByChar(t *testing.T) {
 			} else {
 				newState, gotOutput = tc.complexParser1.It(gomme.NewFromString(-1, nil, -1, input))
 			}
-			t.Log("Error2? :", newState.Error())
+			t.Log("Error2? :", newState.Errors())
 
 			if gotOutput != wantOutput {
 				t.Errorf("got output %q, want output %q", gotOutput, wantOutput)

@@ -2,6 +2,7 @@ package gomme
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -439,7 +440,7 @@ func (st State) Failed() bool {
 }
 
 // HasError returns true if any handled errors are registered.
-// (Errors that would be returned by State.Error())
+// (Errors that would be returned by State.Errors())
 func (st State) HasError() bool {
 	return len(st.oldErrors) > 0 || st.errHand.err != nil
 }
@@ -535,12 +536,25 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 	return 1, 0, "", false
 }
 
-// Error returns a human readable error string.
-func (st State) Error() string {
-	if err := pcbErrorsToGoErrors(st); err != nil {
-		return err.Error()
+// Errors returns all error messages accumulated by the state as a Go error.
+// Multiple errors have been joined (by errors.Join()).
+func (st State) Errors() error {
+	pcbErrors := slices.Clone(st.oldErrors)
+	n := len(pcbErrors)
+	if st.errHand.err != nil && (n == 0 || st.errHand.err.pos != pcbErrors[n-1].pos) {
+		pcbErrors = append(pcbErrors, *st.errHand.err)
 	}
-	return ""
+
+	if len(pcbErrors) == 0 {
+		return nil
+	}
+
+	goErrors := make([]error, len(pcbErrors))
+	for i, pe := range pcbErrors {
+		goErrors[i] = errors.New(singleErrorMsg(pe, st.input.binary))
+	}
+
+	return errors.Join(goErrors...)
 }
 
 // NoWayBack is true iff we crossed a noWayBackMark.

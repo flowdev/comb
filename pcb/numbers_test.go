@@ -74,7 +74,7 @@ func TestInt64(t *testing.T) {
 
 			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -168,7 +168,7 @@ func TestInt8(t *testing.T) {
 
 			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -246,7 +246,7 @@ func TestUInt8(t *testing.T) {
 
 			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {

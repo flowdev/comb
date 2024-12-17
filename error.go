@@ -2,7 +2,6 @@ package gomme
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -390,23 +389,4 @@ func lastNRunes(s string, n int) string {
 		j -= size
 	}
 	return s[j:]
-}
-
-func pcbErrorsToGoErrors(state State) error {
-	pcbErrors := slices.Clone(state.oldErrors)
-	n := len(pcbErrors)
-	if state.errHand.err != nil && (n == 0 || state.errHand.err.pos != pcbErrors[n-1].pos) {
-		pcbErrors = append(pcbErrors, *state.errHand.err)
-	}
-
-	if len(pcbErrors) == 0 {
-		return nil
-	}
-
-	goErrors := make([]error, len(pcbErrors))
-	for i, pe := range pcbErrors {
-		goErrors[i] = errors.New(singleErrorMsg(pe, state.input.binary))
-	}
-
-	return errors.Join(goErrors...)
 }

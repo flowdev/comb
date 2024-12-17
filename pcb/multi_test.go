@@ -68,7 +68,7 @@ func TestCount(t *testing.T) {
 
 			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.Failed() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			assert.Equal(t,
@@ -148,7 +148,7 @@ func TestMany0(t *testing.T) {
 
 			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.Failed() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			// testify makes it easier comparing slices
@@ -174,7 +174,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 
 	newState, output := parser.It(state)
 
-	assert.Error(t, newState)
+	assert.Error(t, newState.Errors())
 	assert.Empty(t, output)
 	assert.Equal(t, state.CurrentString(), newState.CurrentString())
 }
@@ -262,7 +262,7 @@ func TestMany1(t *testing.T) {
 
 			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.Failed() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			// testify makes it easier comparing slices
@@ -288,7 +288,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 
 	newState, output := parser.It(state)
 
-	assert.Error(t, newState)
+	assert.Error(t, newState.Errors())
 	assert.Empty(t, output)
 	assert.Equal(t, state.CurrentString(), newState.CurrentString())
 }
@@ -396,7 +396,7 @@ func TestSeparated0(t *testing.T) {
 
 			newState, gotResult := tc.args.p.It(gomme.NewFromString(-1, nil, -1, tc.input))
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			// testify makes it easier comparing slices
@@ -496,7 +496,7 @@ func TestSeparated1(t *testing.T) {
 
 			newState, gotResult := gomme.RunOnState(gomme.NewFromString(-1, nil, -1, tc.input), tc.args.parser)
 			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Error(), tc.wantErr)
+				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
 			}
 
 			// testify makes it easier comparing slices

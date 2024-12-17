@@ -232,22 +232,22 @@ func (lp *lazyprsr[Output]) NoWayBackRecoverer(state State) int {
 //
 
 // RunOnString runs a parser on text input and returns the output and error(s).
-func RunOnString[Output any](maxDel int, del Deleter, maxRecover int, input string, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewFromString(maxDel, del, maxRecover, input), parse)
-	if len(newState.oldErrors) == 0 {
-		return output, nil
+func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
+	newState, output := RunOnState(NewFromString(-1, nil, -1, input), parse)
+	if err := newState.Errors(); err != nil {
+		return ZeroOf[Output](), err
 	}
-	return ZeroOf[Output](), pcbErrorsToGoErrors(newState)
+	return output, nil
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
-func RunOnBytes[Output any](maxDel int, del Deleter, maxRecover int, input []byte, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewFromBytes(maxDel, del, maxRecover, input), parse)
-	if len(newState.oldErrors) == 0 {
-		return output, nil
+func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
+	newState, output := RunOnState(NewFromBytes(-1, nil, -1, input), parse)
+	if err := newState.Errors(); err != nil {
+		return ZeroOf[Output](), err
 	}
-	return ZeroOf[Output](), pcbErrorsToGoErrors(newState)
+	return output, nil
 }
 
 func RunOnState[Output any](state State, parse Parser[Output]) (State, Output) {
