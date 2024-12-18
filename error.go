@@ -3,9 +3,7 @@ package gomme
 import (
 	"encoding/hex"
 	"fmt"
-	"slices"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -276,48 +274,18 @@ func DefaultBinaryDeleter(state State, count int) State {
 }
 
 // DefaultTextDeleter shouldn't be used outside of this package.
-// Please use pcb.RuneTypeChangeDeleter instead.
+// Please use pcb.RuneDeleter instead.
 func DefaultTextDeleter(state State, count int) State {
-	found := 0
-	oldTyp := rune(0)
-
 	if count <= 0 { // don't delete at all
 		return state
 	}
-	byteCount := strings.IndexFunc(state.CurrentString(), func(r rune) bool {
-		var typ, paren rune
-
-		switch {
-		case unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_':
-			typ = 'a'
-		case unicode.IsSpace(r):
-			typ = ' '
-		case slices.Contains([]rune{'(', '[', '{', '}', ']', ')'}, r):
-			typ = '('
-		case slices.Contains([]rune{
-			'+', '-', '*', '/', '%', '^', '=', ':', '<', '>', '~',
-			'|', '\\', ';', '.', ',', '"', '`', '\'',
-		}, r):
-			typ = '+'
-		default:
-			typ = utf8.RuneError
+	byteCount, j := 0, 0
+	for i := range state.CurrentString() {
+		byteCount += i
+		j++
+		if j >= count {
+			return state.MoveBy(byteCount)
 		}
-
-		if typ != oldTyp {
-			if typ != ' ' && oldTyp != 0 {
-				found++
-			}
-			if typ == '(' && oldTyp == '(' && r != paren {
-				found++
-			}
-			oldTyp = typ
-			paren = r // works just fine even if r isn't a parenthesis at all and saves an if
-		}
-		return found == count
-	})
-
-	if byteCount < 0 {
-		return state.MoveBy(state.BytesRemaining())
 	}
 	return state.MoveBy(byteCount)
 }

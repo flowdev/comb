@@ -173,29 +173,9 @@ func ByteDeleter(state gomme.State, count int) gomme.State {
 	return gomme.DefaultBinaryDeleter(state, count)
 }
 
-// RuneTypeChangeDeleter is a Deleter that recognizes tokens separated by
-// changes in the type of the runes.
-// The following types are recognized:
-//   - Alphanumeric (unicode.IsLetter() || unicode.IsNumber() || '_')
-//   - Whitespace (using unicode.IsSpace())
-//   - Parentheses ('(', '[', '{', '}', ']' and ')'
-//     (all the same runes in one token))
-//   - Operators ('+', '-', '*', '/', '%', '^', '=', ':', '<', '>', '~',
-//     '|', '\', ';', '.', ',', '"', '`' and "'")
-//   - Everything else (that shouldn't be in any text source code at all ;))
-//
-// White space between tokens and after the last deleted token is ignored.
-// So only white space at the start is counted
-// (and that would hint towards a missing Whitespace0 or Whitespace1 parser
-// or towards the white space being the culprit).
-// So the input never starts with white space after this Deleter.
-// This is intentional. Even if a mandatory white space parser is
-// causing the error we handle, it will be ignored by our recovering strategy
-// in the update phase.
-//
-// It is meant to be used for parsing text data where white space is optional.
+// RuneDeleter is a Deleter that deletes runes.
 // This is the default Deleter for text input.
-func RuneTypeChangeDeleter(state gomme.State, count int) gomme.State {
+func RuneDeleter(state gomme.State, count int) gomme.State {
 	return gomme.DefaultTextDeleter(state, count)
 }
 
@@ -211,8 +191,8 @@ func RuneTypeChangeDeleter(state gomme.State, count int) gomme.State {
 // causing the error we handle, it will be ignored by our recovering strategy
 // in the update phase.
 //
-// It is meant to be used for parsing text data where white space is
-// mandatory in many places.
+// It is meant to be used for parsing grammars where all (save spot) tokens
+// start after some white space.
 func SpacedTokens(state gomme.State, count int) gomme.State {
 	found := 0
 	space := false
