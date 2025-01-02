@@ -5,7 +5,6 @@ import (
 	"github.com/oleiade/gomme"
 	"reflect"
 	"strings"
-	"unicode"
 )
 
 // Forbidden is the Recoverer for parsers that MUST NOT be used to recover at all.
@@ -163,55 +162,6 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 
 // BasicRecovererFunc recovers by trying to parse again and again and again.
 // It moves forward in the input using the Deleter one token at a time.
-func BasicRecovererFunc[Output any](parse func(gomme.State) (gomme.State, Output)) gomme.Recoverer {
+func BasicRecovererFunc[Output any](parse func(gomme.State) (gomme.State, Output, *gomme.ParserError)) func(gomme.State) int {
 	return gomme.DefaultRecovererFunc(parse)
-}
-
-// ByteDeleter is a Deleter that simply deletes bytes from the input.
-// It is meant to be used for parsing binary data.
-func ByteDeleter(state gomme.State, count int) gomme.State {
-	return gomme.DefaultBinaryDeleter(state, count)
-}
-
-// RuneDeleter is a Deleter that deletes runes.
-// This is the default Deleter for text input.
-func RuneDeleter(state gomme.State, count int) gomme.State {
-	return gomme.DefaultTextDeleter(state, count)
-}
-
-// SpacedTokens is a Deleter that recognizes tokens separated by
-// Unicode white space.
-//
-// White space between tokens and after the last deleted token is ignored.
-// So only white space at the start is counted
-// (and that would hint towards a missing Whitespace0 or Whitespace1 parser
-// or towards the white space being the culprit).
-// So the input never starts with white space after this Deleter.
-// This is intentional. Even if a mandatory white space parser is
-// causing the error we handle, it will be ignored by our recovering strategy
-// in the update phase.
-//
-// It is meant to be used for parsing grammars where all (save spot) tokens
-// start after some white space.
-func SpacedTokens(state gomme.State, count int) gomme.State {
-	found := 0
-	space := false
-
-	if count <= 0 { // don't delete at all
-		return state
-	}
-	byteCount := strings.IndexFunc(state.CurrentString(), func(r rune) bool {
-		if unicode.IsSpace(r) != space {
-			space = !space
-			if !space {
-				found++
-			}
-		}
-		return found == count
-	})
-
-	if byteCount < 0 {
-		return state.MoveBy(state.BytesRemaining())
-	}
-	return state.MoveBy(byteCount)
 }

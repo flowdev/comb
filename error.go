@@ -9,26 +9,32 @@ import (
 
 const errorMarker = 0x25B6 // easy to spot marker (▶) for exact error position
 
-// pcbError is an error message from the parser.
+// ParserError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
-type pcbError struct {
-	text      string
-	pos       int // pos is the byte index in the input (state.input.pos)
-	line, col int // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
-	srcLine   string
+type ParserError struct {
+	text      string // the error message from the parser
+	pos       int    // pos is the byte index in the input (state.input.pos)
+	line, col int    // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
+	srcLine   string // line of the source code containing the error or bytes around the error in binary case
+	binary    bool   // are we in binary or text mode?
+	parserID  int32  // ID of the parser reporting the error (only set for syntax errors)
+}
+
+func (e *ParserError) Error() string {
+	return singleErrorMsg(*e)
 }
 
 // errHand contains all data needed for handling one error.
 type errHand struct {
-	err             *pcbError // error that is currently handled
-	witnessID       uint64    // ID of the immediate parent branch parser that witnessed the error
-	witnessPos      int       // input position of the witness parser
-	culpritIdx      int       // index of the sub-parser that created the error
-	curDel          int       // current number of tokes to delete for error handling
-	ignoreErrParser bool      // true if the failing parser should be ignored
-	orgPos          int       // state.input.pos before starting to use deleter
-	orgLine         int       // state.input.line before starting to use deleter
-	orgPrevNl       int       // state.input.prevNl before starting to use deleter
+	err             *ParserError // error that is currently handled
+	witnessID       uint64       // ID of the immediate parent branch parser that witnessed the error
+	witnessPos      int          // input position of the witness parser
+	culpritIdx      int          // index of the sub-parser that created the error
+	curDel          int          // current number of tokes to delete for error handling
+	ignoreErrParser bool         // true if the failing parser should be ignored
+	orgPos          int          // state.input.pos before starting to use deleter
+	orgLine         int          // state.input.line before starting to use deleter
+	orgPrevNl       int          // state.input.prevNl before starting to use deleter
 }
 
 // IWitnessed lets a branch parser report an error that it witnessed in
@@ -162,12 +168,12 @@ func DefaultRecoverer[Output any](parse Parser[Output]) Recoverer {
 // DefaultRecovererFunc is the heart of the DefaultRecoverer and shouldn't be used
 // outside of this package either.
 // Please use pcb.BasicRecovererFunc instead.
-func DefaultRecovererFunc[Output any](parse func(State) (State, Output)) Recoverer {
+func DefaultRecovererFunc[Output any](parse func(State) (State, Output, *ParserError)) func(State) int {
 	return func(state State) int {
 		curState := state
 		for curState.BytesRemaining() > 0 {
-			newState, _ := parse(curState)
-			if !newState.Failed() {
+			_, _, err := parse(curState)
+			if err == nil {
 				return state.ByteCount(curState) // return the bytes up to the successful position
 			}
 			curState = curState.Delete(1)
@@ -261,43 +267,13 @@ func (crc CombiningRecoverer) CachedIndex(state State) (waste, idx int, ok bool)
 }
 
 // ============================================================================
-// Deleters
-//
-
-// DefaultBinaryDeleter shouldn't be used outside of this package.
-// Please use pcb.ByteDeleter instead.
-func DefaultBinaryDeleter(state State, count int) State {
-	if count <= 0 { // don't delete at all
-		return state
-	}
-	return state.MoveBy(count)
-}
-
-// DefaultTextDeleter shouldn't be used outside of this package.
-// Please use pcb.RuneDeleter instead.
-func DefaultTextDeleter(state State, count int) State {
-	if count <= 0 { // don't delete at all
-		return state
-	}
-	byteCount, j := 0, 0
-	for i := range state.CurrentString() {
-		byteCount += i
-		j++
-		if j >= count {
-			return state.MoveBy(byteCount)
-		}
-	}
-	return state.MoveBy(byteCount)
-}
-
-// ============================================================================
 // Error Reporting
 //
 
-func singleErrorMsg(pcbErr pcbError, binary bool) string {
+func singleErrorMsg(pcbErr ParserError) string {
 	fullMsg := strings.Builder{}
 	fullMsg.WriteString(pcbErr.text)
-	if binary {
+	if pcbErr.binary {
 		fullMsg.WriteString(formatBinaryLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
 	} else {
 		fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))

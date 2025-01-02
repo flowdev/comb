@@ -32,17 +32,22 @@ type cachedWasteIdx struct {
 var combiningParserIDs = &atomic.Uint64{}
 
 type ParserResult struct {
-	pos           int         // position in the input
-	Idx           int         // index of the chosen branch or parser (success or fail)
-	HasSaveSpot   bool        // true if the SaveSpot mark has been moved
-	SaveSpotIdx   int         // index of last sub-parser that moved the mark
-	SaveSpotStart int         // start of the input (relative to `pos`) for the SaveSpot parser
-	SaveSpot      int         // the new SaveSpot mark (if HasSaveSpot) or -1
-	Failed        bool        // true if the sub-parser failed and provided the error to be handled
-	ErrorStart    int         // start of the input (relative to `pos`) for the failed sub-parser
-	Consumed      int         // number of bytes consumed from the input during successful parsing
-	Output        interface{} // the Output of the parser (nil if it failed)
-	Error         *pcbError   // the error if the parser failed (nil if it succeeded)
+	pos           int          // position in the input
+	Idx           int          // index of the chosen branch or parser (success or fail)
+	HasSaveSpot   bool         // true if the SaveSpot mark has been moved
+	SaveSpotIdx   int          // index of last sub-parser that moved the mark
+	SaveSpotStart int          // start of the input (relative to `pos`) for the SaveSpot parser
+	SaveSpot      int          // the new SaveSpot mark (if HasSaveSpot) or -1
+	Failed        bool         // true if the sub-parser failed and provided the error to be handled
+	ErrorStart    int          // start of the input (relative to `pos`) for the failed sub-parser
+	Consumed      int          // number of bytes consumed from the input during successful parsing
+	Output        interface{}  // the Output of the parser (nil if it failed)
+	Error         *ParserError // the error if the parser failed (nil if it succeeded)
+}
+
+type ParserOutput struct {
+	pos    int         // position in the input
+	Output interface{} // the Output of the parser
 }
 
 var callIDs = &atomic.Uint64{} // used for endless loop prevention
@@ -51,15 +56,14 @@ var callIDs = &atomic.Uint64{} // used for endless loop prevention
 type State struct {
 	mode                   ParsingMode // one of: happy, error, handle, record, choose, play
 	input                  Input
-	saveSpot               int        // mark set by the SaveSpot parser
-	maxDel                 int        // maximum number of tokens that should be deleted for error recovery
-	deleter                Deleter    // used to get back on track in error recovery
-	maxRecover             int        // maximum number of recoverers to consider for error recovery
-	errHand                errHand    // everything for handling one error
-	oldErrors              []pcbError // errors that are or have been handled
+	saveSpot               int           // mark set by the SaveSpot parser
+	recover                bool          // recover from errors
+	errHand                errHand       // everything for handling one error
+	oldErrors              []ParserError // errors that are or have been handled
 	recovererWasteCache    map[uint64][]cachedWaste
 	recovererWasteIdxCache map[uint64][]cachedWasteIdx
 	parserCache            map[uint64][]ParserResult
+	outputCache            map[int32][]ParserOutput
 }
 
 // ============================================================================
@@ -154,8 +158,25 @@ func (st State) Moved(other State) bool {
 	return st.input.pos != other.input.pos
 }
 
-func (st State) Delete(countToken int) State {
-	return st.deleter(st, countToken)
+// Delete moves forward in the input, thus simulating deletion of input.
+// For binary input it moves forward by bytes otherwise by UNICODE runes.
+func (st State) Delete(count int) State {
+	if count <= 0 { // don't delete at all
+		return st
+	}
+	if st.input.binary {
+		return st.MoveBy(count)
+	}
+
+	byteCount, j := 0, 0
+	for i := range st.CurrentString() {
+		byteCount += i
+		j++
+		if j >= count {
+			return st.MoveBy(byteCount)
+		}
+	}
+	return st.MoveBy(byteCount)
 }
 
 // ============================================================================
@@ -264,7 +285,7 @@ func (st State) CachedParserResult(id uint64) (result ParserResult, ok bool) {
 	})
 }
 
-func cacheValue[T any](cache map[uint64][]T, id uint64, value T, f func(T, T) int, maxDel int) {
+func cacheValue[T any, U cmp.Ordered](cache map[U][]T, id U, value T, f func(T, T) int, maxDel int) {
 	cacheSize := max(maxDel+1, 8)
 
 	scache, ok := cache[id]
@@ -290,7 +311,7 @@ func cacheValue[T any](cache map[uint64][]T, id uint64, value T, f func(T, T) in
 	scache[i] = value
 }
 
-func cachedValue[T any](cache map[uint64][]T, id uint64, f func(T) bool) (result T, ok bool) {
+func cachedValue[T any, U cmp.Ordered](cache map[U][]T, id U, f func(T) bool) (result T, ok bool) {
 	var zero T
 	var scache []T
 
@@ -305,6 +326,33 @@ func cachedValue[T any](cache map[uint64][]T, id uint64, f func(T) bool) (result
 	return scache[i], true
 }
 
+func (st State) CacheOutput(id int32, output interface{}) {
+	cacheValue(st.outputCache, id, ParserOutput{pos: st.input.pos, Output: output},
+		func(a, b ParserOutput) int {
+			return cmp.Compare(a.pos, b.pos)
+		}, st.maxRecursion)
+}
+func (st State) CachedOutput(id int32) (output interface{}, ok bool) {
+	return cachedValue(st.outputCache, id, func(data ParserOutput) bool {
+		return data.pos == st.input.pos
+	})
+}
+func (st State) PurgeOutput(id int32) {
+	var scache []ParserOutput
+	ok := false
+
+	if scache, ok = st.outputCache[id]; !ok {
+		return
+	}
+
+	i := slices.IndexFunc(scache, func(o ParserOutput) bool {
+		return cmp.Compare(o.pos, st.input.pos) == 0
+	})
+	if i >= 0 {
+		scache[i] = ParserOutput{pos: -1}
+	}
+}
+
 // ClearAllCaches empties all caches of this state.
 // It should be used after reaching a safe state.
 // So after successfully handling an error or at the end of a
@@ -316,6 +364,7 @@ func (st State) ClearAllCaches() State {
 	clear(st.recovererWasteCache)
 	clear(st.recovererWasteIdxCache)
 	clear(st.parserCache)
+	// clear(st.outputCache) the output might be needed by later parsers as it isn't part of the error handling
 	return st
 }
 
@@ -384,7 +433,7 @@ func (st State) SucceedAgain(result ParserResult) State {
 
 // ErrorAgain is really just like NewError.
 // It just exists for cached error results.
-func (st State) ErrorAgain(newErr *pcbError) State {
+func (st State) ErrorAgain(newErr *ParserError) State {
 	switch st.mode {
 	case ParsingModeHappy:
 		st.errHand.err = newErr
@@ -404,7 +453,7 @@ func (st State) ErrorAgain(newErr *pcbError) State {
 // For syntax errors `expected ` is prepended to the message and the usual
 // position and source line including marker are appended.
 func (st State) NewError(message string) State {
-	newErr := st.newPcbError()
+	newErr := st.newParserError()
 	newErr.text = "expected " + message
 
 	return st.ErrorAgain(&newErr)
@@ -412,23 +461,31 @@ func (st State) NewError(message string) State {
 
 // NewSemanticError sets a semantic error with the messages in this state at the
 // current position.
-// For semantic errors `expected ` is NOT prepended to the message but the usual
+// For semantic errors `expected` is NOT prepended to the message but the usual
 // position and source line including marker are appended.
 func (st State) NewSemanticError(message string) State {
-	err := st.newPcbError()
+	err := st.newParserError()
 	err.text = message
 	st.oldErrors = append(st.oldErrors, err)
 	return st
 }
 
-func (st State) newPcbError() pcbError {
-	newErr := pcbError{pos: st.input.pos}
+func (st State) newParserError() ParserError {
+	newErr := ParserError{pos: st.input.pos, binary: st.input.binary, parserID: -1}
 	if st.input.binary { // the rare binary case is misusing the text case data a bit...
 		newErr.line, newErr.col, newErr.srcLine = st.bytesAround(st.input.pos)
 	} else {
-		newErr.line, newErr.col, newErr.srcLine = st.where(st.input.pos)
+		newErr.line, newErr.col, newErr.srcLine = st.textAround(st.input.pos)
 	}
 	return newErr
+}
+
+func (st State) CurrentError() *ParserError {
+	return st.errHand.err
+}
+func (st State) SaveError(err *ParserError) State {
+	st.oldErrors = append(st.oldErrors, *err)
+	return st
 }
 
 // Failed returns whether this state is in a failed state or not.
@@ -463,7 +520,7 @@ func (st State) CurrentSourceLine() string {
 	if st.input.binary {
 		return formatBinaryLine(st.bytesAround(st.input.pos))
 	} else {
-		return formatSrcLine(st.where(st.input.pos))
+		return formatSrcLine(st.textAround(st.input.pos))
 	}
 }
 
@@ -477,7 +534,7 @@ func (st State) bytesAround(pos int) (line, col int, srcLine string) {
 	return start, pos - start, srcLine
 }
 
-func (st State) where(pos int) (line, col int, srcLine string) {
+func (st State) textAround(pos int) (line, col int, srcLine string) {
 	if pos < 0 {
 		pos = 0
 	}
@@ -551,7 +608,7 @@ func (st State) Errors() error {
 
 	goErrors := make([]error, len(pcbErrors))
 	for i, pe := range pcbErrors {
-		goErrors[i] = errors.New(singleErrorMsg(pe, st.input.binary))
+		goErrors[i] = errors.New(singleErrorMsg(pe))
 	}
 
 	return errors.Join(goErrors...)

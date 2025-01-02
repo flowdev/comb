@@ -8,20 +8,14 @@ import (
 // if not successful.
 // Optional will ignore any parsing error except if a SaveSpot is active.
 func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	optParse := func(state gomme.State) (gomme.State, Output) {
-		newState, output := parse.It(state)
+	optParse := func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
+		newState, output, err := parse.It(state)
 		if newState.Failed() && !state.SaveSpotMoved(newState) {
-			return state.Succeed(newState), gomme.ZeroOf[Output]()
+			return state.Succeed(newState), gomme.ZeroOf[Output](), nil
 		}
-		return newState, output
+		return newState, output, err
 	}
-	return gomme.NewParser[Output](
-		"Optional",
-		optParse,
-		parse.PossibleWitness(),
-		Forbidden("Optional"),
-		parse.SaveSpotRecoverer,
-	)
+	return gomme.NewParser[Output]("Optional", optParse, Forbidden("Optional"))
 }
 
 // Peek tries to apply the provided parser without consuming any input.
@@ -32,17 +26,16 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 //   - Even though Peek accepts a parser as argument it behaves like a leaf parser
 //     to the outside. So it doesn't need to use MapN or the like.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	peekParse := func(state gomme.State) (gomme.State, Output) {
-		newState, output := parse.It(state)
-		if newState.Failed() {
+	peekParse := func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
+		newState, output, err := parse.It(state)
+		if err != nil {
 			// avoid SaveSpot and consumption because we only peek
-			return state.Fail(newState), output
+			return state.Fail(newState), output, err
 		}
 
-		return state, output
+		return state, output, nil
 	}
-	return gomme.NewParser[Output]("Peek", peekParse, false,
-		Forbidden("Peek"), nil)
+	return gomme.NewParser[Output]("Peek", peekParse, Forbidden("Peek"))
 }
 
 // Not tries to apply the provided parser without consuming any input.
@@ -56,16 +49,16 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 //     to the outside. So it doesn't need to use MapN or the like.
 func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 	expected := "not " + parse.Expected()
-	notParse := func(state gomme.State) (gomme.State, bool) {
-		newState, _ := parse.It(state)
-		if newState.Failed() {
-			return state, true
+	notParse := func(state gomme.State) (gomme.State, bool, *gomme.ParserError) {
+		_, _, err := parse.It(state)
+		if err != nil {
+			return state, true, nil
 		}
 
 		// avoid SaveSpot because we only peek; error message and consumption don't really matter
-		return state.NewError(expected), false
+		return state.NewError(expected), false, err
 	}
-	return gomme.NewParser[bool](expected, notParse, false, Forbidden("Not"), nil)
+	return gomme.NewParser[bool](expected, notParse, Forbidden("Not"))
 }
 
 // Recognize returns the consumed input (instead of the original parsers output)
@@ -75,19 +68,17 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 //   - Using this parser is a code smell as it effectively removes type safety.
 //   - Rather use one of the MapX functions instead.
 func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
-	recParse := func(state gomme.State) (gomme.State, []byte) {
-		newState, _ := parse.It(state)
+	recParse := func(state gomme.State) (gomme.State, []byte, *gomme.ParserError) {
+		newState, _, err := parse.It(state)
 		if newState.Failed() {
-			return state.Preserve(newState), nil
+			return state.Preserve(newState), nil, err
 		}
-		return newState, state.BytesTo(newState)
+		return newState, state.BytesTo(newState), nil
 	}
 	recParser := gomme.NewParser[[]byte](
 		"Recognize",
 		recParse,
-		parse.PossibleWitness(),
-		parse.MyRecoverer(),
-		parse.SaveSpotRecoverer,
+		parse.Recover,
 	)
 	return MapN[[]byte, interface{}, interface{}, interface{}, interface{}](
 		"Recognize",

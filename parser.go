@@ -1,9 +1,5 @@
 package gomme
 
-import (
-	"fmt"
-)
-
 // SaveSpot applies a sub-parser and marks the new state as a
 // point of no return if successful.
 // It really serves 3 slightly different purposes:
@@ -25,44 +21,38 @@ import (
 //     This way we won't have a panic at the runtime of the parser.
 //   - Only leaf parsers MUST be given to SaveSpot as sub-parsers.
 //     SaveSpot will treat the sub-parser as a leaf parser.
-//     So it won't bother it with any error handling including witnessing errors.
+//     So the sub-parser will never get a chance to parse with given internal data.
 func SaveSpot[Output any](parse Parser[Output]) Parser[Output] {
-	id := NewBranchParserID()
-
 	// call Recoverer to make a Forbidden recoverer panic during the construction phase
-	recoverer := parse.MyRecoverer()
+	recoverer := parse.Recover
 	if recoverer != nil {
-		recoverer(NewFromBytes(-1, DefaultBinaryDeleter, -1, []byte{}))
+		recoverer(NewFromBytes(-1, DefaultBinaryDeleter, -1, 1, []byte{}))
 	}
 
-	newParse := func(state State) (State, Output) {
-		switch state.mode {
-		case ParsingModeHappy:
-			return saveSpotHappy(id, parse, state)
-		case ParsingModeError: // we found the previous SaveSpot => switch to handle and find error again
-			return saveSpotError(id, parse, state)
-		case ParsingModeHandle: // the sub-parser must have failed, or we have a programming error
-			return saveSpotHandle(id, parse, state)
-		case ParsingModeRewind: // error didn't go away yet; go back to witness parser (1)
-			return saveSpotRewind(id, parse, state)
-		case ParsingModeEscape: // recover from the error the hard way; use the recoverer
-			return saveSpotEscape(id, parse, state)
-		}
-		return state.NewSemanticError(fmt.Sprintf(
-			"parsing mode %v hasn't been handled in `SaveSpot`", state.mode)), ZeroOf[Output]()
-	}
+	//newParse := func(state State) (State, Output, *ParserError) {
+	//	switch state.mode {
+	//	case ParsingModeHappy:
+	//		return saveSpotHappy(id, parse, state)
+	//	case ParsingModeError: // we found the previous SaveSpot => switch to handle and find error again
+	//		return saveSpotError(id, parse, state)
+	//	case ParsingModeHandle: // the sub-parser must have failed, or we have a programming error
+	//		return saveSpotHandle(id, parse, state)
+	//	case ParsingModeRewind: // error didn't go away yet; go back to witness parser (1)
+	//		return saveSpotRewind(id, parse, state)
+	//	case ParsingModeEscape: // recover from the error the hard way; use the recoverer
+	//		return saveSpotEscape(id, parse, state)
+	//	}
+	//	return state.NewSemanticError(fmt.Sprintf(
+	//		"parsing mode %v hasn't been handled in `SaveSpot`", state.mode)), ZeroOf[Output]()
+	//}
 
-	return NewParser[Output](
-		"SaveSpot",
-		newParse,
-		true,
-		parse.MyRecoverer(),
-		CachingRecoverer(parse.MyRecoverer()),
-	)
+	sp := NewParser[Output]("SaveSpot", parse.It, recoverer)
+	sp.setSaveSpot()
+	return sp
 }
 func saveSpotHappy[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
-	newState, output := parse.It(state)
-	if !newState.Failed() {
+	newState, output, err := parse.It(state)
+	if err == nil {
 		if newState.errHand.witnessID > 0 { // we just successfully handled an error :)
 			newState.errHand = errHand{}
 		}
@@ -85,7 +75,7 @@ func saveSpotRewind[Output any](id uint64, parse Parser[Output], state State) (S
 	return HandleWitness(state, id, 0, parse)
 }
 func saveSpotEscape[Output any](id uint64, parse Parser[Output], state State) (State, Output) {
-	waste := parse.MyRecoverer()(state)
+	waste := parse.Recover(state)
 	if waste < 0 {
 		return state.MoveBy(state.BytesRemaining()), ZeroOf[Output]() // give up
 	}

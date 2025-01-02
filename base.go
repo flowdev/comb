@@ -28,6 +28,10 @@ const DefaultMaxDel = 3
 // are all tried or none.
 const DefaultMaxRecover = 3
 
+// DefaultMaxRecursion is the default value of the maximum number of recursive
+// child, grand child, ... parsers to support.
+const DefaultMaxRecursion = 64
+
 // ParsingMode is needed for error handling. See `ERROR_HANDLING.md` for details.
 type ParsingMode int
 
@@ -58,15 +62,13 @@ type Separator interface {
 }
 
 // Recoverer is a simplified parser that only returns the number of bytes
-// to reach a safe state (SaveSpot).
+// to reach a SaveSpot.
 // If it can't recover it should return -1.
 //
 // A Recoverer is used for recovering from an error in the input.
-// It helps to move forward to the next safe spot (SaveSpot).
-// A Recoverer will be used by the SaveSpot parser if it's sub-parser
-// provides it.
-// Otherwise, SaveSpot will have to try the sub-parser until it succeeds moving
-// forward 1 token at a time. :(
+// It helps to move forward to the next SaveSpot.
+// The basic Recoverer will have to try the parser until it succeeds moving
+// forward 1 rune/byte at a time. :(
 type Recoverer func(state State) int
 
 // Deleter is a simplified parser that only moves the position in the input
@@ -81,64 +83,38 @@ type Deleter func(state State, count int) State
 // Parser Interface And Its Implementations
 //
 
-// Parser defines the type of a generic Parser
+// Parser defines the type of a generic Parser.
 // A few rules should be followed to prevent unexpected behaviour:
-//   - A parser that errors must add an error to the state
+//   - A parser that errors must return the error
 //   - A parser that errors should not change position of the states input
 //   - A parser that consumed some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	Expected() string
-	It(State) (State, Output)
-	PossibleWitness() bool
-	MyRecoverer() Recoverer
-	SwapMyRecoverer(Recoverer) Parser[Output]
-	SaveSpotRecoverer(State) int
-}
-
-// ParserToZeroOutput converts a parser of one output type to a different
-// output type with zero value.
-// So only use this if the output of the parser is waste.
-func ParserToZeroOutput[Output, S any](other Parser[S]) Parser[Output] {
-	var zero Output
-
-	parse := func(state State) (State, Output) {
-		state, _ = other.It(state)
-		return state, zero
-	}
-	return NewParser[Output](
-		other.Expected(),
-		parse,
-		other.PossibleWitness(),
-		other.MyRecoverer(),
-		other.SaveSpotRecoverer,
-	)
+	It(State) (State, Output, *ParserError)
+	IsSaveSpot() bool
+	setSaveSpot()
+	Recover(State) int
+	SwapRecoverer(Recoverer) Parser[Output]
 }
 
 type prsr[Output any] struct {
-	expected          string
-	it                func(State) (State, Output)
-	possibleWitness   bool
-	recoverer         Recoverer // will be requested only by the SaveSpot parser
-	saveSpotRecoverer Recoverer // will be requested in escape mode to find the best SaveSpot parser
+	expected    string
+	parser      func(State) (State, Output, *ParserError)
+	recoverer   func(State) int
+	saveSpot    bool
+	stepRecover bool
 }
 
 // NewParser is THE way to create parsers.
 func NewParser[Output any](
 	expected string,
-	parse func(State) (State, Output),
-	possibleWitness bool,
+	parse func(State) (State, Output, *ParserError),
 	recover Recoverer,
-	saveSpotRecoverer Recoverer,
 ) Parser[Output] {
 	p := prsr[Output]{
-		expected:          expected,
-		it:                parse,
-		possibleWitness:   possibleWitness,
-		recoverer:         recover,
-		saveSpotRecoverer: saveSpotRecoverer,
-	}
-	if recover == nil {
-		p.recoverer = DefaultRecoverer(p)
+		expected:  expected,
+		parser:    parse,
+		recoverer: recover,
 	}
 	return p
 }
@@ -147,32 +123,29 @@ func (p prsr[Output]) Expected() string {
 	return p.expected
 }
 
-func (p prsr[Output]) It(state State) (State, Output) {
-	return p.it(state)
+func (p prsr[Output]) It(state State) (State, Output, *ParserError) {
+	return p.parser(state)
 }
 
-func (p prsr[Output]) PossibleWitness() bool {
-	return p.possibleWitness
+func (p prsr[Output]) IsSaveSpot() bool {
+	return p.saveSpot
 }
 
-func (p prsr[Output]) MyRecoverer() Recoverer {
-	return p.recoverer
+func (p prsr[Output]) setSaveSpot() {
+	p.saveSpot = true
 }
 
-func (p prsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
+func (p prsr[Output]) Recover(state State) int {
+	return p.recoverer(state)
+}
+
+func (p prsr[Output]) SwapRecoverer(newRecoverer Recoverer) Parser[Output] {
 	return prsr[Output]{ // make it concurrency safe without locking
-		expected:          p.expected,
-		it:                p.it,
-		recoverer:         newRecoverer,
-		saveSpotRecoverer: p.saveSpotRecoverer,
+		expected:  p.expected,
+		parser:    p.parser,
+		saveSpot:  p.saveSpot,
+		recoverer: newRecoverer,
 	}
-}
-
-func (p prsr[Output]) SaveSpotRecoverer(state State) int {
-	if p.saveSpotRecoverer == nil {
-		return -1
-	}
-	return p.saveSpotRecoverer(state)
 }
 
 type lazyprsr[Output any] struct {
@@ -191,8 +164,7 @@ func LazyParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
 func (lp *lazyprsr[Output]) ensurePrsr() {
 	lp.cachedPrsr = lp.makePrsr()
 	if lp.newRecoverer != nil {
-		lp.cachedPrsr = lp.cachedPrsr.SwapMyRecoverer(lp.newRecoverer)
-		lp.newRecoverer = nil
+		lp.cachedPrsr = lp.cachedPrsr.SwapRecoverer(lp.newRecoverer)
 	}
 }
 
@@ -201,36 +173,34 @@ func (lp *lazyprsr[Output]) Expected() string {
 	return lp.cachedPrsr.Expected()
 }
 
-func (lp *lazyprsr[Output]) It(state State) (State, Output) {
+func (lp *lazyprsr[Output]) It(state State) (State, Output, *ParserError) {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.It(state)
 }
 
-func (lp *lazyprsr[Output]) PossibleWitness() bool {
+func (lp *lazyprsr[Output]) IsSaveSpot() bool {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.PossibleWitness()
+	return lp.cachedPrsr.IsSaveSpot()
 }
 
-func (lp *lazyprsr[Output]) MyRecoverer() Recoverer {
+func (lp *lazyprsr[Output]) setSaveSpot() {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.MyRecoverer()
+	lp.cachedPrsr.setSaveSpot()
 }
 
-func (lp *lazyprsr[Output]) SwapMyRecoverer(newRecoverer Recoverer) Parser[Output] {
+func (lp *lazyprsr[Output]) Recover(state State) int {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.Recover(state)
+}
+
+func (lp *lazyprsr[Output]) SwapRecoverer(newRecoverer Recoverer) Parser[Output] {
 	if lp.cachedPrsr == nil {
 		return &lazyprsr[Output]{ // return a new instance that can't be in a stale cache somewhere
-			once:         sync.Once{},
 			makePrsr:     lp.makePrsr,
-			cachedPrsr:   lp.cachedPrsr,
 			newRecoverer: newRecoverer,
 		}
 	}
-	return lp.cachedPrsr.SwapMyRecoverer(newRecoverer)
-}
-
-func (lp *lazyprsr[Output]) SaveSpotRecoverer(state State) int {
-	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.SaveSpotRecoverer(state)
+	return lp.cachedPrsr.SwapRecoverer(newRecoverer)
 }
 
 // ============================================================================
@@ -240,8 +210,9 @@ func (lp *lazyprsr[Output]) SaveSpotRecoverer(state State) int {
 // RunOnString runs a parser on text input and returns the output and error(s).
 // It uses default values for maximum number of "tokens" to delete for error handling,
 // the number of recoverers to try and the deleter to use.
+// It also uses the default value for the number of recursions to support.
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewFromString(-1, nil, -1, input), parse)
+	newState, output := RunOnState(NewFromString(-1, nil, -1, -1, input), parse)
 	if err := newState.Errors(); err != nil {
 		return ZeroOf[Output](), err
 	}
@@ -251,9 +222,10 @@ func RunOnString[Output any](input string, parse Parser[Output]) (Output, error)
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // It uses default values for maximum number of "tokens" to delete for error handling,
 // the number of recoverers to try and the deleter to use.
+// It also uses the default value for the number of recursions to support.
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	newState, output := RunOnState(NewFromBytes(-1, nil, -1, input), parse)
+	newState, output := RunOnState(NewFromBytes(-1, nil, -1, -1, input), parse)
 	if err := newState.Errors(); err != nil {
 		return ZeroOf[Output](), err
 	}
@@ -330,34 +302,21 @@ func newInput(binary bool, bytes []byte, text string) Input {
 }
 
 // NewFromString creates a new parser state from the input data.
-func NewFromString(maxDel int, del Deleter, maxRecover int, input string) State {
-	if del == nil {
-		del = DefaultTextDeleter
-	}
-	return newState(maxDel, del, maxRecover, false, nil, input)
+func NewFromString(input string, recover bool) State {
+	return newState(false, nil, input, recover)
 }
 
 // NewFromBytes creates a new parser state from the input data.
-func NewFromBytes(maxDel int, del Deleter, maxRecover int, input []byte) State {
-	if del == nil {
-		del = DefaultTextDeleter
-	}
-	return newState(maxDel, del, maxRecover, true, input, "")
+func NewFromBytes(input []byte, recover bool) State {
+	return newState(true, input, "", recover)
 }
 
 // newState creates a new parser state from the input data.
-func newState(maxDel int, del Deleter, maxRecover int, binary bool, bytes []byte, text string) State {
-	if maxDel < 0 {
-		maxDel = DefaultMaxDel
-	}
-	if maxRecover < 0 {
-		maxRecover = DefaultMaxRecover
-	}
+func newState(binary bool, bytes []byte, text string, recover bool) State {
 	return State{
 		input:                  newInput(binary, bytes, text),
 		saveSpot:               -1,
-		maxDel:                 maxDel,
-		deleter:                del,
+		recover:                recover,
 		recovererWasteCache:    make(map[uint64][]cachedWaste),
 		recovererWasteIdxCache: make(map[uint64][]cachedWasteIdx),
 		parserCache:            make(map[uint64][]ParserResult),
