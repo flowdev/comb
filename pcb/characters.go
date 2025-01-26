@@ -20,22 +20,22 @@ import (
 func Char(char rune) gomme.Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
-	parse := func(state gomme.State) (gomme.State, rune) {
+	parse := func(state gomme.State) (gomme.State, rune, *gomme.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.NewError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
+				return state, utf8.RuneError, state.NewSyntaxError("%s (at EOF)", expected)
 			}
-			return state.NewError(fmt.Sprintf("%s (got UTF-8 error)", expected)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%s (got UTF-8 error)", expected)
 		}
 		if r != char {
-			return state.NewError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
 		}
 
-		return state.MoveBy(size), r
+		return state.MoveBy(size), r, nil
 	}
 
-	return gomme.NewParser[rune](expected, parse, false, IndexOf(char), nil)
+	return gomme.NewParser[rune](expected, parse, IndexOf(char))
 }
 
 // Byte parses a single byte and matches it with

@@ -49,35 +49,15 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 		}
 	}
 
-	// Construct mySaveSpotRecoverer from the sub-parsers
-	subRecoverers := make([]gomme.Recoverer, n)
-	subRecoverers[0] = p1.SaveSpotRecoverer
-	if n > 1 {
-		subRecoverers[1] = p2.SaveSpotRecoverer
-		if n > 2 {
-			subRecoverers[2] = p3.SaveSpotRecoverer
-			if n > 3 {
-				subRecoverers[3] = p4.SaveSpotRecoverer
-				if n > 4 {
-					subRecoverers[4] = p5.SaveSpotRecoverer
-				}
-			}
-		}
-	}
-	mySaveSpotRecoverer := gomme.NewCombiningRecoverer(true, subRecoverers...)
-
 	md := &mapData[PO1, PO2, PO3, PO4, PO5, MO]{
-		id:       gomme.NewBranchParserID(),
 		expected: expected,
 		p1:       p1, p2: p2, p3: p3, p4: p4, p5: p5,
 		n:   n,
 		fn1: fn1, fn2: fn2, fn3: fn3, fn4: fn4, fn5: fn5,
-		saveSpotRecoverer: mySaveSpotRecoverer,
-		subRecoverers:     subRecoverers,
 	}
 
-	mapParse := func(state gomme.State) (gomme.State, MO) {
-		return md.any(
+	mapParse := func(state gomme.State) (gomme.State, MO, *gomme.ParserError) {
+		return md.ParseAfterChild(gomme.ParseResult{ID: -1, State: state},
 			state, state,
 			0,
 			-1, -1,
@@ -88,14 +68,11 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	return gomme.NewParser[MO](
 		expected,
 		mapParse,
-		true,
 		BasicRecovererFunc(mapParse),
-		mySaveSpotRecoverer.Recover,
 	)
 }
 
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
-	id                uint64
 	expected          string
 	p1                gomme.Parser[PO1]
 	p2                gomme.Parser[PO2]
@@ -108,19 +85,17 @@ type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	fn3               func(PO1, PO2, PO3) (MO, error)
 	fn4               func(PO1, PO2, PO3, PO4) (MO, error)
 	fn5               func(PO1, PO2, PO3, PO4, PO5) (MO, error)
-	saveSpotRecoverer gomme.CombiningRecoverer
-	subRecoverers     []gomme.Recoverer
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) any(
-	state gomme.State, remaining gomme.State,
-	startIdx int,
-	saveSpotStart int, saveSpotIdx int,
-	out1 PO1, out2 PO2, out3 PO3, out4 PO4, out5 PO5,
-) (gomme.State, MO) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) ParseAfterChild(
+	childID int32,
+	state gomme.State,
+	err *gomme.ParserError,
+	store gomme.Store,
+) (gomme.State, MO, *gomme.ParserError) {
 	var zero MO
 
-	gomme.Debugf("MapN - mode=%s, pos=%d, startIdx=%d", remaining.ParsingMode(), remaining.CurrentPos(), startIdx)
+	gomme.Debugf("MapN - pos=%d", state.CurrentPos())
 	if startIdx >= md.n {
 		if remaining.ParsingMode() == gomme.ParsingModeHappy {
 			return md.mapn(remaining, out1, out2, out3, out4, out5)

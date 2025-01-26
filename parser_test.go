@@ -1,12 +1,6 @@
 package gomme_test
 
-import (
-	"github.com/oleiade/gomme"
-	"github.com/oleiade/gomme/pcb"
-	"strings"
-	"testing"
-)
-
+/*
 func TestSaveSpot(t *testing.T) {
 	t.Parallel()
 
@@ -140,3 +134,4 @@ func BenchmarkSaveSpot(b *testing.B) {
 		_, _ = p.It(input)
 	}
 }
+*/
