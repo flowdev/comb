@@ -10,11 +10,10 @@ import (
 
 // ParseResult is the result of a (leaf) parser.
 type ParseResult struct {
-	ID       int32       // ID of the parser that produced the result
-	StartPos int         // position in the input at the start of parsing
-	State    State       // state after parsing
-	Output   interface{} // output of the parser
-	Error    *ParserError
+	ID     int32       // ID of the parser that produced the result
+	State  State       // state after parsing
+	Output interface{} // output of the parser
+	Error  *ParserError
 }
 
 // BranchParser is a more internal interface used by orchestrators.
@@ -22,8 +21,8 @@ type ParseResult struct {
 // (slices, maps, ...).
 // BranchParser just adds 2 methods to the Parser and AnyParser interfaces.
 type BranchParser interface {
-	Children() []AnyParser
-	ParseAfterChild(childResult ParseResult) ParseResult
+	children() []AnyParser
+	parseAfterChild(childResult ParseResult) ParseResult
 }
 
 // AnyParser is an internal interface used by the orchestrator.
@@ -31,7 +30,7 @@ type BranchParser interface {
 // (slices, maps, ...).
 type AnyParser interface {
 	ID() int32
-	Parse(state State) ParseResult
+	parse(state State) ParseResult
 	IsSaveSpot() bool
 	Recover(state State) int
 	IsStepRecoverer() bool
@@ -66,7 +65,7 @@ func (o *orchestrator[Output]) registerParsers(ap AnyParser, parentID int32) {
 	o.parsers = append(o.parsers, parserData{parser: ap, parentID: parentID})
 
 	if bp, ok := ap.(BranchParser); ok {
-		for _, cp := range bp.Children() {
+		for _, cp := range bp.children() {
 			o.registerParsers(cp, id)
 		}
 	} else if ap.IsSaveSpot() {
@@ -86,7 +85,7 @@ func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
 	var zero Output
 	var id int32 = 0 // this is always the root parser
 	p := o.parsers[id]
-	result := p.parser.Parse(state)
+	result := p.parser.parse(state)
 	nextID := id
 	for result.Error != nil || nextID != id {
 		nState := result.State.SaveError(result.Error)
@@ -99,11 +98,11 @@ func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
 			return zero, nState.Errors()
 		}
 		p = o.parsers[nextID]
-		result = p.parser.Parse(nState)
+		result = p.parser.parse(nState)
 		for p.parentID >= 0 && result.ID == nextID {
 			nextID = p.parentID
 			p = o.parsers[nextID]
-			result = (p.parser.(BranchParser)).ParseAfterChild(result)
+			result = (p.parser.(BranchParser)).parseAfterChild(result)
 		}
 	}
 	return result.Output.(Output), result.State.Errors()
@@ -112,11 +111,11 @@ func (o *orchestrator[Output]) handleError(r ParseResult) (state State, nextID i
 	pos := r.State.CurrentPos()
 	if !r.State.recover { // error recovery is turned off
 		state = r.State.SaveError(r.State.NewSemanticError("error recovery is turned off")).MoveBy(r.State.BytesRemaining())
-		Debugf("handleError - recovery is turned off: parserID=%d, pos=%d", r.ID, pos)
+		Debugf("handleError - recovery is turned off: parserID=%d, pos=%d", r.Error.parserID, pos)
 		return state, -1
 	}
 
-	Debugf("handleError - start: parserID=%d, pos=%d", r.ID, pos)
+	Debugf("handleError - start: parserID=%d, pos=%d", r.Error.parserID, pos)
 
 	minWaste, minRec := o.findMinWaste(r.State, r.ID)
 
@@ -170,7 +169,7 @@ func (o *orchestrator[Output]) findMinStepWaste(stepRecs []AnyParser, state Stat
 	minWaste = 0
 	for curState.BytesRemaining() > 0 && minWaste < maxWaste {
 		for _, sr := range stepRecs {
-			result := sr.Parse(curState)
+			result := sr.parse(curState)
 			if result.Error == nil {
 				Debugf("findMinStepWaste - best slow recoverer: ID=%d, waste=%d", sr.ID(), minWaste)
 				return minWaste, sr

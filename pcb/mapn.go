@@ -50,29 +50,18 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	}
 
 	md := &mapData[PO1, PO2, PO3, PO4, PO5, MO]{
+		id:       -1,
 		expected: expected,
 		p1:       p1, p2: p2, p3: p3, p4: p4, p5: p5,
 		n:   n,
 		fn1: fn1, fn2: fn2, fn3: fn3, fn4: fn4, fn5: fn5,
 	}
 
-	mapParse := func(state gomme.State) (gomme.State, MO, *gomme.ParserError) {
-		return md.ParseAfterChild(gomme.ParseResult{ID: -1, State: state},
-			state, state,
-			0,
-			-1, -1,
-			zero1, zero2, zero3, zero4, zero5,
-		)
-	}
-
-	return gomme.NewParser[MO](
-		expected,
-		mapParse,
-		BasicRecovererFunc(mapParse),
-	)
+	return gomme.NewBranchParser[MO](expected, md.children, md.parseAfterChild, md.setID)
 }
 
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
+	id       int32
 	expected string
 	p1       gomme.Parser[PO1]
 	p2       gomme.Parser[PO2]
@@ -87,11 +76,7 @@ type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	fn5      func(PO1, PO2, PO3, PO4, PO5) (MO, error)
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) ParseAfterChild(
-	childID int32,
-	state gomme.State,
-	err *gomme.ParserError,
-	store gomme.Store,
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childResult gomme.ParseResult,
 ) (gomme.State, MO, *gomme.ParserError) {
 	var zero MO
 

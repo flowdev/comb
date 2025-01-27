@@ -46,48 +46,48 @@ func Char(char rune) gomme.Parser[rune] {
 func Byte(byt byte) gomme.Parser[byte] {
 	expected := "0x" + strconv.FormatUint(uint64(byt), 16)
 
-	parse := func(state gomme.State) (gomme.State, byte) {
+	parse := func(state gomme.State) (gomme.State, byte, *gomme.ParserError) {
 		buf := state.CurrentBytes()
 		if len(buf) == 0 {
-			return state.NewError(fmt.Sprintf("%s (at EOF)", expected)), 0
+			return state, 0, state.NewSyntaxError("%s (at EOF)", expected)
 		}
 		b := buf[0]
 		if b != byt {
-			return state.NewError(fmt.Sprintf("%s (got 0x%x)", expected, b)), 0
+			return state, 0, state.NewSyntaxError("%s (got 0x%x)", expected, b)
 		}
 
-		return state.MoveBy(1), b
+		return state.MoveBy(1), b, nil
 	}
 
-	return gomme.NewParser[byte](expected, parse, false, IndexOf(byt), nil)
+	return gomme.NewParser[byte](expected, parse, IndexOf(byt))
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
 // `expected` is used in error messages to tell the user what is expected at the current position.
 //
 // This parser is a good candidate for SafeSpot and has an optimized Recoverer.
-// An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
+// An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer)`.
 func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
-	parse := func(state gomme.State) (gomme.State, rune) {
+	parse := func(state gomme.State) (gomme.State, rune, *gomme.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.NewError(fmt.Sprintf("%s (at EOF)", expected)), utf8.RuneError
+				return state, utf8.RuneError, state.NewSyntaxError("%s (at EOF)", expected)
 			}
-			return state.NewError(fmt.Sprintf("%s (got UTF-8 error)", expected)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%s (got UTF-8 error)", expected)
 		}
 		if !predicate(r) {
-			return state.NewError(fmt.Sprintf("%s (got %q)", expected, r)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
 		}
 
-		return state.MoveBy(size), r
+		return state.MoveBy(size), r, nil
 	}
 
 	recoverer := func(state gomme.State) int {
 		return strings.IndexFunc(state.CurrentString(), predicate)
 	}
 
-	return gomme.NewParser[rune](expected, parse, false, recoverer, nil)
+	return gomme.NewParser[rune](expected, parse, recoverer)
 }
 
 // String parses a token from the input, and returns the part of the input that
@@ -98,16 +98,16 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 func String(token string) gomme.Parser[string] {
 	expected := strconv.Quote(token)
 
-	parse := func(state gomme.State) (gomme.State, string) {
+	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
 		if !strings.HasPrefix(state.CurrentString(), token) {
-			return state.NewError(expected), ""
+			return state, "", state.NewSyntaxError(expected)
 		}
 
 		newState := state.MoveBy(len(token))
-		return newState, token
+		return newState, token, nil
 	}
 
-	return gomme.NewParser[string](expected, parse, false, IndexOf(token), nil)
+	return gomme.NewParser[string](expected, parse, IndexOf(token))
 }
 
 // Bytes parses a token from the input, and returns the part of the input that
@@ -117,16 +117,16 @@ func String(token string) gomme.Parser[string] {
 func Bytes(token []byte) gomme.Parser[[]byte] {
 	expected := fmt.Sprintf("0x%x", token)
 
-	parse := func(state gomme.State) (gomme.State, []byte) {
+	parse := func(state gomme.State) (gomme.State, []byte, *gomme.ParserError) {
 		if !bytes.HasPrefix(state.CurrentBytes(), token) {
-			return state.NewError(expected), []byte{}
+			return state, []byte{}, state.NewSyntaxError(expected)
 		}
 
 		newState := state.MoveBy(len(token))
-		return newState, token
+		return newState, token, nil
 	}
 
-	return gomme.NewParser[[]byte](expected, parse, false, IndexOf(token), nil)
+	return gomme.NewParser[[]byte](expected, parse, IndexOf(token))
 }
 
 // UntilString parses until it finds a token in the input, and returns
@@ -147,28 +147,26 @@ func UntilString(stop string) gomme.Parser[string] {
 		panic("stop is empty")
 	}
 
-	parse := func(state gomme.State) (gomme.State, string) {
+	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state.NewError(expected), ""
+			return state, "", state.NewSyntaxError(expected)
 		}
 
 		newState := state.MoveBy(i + len(stop))
-		return newState, input[:i]
+		return newState, input[:i], nil
 	}
 
 	return gomme.NewParser[string](
 		expected,
 		parse,
-		false,
 		func(state gomme.State) int {
 			if strings.Contains(state.CurrentString(), stop) {
 				return 0 // this is probably not what the user wants but the only correct value :(
 			}
 			return -1
 		},
-		nil,
 	)
 }
 
@@ -187,7 +185,7 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 	if atMost < 0 {
 		panic("SatisfyMN is unable to handle negative `atMost` argument")
 	}
-	parse := func(state gomme.State) (gomme.State, string) {
+	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
 		current := state
 		count := 0
 		for atMost > count {
@@ -195,26 +193,23 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 			if r == utf8.RuneError {
 				if count >= atLeast {
 					output := state.StringTo(current)
-					return current, output
+					return current, output, nil
 				}
 				if size == 0 {
-					return state.NewError(
-						fmt.Sprintf("%s (need %d, found %d at EOF)", expected, atLeast, count),
-					), ""
+					return state, "", state.NewSyntaxError("%s (need %d, found %d at EOF)",
+						expected, atLeast, count)
 				}
-				return state.NewError(
-					fmt.Sprintf("%s (need %d, found %d, got UTF-8 error)", expected, atLeast, count),
-				), ""
+				return state, "", state.NewSyntaxError("%s (need %d, found %d, got UTF-8 error)",
+					expected, atLeast, count)
 			}
 
 			if !predicate(r) {
 				if count >= atLeast {
 					output := state.StringTo(current)
-					return current, output
+					return current, output, nil
 				}
-				return state.NewError(
-					fmt.Sprintf("%s (need %d, found %d, got %q)", expected, atLeast, count, r),
-				), ""
+				return state, "", state.NewSyntaxError("%s (need %d, found %d, got %q)",
+					expected, atLeast, count, r)
 			}
 
 			current = current.MoveBy(size)
@@ -222,11 +217,10 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 		}
 
 		output := state.StringTo(current)
-		return current, output
+		return current, output, nil
 	}
 
-	return gomme.NewParser[string](
-		expected, parse, false, satisfyMNRecoverer(atLeast, predicate), nil)
+	return gomme.NewParser[string](expected, parse, satisfyMNRecoverer(atLeast, predicate))
 }
 
 func satisfyMNRecoverer(atLeast int, predicate func(rune2 rune) bool) gomme.Recoverer {
@@ -333,9 +327,10 @@ func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 	parser := Satisfy(expected, func(r rune) bool {
 		return slices.Contains(collection, r)
 	})
-	return parser.SwapMyRecoverer(func(state gomme.State) int {
+	parser.SwapRecoverer(func(state gomme.State) int {
 		return strings.IndexAny(state.CurrentString(), string(collection))
 	})
+	return parser
 }
 
 // OneOf parses a single character from the given set of characters.
@@ -347,18 +342,18 @@ func OneOf(collection ...string) gomme.Parser[string] {
 	}
 	expected := fmt.Sprintf("one of %q", collection)
 
-	parse := func(state gomme.State) (gomme.State, string) {
+	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
 		input := state.CurrentString()
 		for _, token := range collection {
 			if strings.HasPrefix(input, token) {
-				return state.MoveBy(len(token)), token
+				return state.MoveBy(len(token)), token, nil
 			}
 		}
 
-		return state.NewError(expected), ""
+		return state, "", state.NewSyntaxError(expected)
 	}
 
-	return gomme.NewParser[string](expected, parse, false, IndexOfAny(collection...), nil)
+	return gomme.NewParser[string](expected, parse, IndexOfAny(collection...))
 }
 
 // LF parses a line feed `\n` character.

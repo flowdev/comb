@@ -38,7 +38,8 @@ type Recoverer func(state State) int
 type Parser[Output any] interface {
 	ID() int32
 	Expected() string
-	Parse(state State) ParseResult // used by orchestrator and branch parsers
+	Parse(state State) (int32, State, Output, *ParserError) // used by branch parsers and compiler (type inference)
+	parse(state State) ParseResult                          // used by orchestrator
 	IsSaveSpot() bool
 	setSaveSpot() // used by SafeSpot parser
 	Recover(State) int

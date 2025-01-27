@@ -35,17 +35,20 @@ func (p *prsr[Output]) ID() int32 {
 func (p *prsr[Output]) Expected() string {
 	return p.expected
 }
-func (p *prsr[Output]) Parse(state State) ParseResult {
+func (p *prsr[Output]) Parse(state State) (int32, State, Output, *ParserError) {
 	nState, out, err := p.parser(state)
 	if err != nil {
 		err.parserID = p.id
 	}
+	return p.id, nState, out, err
+}
+func (p *prsr[Output]) parse(state State) ParseResult {
+	id, nState, output, err := p.Parse(state)
 	return ParseResult{
-		ID:       p.id,
-		StartPos: state.CurrentPos(),
-		State:    nState,
-		Output:   out,
-		Error:    err,
+		ID:     id,
+		State:  nState,
+		Output: output,
+		Error:  err,
 	}
 }
 func (p *prsr[Output]) IsSaveSpot() bool {
@@ -77,11 +80,10 @@ type OutputBranchParser[Output any] interface {
 }
 
 type brnchprsr[Output any] struct {
-	id              int32
-	name            string
-	children        func() []AnyParser
-	parseAfterChild func(childResult ParseResult) ParseResult
-	stID            func(id int32)
+	id            int32
+	name          string
+	childs        func() []AnyParser
+	prsAfterChild func(childResult ParseResult) ParseResult
 }
 
 // NewBranchParser is THE way to create branch parsers.
@@ -91,14 +93,12 @@ func NewBranchParser[Output any](
 	name string,
 	children func() []AnyParser,
 	parseAfterChild func(childResult ParseResult) ParseResult,
-	setID func(id int32),
 ) OutputBranchParser[Output] {
 	return &brnchprsr[Output]{
-		id:              -1,
-		name:            name,
-		children:        children,
-		parseAfterChild: parseAfterChild,
-		stID:            setID,
+		id:            -1,
+		name:          name,
+		childs:        children,
+		prsAfterChild: parseAfterChild,
 	}
 }
 func (bp *brnchprsr[Output]) ID() int32 {
@@ -107,7 +107,14 @@ func (bp *brnchprsr[Output]) ID() int32 {
 func (bp *brnchprsr[Output]) Expected() string {
 	return bp.name
 }
-func (bp *brnchprsr[Output]) Parse(state State) ParseResult {
+func (bp *brnchprsr[Output]) Parse(state State) (int32, State, Output, *ParserError) {
+	result := bp.parseAfterChild(ParseResult{ID: -1, State: state})
+	if out, ok := result.Output.(Output); ok {
+		return result.ID, result.State, out, result.Error
+	}
+	return result.ID, result.State, ZeroOf[Output](), result.Error
+}
+func (bp *brnchprsr[Output]) parse(state State) ParseResult {
 	return bp.parseAfterChild(ParseResult{ID: -1, State: state})
 }
 func (bp *brnchprsr[Output]) IsSaveSpot() bool {
@@ -125,14 +132,20 @@ func (bp *brnchprsr[Output]) IsStepRecoverer() bool {
 func (bp *brnchprsr[Output]) SwapRecoverer(_ Recoverer) {
 	panic("a branch parser can never have a special recoverer")
 }
-func (bp *brnchprsr[Output]) Children() []AnyParser {
-	return bp.children()
+func (bp *brnchprsr[Output]) children() []AnyParser {
+	return bp.childs()
 }
-func (bp *brnchprsr[Output]) ParseAfterChild(childResult ParseResult) ParseResult {
-	return bp.parseAfterChild(childResult)
+func (bp *brnchprsr[Output]) parseAfterChild(childResult ParseResult) ParseResult {
+	result := bp.prsAfterChild(childResult)
+	if result.Error != nil && result.Error.ParserID() < 0 {
+		result.Error.parserID = bp.id
+	}
+	if result.ID < 0 {
+		result.ID = bp.id
+	}
+	return result
 }
 func (bp *brnchprsr[Output]) setID(id int32) {
-	bp.stID(id)
 	bp.id = id
 }
 
@@ -169,9 +182,13 @@ func (lp *lazyprsr[Output]) Expected() string {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.Expected()
 }
-func (lp *lazyprsr[Output]) Parse(state State) ParseResult {
+func (lp *lazyprsr[Output]) Parse(state State) (int32, State, Output, *ParserError) {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.Parse(state)
+}
+func (lp *lazyprsr[Output]) parse(state State) ParseResult {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.parse(state)
 }
 func (lp *lazyprsr[Output]) IsSaveSpot() bool {
 	lp.once.Do(lp.ensurePrsr)
@@ -239,11 +256,11 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	}
 
 	nParse := func(state State) (State, Output, *ParserError) {
-		result := p.Parse(state)
-		if result.Error == nil {
-			result.State.saveSpot = result.State.input.pos // move the mark!
+		_, nState, output, err := p.Parse(state)
+		if err == nil {
+			nState.saveSpot = nState.input.pos // move the mark!
 		}
-		return result.State, result.Output.(Output), result.Error
+		return nState, output, err
 	}
 	sp := NewParser[Output](p.Expected(), nParse, p.Recover)
 	sp.setSaveSpot()
