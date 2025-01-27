@@ -14,7 +14,7 @@ import (
 // The returned Recoverer panics if used.
 // So by the general contract that panics during runtime aren't allowed,
 // it has to be used during the construction phase.
-// So `SaveSpot` simply calls the Recoverer of its parser with empty input
+// So `SafeSpot` simply calls the Recoverer of its parser with empty input
 // during the construction phase.
 func Forbidden(name string) gomme.Recoverer {
 	return func(state gomme.State) int {

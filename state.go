@@ -14,7 +14,7 @@ import (
 // State represents the current state of a parser.
 type State struct {
 	input     Input
-	saveSpot  int           // mark set by the SaveSpot parser
+	saveSpot  int           // mark set by the SafeSpot parser
 	recover   bool          // recover from errors
 	oldErrors []ParserError // errors that are or have been handled
 }

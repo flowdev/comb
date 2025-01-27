@@ -16,7 +16,7 @@ import (
 // a provided candidate.
 // If the rune could not be found at the current position,
 // the parser returns an error result.
-// This parser is a good candidate for SaveSpot and has an optimized recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func Char(char rune) gomme.Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
@@ -42,7 +42,7 @@ func Char(char rune) gomme.Parser[rune] {
 // a provided candidate.
 // If the byte could not be found at the current position,
 // the parser returns an error result.
-// This parser is a good candidate for SaveSpot and has an optimized recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func Byte(byt byte) gomme.Parser[byte] {
 	expected := "0x" + strconv.FormatUint(uint64(byt), 16)
 
@@ -65,7 +65,7 @@ func Byte(byt byte) gomme.Parser[byte] {
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
 // `expected` is used in error messages to tell the user what is expected at the current position.
 //
-// This parser is a good candidate for SaveSpot and has an optimized Recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
 func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 	parse := func(state gomme.State) (gomme.State, rune) {
@@ -94,7 +94,7 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 // matched the token.
 // If the token could not be found at the current position,
 // the parser returns an error result.
-// This parser is a good candidate for SaveSpot and has an optimized recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func String(token string) gomme.Parser[string] {
 	expected := strconv.Quote(token)
 
@@ -139,7 +139,7 @@ func Bytes(token []byte) gomme.Parser[[]byte] {
 //   - UntilString is rather dangerous especially in case of error recovery
 //     because it potentially consumes much more input than expected.
 //     In error cases it will usually start earlier because other parsers are skipped.
-//     Especially using it as a `SaveSpot` parser is a bad idea!
+//     Especially using it as a `SafeSpot` parser is a bad idea!
 func UntilString(stop string) gomme.Parser[string] {
 	expected := fmt.Sprintf("... %q", stop)
 
@@ -178,7 +178,7 @@ func UntilString(stop string) gomme.Parser[string] {
 // If the provided parser is not successful or the predicate doesn't match
 // `atLeast` times, the parser fails and goes back to the start.
 //
-// This parser is a good candidate for SaveSpot and has an optimized Recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
 func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) gomme.Parser[string] {
 	if atLeast < 0 {
@@ -322,7 +322,7 @@ func Whitespace1() gomme.Parser[string] {
 }
 
 // OneOfRunes parses a single character from the given set of characters.
-// This parser is a good candidate for SaveSpot and has an optimized recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 	n := len(collection)
 	if n == 0 {
@@ -339,7 +339,7 @@ func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 }
 
 // OneOf parses a single character from the given set of characters.
-// This parser is a good candidate for SaveSpot and has an optimized recoverer.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func OneOf(collection ...string) gomme.Parser[string] {
 	n := len(collection)
 	if n == 0 {

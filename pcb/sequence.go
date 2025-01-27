@@ -69,7 +69,7 @@ func (seq *sequenceData[Output]) any(
 	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
 		return seq.happy(state, remaining, startIdx, saveSpotStart, saveSpotIdx, outputs)
-	case gomme.ParsingModeError: // find previous SaveSpot (backward)
+	case gomme.ParsingModeError: // find previous SafeSpot (backward)
 		return seq.error(state, startIdx, outputs)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return seq.handle(state, startIdx, outputs)
@@ -242,7 +242,7 @@ func (seq *sequenceData[Output]) escape(
 
 	if idx < 0 {
 		return remaining.NewSemanticError(
-			"grammar error: unable to recover; did you forget to use the SaveSpot parser?",
+			"grammar error: unable to recover; did you forget to use the SafeSpot parser?",
 		).MoveBy(remaining.BytesRemaining()), nil // give up!
 	}
 	newState, output := seq.parsers[idx].It(remaining.MoveBy(waste))

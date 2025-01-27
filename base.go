@@ -21,11 +21,11 @@ type Separator interface {
 }
 
 // Recoverer is a simplified parser that only returns the number of bytes
-// to reach a SaveSpot.
+// to reach a SafeSpot.
 // If it can't recover it should return -1.
 //
 // A Recoverer is used for recovering from an error in the input.
-// It helps to move forward to the next SaveSpot.
+// It helps to move forward to the next SafeSpot.
 // The basic Recoverer will have to try the parser until it succeeds moving
 // forward 1 rune/byte at a time. :(
 type Recoverer func(state State) int
@@ -38,10 +38,9 @@ type Recoverer func(state State) int
 type Parser[Output any] interface {
 	ID() int32
 	Expected() string
-	It(State) (State, Output, *ParserError)
 	Parse(state State) ParseResult // used by orchestrator and branch parsers
 	IsSaveSpot() bool
-	setSaveSpot() // used by SaveSpot parser
+	setSaveSpot() // used by SafeSpot parser
 	Recover(State) int
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during construction phase
@@ -57,7 +56,7 @@ type Parser[Output any] interface {
 // the number of recoverers to try and the deleter to use.
 // It also uses the default value for the number of recursions to support.
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	return RunOnState(NewFromString(input, true), parse)
+	return RunOnState[Output](NewFromString(input, true), parse)
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
@@ -66,11 +65,11 @@ func RunOnString[Output any](input string, parse Parser[Output]) (Output, error)
 // It also uses the default value for the number of recursions to support.
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	return RunOnState(NewFromBytes(input, true), parse)
+	return RunOnState[Output](NewFromBytes(input, true), parse)
 }
 
 func RunOnState[Output any](state State, parse Parser[Output]) (Output, error) {
-	return newOrchestrator(parse).parseAll(state)
+	return newOrchestrator[Output](parse).parseAll(state)
 }
 
 // ============================================================================
@@ -133,6 +132,16 @@ func BetterOf(state, other State) State {
 		return other
 	}
 	return state
+}
+
+func UnwrapErrors(err error) []error {
+	if err == nil {
+		return nil
+	}
+	if x, ok := err.(interface{ Unwrap() []error }); ok {
+		return x.Unwrap()
+	}
+	return []error{err}
 }
 
 // ZeroOf returns the zero value of some type.

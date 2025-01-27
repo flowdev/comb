@@ -73,18 +73,18 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 }
 
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
-	expected          string
-	p1                gomme.Parser[PO1]
-	p2                gomme.Parser[PO2]
-	p3                gomme.Parser[PO3]
-	p4                gomme.Parser[PO4]
-	p5                gomme.Parser[PO5]
-	n                 int
-	fn1               func(PO1) (MO, error)
-	fn2               func(PO1, PO2) (MO, error)
-	fn3               func(PO1, PO2, PO3) (MO, error)
-	fn4               func(PO1, PO2, PO3, PO4) (MO, error)
-	fn5               func(PO1, PO2, PO3, PO4, PO5) (MO, error)
+	expected string
+	p1       gomme.Parser[PO1]
+	p2       gomme.Parser[PO2]
+	p3       gomme.Parser[PO3]
+	p4       gomme.Parser[PO4]
+	p5       gomme.Parser[PO5]
+	n        int
+	fn1      func(PO1) (MO, error)
+	fn2      func(PO1, PO2) (MO, error)
+	fn3      func(PO1, PO2, PO3) (MO, error)
+	fn4      func(PO1, PO2, PO3, PO4) (MO, error)
+	fn5      func(PO1, PO2, PO3, PO4, PO5) (MO, error)
 }
 
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) ParseAfterChild(
@@ -109,7 +109,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) ParseAfterChild(
 			state, remaining, startIdx, saveSpotStart, saveSpotIdx,
 			out1, out2, out3, out4, out5,
 		)
-	case gomme.ParsingModeError: // find previous SaveSpot (backward)
+	case gomme.ParsingModeError: // find previous SafeSpot (backward)
 		return md.error(state.Preserve(remaining), startIdx, out1, out2, out3, out4, out5)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return md.handle(state.Preserve(remaining), startIdx, out1, out2, out3, out4, out5)

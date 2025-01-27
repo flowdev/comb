@@ -15,11 +15,11 @@ var testJSON string
 
 // break initialization cycle:
 func init() {
-	element = gomme.LazyParser(elementParser)
-	member = gomme.LazyParser(memberParser)
-	members = gomme.LazyParser(membersParser)
-	elements = gomme.LazyParser(elementsParser)
-	objectp = gomme.LazyParser(parseObject)
+	element = gomme.LazyBranchParser(elementParser)
+	member = gomme.LazyBranchParser(memberParser)
+	members = gomme.LazyBranchParser(membersParser)
+	elements = gomme.LazyBranchParser(elementsParser)
+	objectp = gomme.LazyBranchParser(parseObject)
 	arrayp = parseArray()
 	valuep = parseValue()
 }

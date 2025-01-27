@@ -10,7 +10,7 @@ import (
 
 // EOF parses the end of the input.
 // If there is still input left to parse, an error result is returned.
-// This IS already a `SaveSpot` parser.
+// This IS already a `SafeSpot` parser.
 func EOF() gomme.Parser[interface{}] {
 	expected := "end of the input"
 
@@ -24,7 +24,7 @@ func EOF() gomme.Parser[interface{}] {
 		return state, nil
 	}
 
-	return gomme.SaveSpot(
+	return gomme.SafeSpot(
 		gomme.NewParser[interface{}](expected, parse, false, func(state gomme.State) int {
 			return state.BytesRemaining()
 		}, nil),

@@ -16,12 +16,232 @@ func TestOrchestratorParseAll(t *testing.T) {
 	stringPlusRune := func(out1 string, out2 rune) (string, error) {
 		return out1 + string([]rune{out2}), nil
 	}
-	bParse := Map2(
+	badParse := Map2(
 		Map2(Char('a'), Char('b'), runePlusRune),
 		Char('c'),
 		stringPlusRune,
 	)
-	_ = newOrchestrator(bParse)
+	goodParse := Map2(
+		Map2(SafeSpot[rune](Char('a')), SafeSpot[rune](Char('b')), runePlusRune),
+		SafeSpot[rune](Char('c')),
+		stringPlusRune,
+	)
+
+	tests := []struct {
+		name           string
+		givenInput     string
+		givenParser    Parser[string]
+		expectedOutput interface{}
+		expectedErrors int
+	}{
+		{
+			name:           "goodInputBadParser",
+			givenInput:     "abc",
+			givenParser:    badParse,
+			expectedOutput: "abc",
+			expectedErrors: 0,
+		}, {
+			name:           "goodInputGoodParser",
+			givenInput:     "abc",
+			givenParser:    goodParse,
+			expectedOutput: "abc",
+			expectedErrors: 0,
+		}, {
+			name:           "emptyBadParser",
+			givenInput:     "",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "emptyGoodParser",
+			givenInput:     "",
+			givenParser:    goodParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "lastCharMissingBadParser",
+			givenInput:     "ab",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "lastCharMissingGoodParser",
+			givenInput:     "ab",
+			givenParser:    goodParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "middleCharMissingBadParser",
+			givenInput:     "ac",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "middleCharMissingGoodParser",
+			givenInput:     "ac",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 1,
+		}, {
+			name:           "firstCharMissingBadParser",
+			givenInput:     "bc",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "firstCharMissingGoodParser",
+			givenInput:     "bc",
+			givenParser:    goodParse,
+			expectedOutput: "\x00bc",
+			expectedErrors: 1,
+		}, {
+			name:           "firstCharOffBadParser",
+			givenInput:     "1abc",
+			givenParser:    badParse,
+			expectedOutput: "abc",
+			expectedErrors: 1,
+		}, {
+			name:           "firstCharOffGoodParser",
+			givenInput:     "1abc",
+			givenParser:    goodParse,
+			expectedOutput: "abc",
+			expectedErrors: 1,
+		}, {
+			name:           "secondCharOffBadParser",
+			givenInput:     "a1bc",
+			givenParser:    badParse,
+			expectedOutput: "\x00bc",
+			expectedErrors: 1,
+		}, {
+			name:           "secondCharOffGoodParser",
+			givenInput:     "a1bc",
+			givenParser:    goodParse,
+			expectedOutput: "\x00bc",
+			expectedErrors: 1,
+		}, {
+			name:           "thirdCharOffBadParser",
+			givenInput:     "ab1c",
+			givenParser:    badParse,
+			expectedOutput: "c",
+			expectedErrors: 1,
+		}, {
+			name:           "thirdCharOffGoodParser",
+			givenInput:     "ab1c",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 1,
+		}, {
+			name:           "firstAndLastCharOffBadParser",
+			givenInput:     "1ab2c",
+			givenParser:    badParse,
+			expectedOutput: "c",
+			expectedErrors: 2,
+		}, {
+			name:           "firstAndLastCharOffGoodParser",
+			givenInput:     "1ab2c",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 2,
+		}, {
+			name:           "firstCharOffMiddleCharMissingBadParser",
+			givenInput:     "1ac",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 2,
+		}, {
+			name:           "firstCharOffMiddleCharMissingGoodParser",
+			givenInput:     "1ac",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 2,
+		}, {
+			name:           "allCharsOffBadParser",
+			givenInput:     "1a2b3c",
+			givenParser:    badParse,
+			expectedOutput: "c",
+			expectedErrors: 3,
+		}, {
+			name:           "allCharsOffGoodParser",
+			givenInput:     "1a2b3c",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 3,
+		}, {
+			name:           "firstCharMissingLastCharOffBadParser",
+			givenInput:     "b1c",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "firstCharMissingLastCharOffGoodParser",
+			givenInput:     "b1c",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 2,
+		}, {
+			name:           "firstCharOffMiddleCharMissingBadParser",
+			givenInput:     "1ac",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 2,
+		}, {
+			name:           "firstCharOffMiddleCharMissingGoodParser",
+			givenInput:     "1ac",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 2,
+		}, {
+			name:           "onlyFirstCharBadParser",
+			givenInput:     "a",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "onlyFirstCharGoodParser",
+			givenInput:     "a",
+			givenParser:    goodParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "onlyMiddleCharBadParser",
+			givenInput:     "b",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "onlyMiddleCharGoodParser",
+			givenInput:     "b",
+			givenParser:    goodParse,
+			expectedOutput: "",
+			expectedErrors: 2,
+		}, {
+			name:           "onlyLastCharBadParser",
+			givenInput:     "c",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 1,
+		}, {
+			name:           "onlyLastCharGoodParser",
+			givenInput:     "c",
+			givenParser:    goodParse,
+			expectedOutput: "c",
+			expectedErrors: 1,
+		},
+	}
+	SetDebug(true)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orch := newOrchestrator[string](tt.givenParser) // this calls ParserToAnyParser
+			output, err := orch.parseAll(NewFromString(tt.givenInput, true))
+			t.Logf("err=%v", err)
+			if got, want := len(UnwrapErrors(err)), tt.expectedErrors; got != want {
+				t.Errorf("err=%v, want=%d", err, want)
+			}
+			if got, want := output, tt.expectedOutput; got != want {
+				t.Errorf("got output=%q, want=%q", got, want)
+			}
+		})
+	}
 }
 
 func TestBranchParserToAnyParser(t *testing.T) {
@@ -120,7 +340,7 @@ func TestBranchParserToAnyParser(t *testing.T) {
 
 func TestLeafParserToAnyParser(t *testing.T) {
 	parse := Char('a')
-	sParse := SaveSpot(parse)
+	sParse := SafeSpot[rune](parse)
 
 	tests := []struct {
 		name                  string
@@ -232,20 +452,24 @@ func TestLeafParserToAnyParser(t *testing.T) {
 	}
 }
 
+// ============================================================================
+// Map2 Parser
+//
+
 type map2data[PO1, PO2 any, MO any] struct {
-	BaseBranchParser[MO]
+	id int32
 	p1 Parser[PO1]
 	p2 Parser[PO2]
 	fn func(PO1, PO2) (MO, error)
 }
 
-func (md *map2data[PO1, PO2, MO]) Expected() string {
-	return "Map2"
+func (md *map2data[PO1, PO2, MO]) setID(id int32) {
+	md.id = id
 }
-func (md *map2data[PO1, PO2, MO]) Children() []AnyParser {
+func (md *map2data[PO1, PO2, MO]) children() []AnyParser {
 	return []AnyParser{md.p1, md.p2}
 }
-func (md *map2data[PO1, PO2, MO]) ParseAfterChild(childResult ParseResult) ParseResult {
+func (md *map2data[PO1, PO2, MO]) parseAfterChild(childResult ParseResult) ParseResult {
 	var zero MO
 	var zero1 PO1
 
@@ -295,6 +519,7 @@ func (md *map2data[PO1, PO2, MO]) ParseAfterChild(childResult ParseResult) Parse
 	}
 
 	return ParseResult{
+		ID:       md.id,
 		StartPos: childResult.StartPos,
 		State:    nState,
 		Output:   out,
@@ -314,9 +539,12 @@ func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2
 		p2: p2,
 		fn: fn,
 	}
-	m2d.BaseBranchParser = NewBaseBranchParser[MO](m2d.Children, m2d.ParseAfterChild)
-	return m2d
+	return NewBranchParser[MO]("Map2", m2d.children, m2d.parseAfterChild, m2d.setID)
 }
+
+// ============================================================================
+// Char Parser
+//
 
 func Char(char rune) Parser[rune] {
 	expected := strconv.QuoteRune(char)

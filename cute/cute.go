@@ -47,7 +47,7 @@ func OneOf(collection ...string) gomme.Parser[string] {
 
 }
 
-// SaveSpot is the shortened version of `pcb.SaveSpot`.
+// SaveSpot is the shortened version of `pcb.SafeSpot`.
 // This should encourage its use because SaveSpot is the backbone of the
 // error handling mechanism.
 //
@@ -60,7 +60,7 @@ func OneOf(collection ...string) gomme.Parser[string] {
 //
 //	import . "github.com/oleiade/gomme/cute"
 func SaveSpot[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	return gomme.SaveSpot[Output](parse)
+	return gomme.SafeSpot[Output](parse)
 }
 
 // FirstSuccessful is a shortened version of `gomme.FirstSuccessful`.

@@ -6,7 +6,7 @@ import (
 
 // Optional applies an optional child parser. Will return a zero value
 // if not successful.
-// Optional will ignore any parsing error except if a SaveSpot is active.
+// Optional will ignore any parsing error except if a SafeSpot is active.
 func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	optParse := func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
 		newState, output, err := parse.It(state)
@@ -22,14 +22,14 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // It effectively allows to look ahead in the input.
 //
 // NOTE:
-//   - SaveSpot isn't honored here because we aren't officially parsing anything.
+//   - SafeSpot isn't honored here because we aren't officially parsing anything.
 //   - Even though Peek accepts a parser as argument it behaves like a leaf parser
 //     to the outside. So it doesn't need to use MapN or the like.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
 		newState, output, err := parse.It(state)
 		if err != nil {
-			// avoid SaveSpot and consumption because we only peek
+			// avoid SafeSpot and consumption because we only peek
 			return state.Fail(newState), output, err
 		}
 
@@ -44,7 +44,7 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // The returned boolean value indicates its own success and not the given parsers.
 //
 // NOTE:
-//   - SaveSpot isn't honored here because we aren't officially parsing anything.
+//   - SafeSpot isn't honored here because we aren't officially parsing anything.
 //   - Even though Not accepts a parser as argument it behaves like a leaf parser
 //     to the outside. So it doesn't need to use MapN or the like.
 func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
@@ -55,7 +55,7 @@ func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
 			return state, true, nil
 		}
 
-		// avoid SaveSpot because we only peek; error message and consumption don't really matter
+		// avoid SafeSpot because we only peek; error message and consumption don't really matter
 		return state.NewError(expected), false, err
 	}
 	return gomme.NewParser[bool](expected, notParse, Forbidden("Not"))

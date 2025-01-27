@@ -7,6 +7,10 @@ import (
 	"unicode/utf8"
 )
 
+// ============================================================================
+// Parser Error
+//
+
 const errorMarker = 0x25B6 // easy to spot marker (▶) for exact error position
 
 // ParserError is an error message from the parser.
@@ -22,33 +26,6 @@ type ParserError struct {
 
 func (e *ParserError) Error() string {
 	return singleErrorMsg(*e)
-}
-
-// ============================================================================
-// Recoverers
-//
-
-// DefaultRecoverer shouldn't be used outside of this package.
-// Please use pcb.BasicRecovererFunc instead.
-func DefaultRecoverer[Output any](parse Parser[Output]) Recoverer {
-	return DefaultRecovererFunc(parse.It)
-}
-
-// DefaultRecovererFunc is the heart of the DefaultRecoverer and shouldn't be used
-// outside of this package either.
-// Please use pcb.BasicRecovererFunc instead.
-func DefaultRecovererFunc[Output any](parse func(State) (State, Output, *ParserError)) func(State) int {
-	return func(state State) int {
-		curState := state
-		for curState.BytesRemaining() > 0 {
-			_, _, err := parse(curState)
-			if err == nil {
-				return state.ByteCount(curState) // return the bytes up to the successful position
-			}
-			curState = curState.Delete1()
-		}
-		return -1 // absolut worst case! :(
-	}
 }
 
 // ============================================================================

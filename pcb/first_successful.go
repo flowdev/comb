@@ -52,13 +52,13 @@ func (fsd *firstSuccessfulData[Output]) any(state gomme.State) (gomme.State, Out
 	switch state.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing (forward)
 		return fsd.happy(state)
-	case gomme.ParsingModeError: // find previous SaveSpot (backward)
+	case gomme.ParsingModeError: // find previous SafeSpot (backward)
 		return fsd.error(state)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return fsd.handle(state)
 	case gomme.ParsingModeRewind: // go back to the witness parser (1)
 		return fsd.rewind(state)
-	case gomme.ParsingModeEscape: // find the SaveSpot recoverer with the least waste
+	case gomme.ParsingModeEscape: // find the SafeSpot recoverer with the least waste
 		return fsd.escape(state)
 	}
 

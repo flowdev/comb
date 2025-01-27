@@ -87,7 +87,7 @@ func (sd *separatedData[Output, S]) any(
 	switch remaining.ParsingMode() {
 	case gomme.ParsingModeHappy: // normal parsing
 		return sd.happy(state, remaining, count, saveSpotIdx, saveSpotStart, outputs)
-	case gomme.ParsingModeError: // find previous SaveSpot (backward)
+	case gomme.ParsingModeError: // find previous SafeSpot (backward)
 		return sd.error(state, outputs)
 	case gomme.ParsingModeHandle: // find error again (forward)
 		return sd.handle(state, outputs)
@@ -116,7 +116,7 @@ func (sd *separatedData[Output, S]) happy(
 
 		newState, output := sd.parse.It(remaining)
 		if newState.Failed() {
-			if remaining.SaveSpotMoved(newState) { // fail because of SaveSpot
+			if remaining.SaveSpotMoved(newState) { // fail because of SafeSpot
 				state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, newState, outputs)
 				state = gomme.IWitnessed(state, sd.id, 0, newState)
 				return sd.error(state, outputs)
@@ -145,7 +145,7 @@ func (sd *separatedData[Output, S]) happy(
 		if sd.separator.Expected() != noSeparator.Expected() {
 			sepState, _ = sd.separator.It(newState)
 			if sepState.Failed() {
-				if newState.SaveSpotMoved(sepState) { // fail because of SaveSpot
+				if newState.SaveSpotMoved(sepState) { // fail because of SafeSpot
 					state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, sepState, outputs)
 					state = gomme.IWitnessed(state, sd.id, 1, sepState)
 					return sd.error(state, outputs)

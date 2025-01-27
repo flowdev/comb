@@ -30,36 +30,31 @@ type BranchParser interface {
 // It intentionally avoids generics for easy storage of parsers in collections
 // (slices, maps, ...).
 type AnyParser interface {
-	setID(int32) // only sets own ID
 	ID() int32
 	Parse(state State) ParseResult
 	IsSaveSpot() bool
 	Recover(state State) int
 	IsStepRecoverer() bool
+	setID(int32) // only sets own ID
 }
 
 // ============================================================================
 // orchestra data structures and construction
 //
 
-type orchestraResult struct { // data for a single parser execution at a single position
-	data   interface{}
-	output interface{}
-}
-type orchestraData struct { // all data about a single parser
+type parserData struct { // all data about a single parser
 	parser   AnyParser
 	parentID int32
-	data     []orchestraResult // "stack" of parser results for support of left recursive grammars
 }
 type orchestrator[Output any] struct {
-	parsers        []orchestraData
+	parsers        []parserData
 	recoverers     []AnyParser
 	stepRecoverers []AnyParser
 }
 
 func newOrchestrator[Output any](p Parser[Output]) *orchestrator[Output] {
 	o := &orchestrator[Output]{
-		parsers:    make([]orchestraData, 0, 64),
+		parsers:    make([]parserData, 0, 64),
 		recoverers: make([]AnyParser, 0, 64),
 	}
 	o.registerParsers(p, -1)
@@ -68,7 +63,7 @@ func newOrchestrator[Output any](p Parser[Output]) *orchestrator[Output] {
 func (o *orchestrator[Output]) registerParsers(ap AnyParser, parentID int32) {
 	id := int32(len(o.parsers))
 	ap.setID(id)
-	o.parsers = append(o.parsers, orchestraData{parser: ap, parentID: parentID})
+	o.parsers = append(o.parsers, parserData{parser: ap, parentID: parentID})
 
 	if bp, ok := ap.(BranchParser); ok {
 		for _, cp := range bp.Children() {
@@ -126,7 +121,7 @@ func (o *orchestrator[Output]) handleError(r ParseResult) (state State, nextID i
 	minWaste, minRec := o.findMinWaste(r.State, r.ID)
 
 	if minWaste < 0 {
-		state = r.State.SaveError(r.State.NewSemanticError("unable to recover from error")).MoveBy(r.State.BytesRemaining())
+		state = r.State.MoveBy(r.State.BytesRemaining())
 		Debugf("handleError - no recoverer found")
 		return state, -1
 	}
@@ -139,11 +134,11 @@ func (o *orchestrator[Output]) findMinWaste(state State, id int32) (minWaste int
 	minWaste = math.MaxInt
 	if !minRec.IsStepRecoverer() {
 		minWaste = minRec.Recover(state)
+		Debugf("findMinWaste - failed parser has fast recoverer: ID=%d, waste=%d", id, minWaste)
 		if minWaste < 0 {
 			minWaste = math.MaxInt
 		}
 		failed = true
-		Debugf("findMinWaste - failed parser has fast recoverer: ID=%d, waste=%d", id, minWaste)
 	}
 	for _, rec := range o.recoverers { // try all fast recoverers
 		if waste := rec.Recover(state); waste >= 0 && waste < minWaste {
@@ -168,8 +163,7 @@ func (o *orchestrator[Output]) findMinWaste(state State, id int32) (minWaste int
 func (o *orchestrator[Output]) findMinStepWaste(stepRecs []AnyParser, state State, waste int, rec AnyParser,
 ) (minWaste int, minRec AnyParser) {
 	maxWaste := waste
-	if maxWaste < 0 {
-		maxWaste = math.MaxInt
+	if maxWaste == math.MaxInt {
 		Debugf("findMinStepWaste - ALL fast recoverers failed!")
 	}
 	curState := state
@@ -186,5 +180,8 @@ func (o *orchestrator[Output]) findMinStepWaste(stepRecs []AnyParser, state Stat
 		minWaste = state.ByteCount(curState)
 	}
 	Debugf("findMinStepWaste - ALL slow recoverers failed!")
+	if waste == math.MaxInt {
+		return -1, rec
+	}
 	return waste, rec
 }
