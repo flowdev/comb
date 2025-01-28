@@ -226,6 +226,18 @@ func TestOrchestratorParseAll(t *testing.T) {
 			givenParser:    goodParse,
 			expectedOutput: "c",
 			expectedErrors: 1,
+		}, {
+			name:           "firstCharLastBadParser",
+			givenInput:     "bca",
+			givenParser:    badParse,
+			expectedOutput: "",
+			expectedErrors: 2,
+		}, {
+			name:           "firstCharLastGoodParser",
+			givenInput:     "bca",
+			givenParser:    goodParse,
+			expectedOutput: "\x00bc",
+			expectedErrors: 1,
 		},
 	}
 	SetDebug(true)
@@ -299,9 +311,6 @@ func TestBranchParserToAnyParser(t *testing.T) {
 			orch := newOrchestrator[string](tt.givenParser) // this calls ParserToAnyParser
 			aParse := orch.parsers[0].parser
 			result := aParse.parse(NewFromString(tt.givenInput, true))
-			if got, want := result.ID, tt.expectedID; got != want {
-				t.Errorf("parser ID=%d, want=%d", got, want)
-			}
 			if got, want := aParse.IsSaveSpot(), false; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
@@ -404,9 +413,6 @@ func TestLeafParserToAnyParser(t *testing.T) {
 			orch := newOrchestrator[rune](tt.givenParser) // this calls ParserToAnyParser
 			aParse := orch.parsers[0].parser
 			result := aParse.parse(NewFromString(tt.givenInput, true))
-			if got, want := result.ID, aParse.ID(); got != want {
-				t.Errorf("parser ID=%d, want=%d", got, want)
-			}
 			if got, want := tt.givenParser.IsSaveSpot(), tt.expectedSaveSpot; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
@@ -453,7 +459,7 @@ type map2data[PO1, PO2 any, MO any] struct {
 func (md *map2data[PO1, PO2, MO]) children() []AnyParser {
 	return []AnyParser{md.p1, md.p2}
 }
-func (md *map2data[PO1, PO2, MO]) parseAfterChild(childResult ParseResult) ParseResult {
+func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
 	var zero MO
 	var zero1 PO1
 	var zero2 PO2
@@ -463,41 +469,38 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childResult ParseResult) Parse
 	}
 
 	state := childResult.State
-	id := childResult.ID
+	id := childID
 	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), id)
 	if id >= 0 && id != md.p1.ID() && id != md.p2.ID() {
 		return ParseResult{
-			ID:     -1,
 			State:  state,
 			Output: zero,
 			Error:  state.NewSemanticError("unable to parse after child with ID %d; unknown ID", id),
 		}
 	}
 
-	id1, state1, out1, err1 := int32(-1), state, zero1, (*ParserError)(nil)
+	state1, out1, err1 := state, zero1, (*ParserError)(nil)
 	if id < 0 {
-		id1, state1, out1, err1 = md.p1.Parse(state)
+		state1, out1, err1 = md.p1.Parse(state)
 		if err1 != nil {
-			return ParseResult{ID: id1, State: state1, Output: out1, Error: err1}
+			return ParseResult{State: state1, Output: out1, Error: err1}
 		}
 	}
 	if id == md.p1.ID() {
-		id1 = childResult.ID
 		state1 = childResult.State
 		out1, _ = childResult.Output.(PO1)
 		err1 = childResult.Error
 	}
 
-	id2, state2, out2, err2 := int32(-1), state, zero2, (*ParserError)(nil)
+	state2, out2, err2 := state, zero2, (*ParserError)(nil)
 	if id == md.p2.ID() {
-		id2 = childResult.ID
 		state2 = childResult.State
 		out2, _ = childResult.Output.(PO2)
 		err2 = childResult.Error
 	} else {
-		id2, state2, out2, err2 = md.p2.Parse(state1)
+		state2, out2, err2 = md.p2.Parse(state1)
 		if err2 != nil {
-			return ParseResult{ID: id2, State: state2, Output: out2, Error: err2}
+			return ParseResult{State: state2, Output: out2, Error: err2}
 		}
 	}
 
@@ -508,7 +511,6 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childResult ParseResult) Parse
 	}
 
 	return ParseResult{
-		ID:     -1,
 		State:  state2,
 		Output: out,
 		Error:  pErr,

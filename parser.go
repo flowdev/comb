@@ -35,17 +35,16 @@ func (p *prsr[Output]) ID() int32 {
 func (p *prsr[Output]) Expected() string {
 	return p.expected
 }
-func (p *prsr[Output]) Parse(state State) (int32, State, Output, *ParserError) {
+func (p *prsr[Output]) Parse(state State) (State, Output, *ParserError) {
 	nState, out, err := p.parser(state)
-	if err != nil {
+	if err != nil && err.parserID < 0 {
 		err.parserID = p.id
 	}
-	return p.id, nState, out, err
+	return nState, out, err
 }
 func (p *prsr[Output]) parse(state State) ParseResult {
-	id, nState, output, err := p.Parse(state)
+	nState, output, err := p.Parse(state)
 	return ParseResult{
-		ID:     id,
 		State:  nState,
 		Output: output,
 		Error:  err,
@@ -74,7 +73,7 @@ func (p *prsr[Output]) setID(id int32) {
 // Branch Parser
 //
 
-type OutputBranchParser[Output any] interface {
+type outputBranchParser[Output any] interface {
 	Parser[Output]
 	BranchParser
 }
@@ -83,17 +82,17 @@ type brnchprsr[Output any] struct {
 	id            int32
 	name          string
 	childs        func() []AnyParser
-	prsAfterChild func(childResult ParseResult) ParseResult
+	prsAfterChild func(childID int32, childResult ParseResult) ParseResult
 }
 
 // NewBranchParser is THE way to create branch parsers.
-// parseAfterChild will be called with a child result that has a childID < 0
-// if it should parse from the beginning.
+// parseAfterChild will be called with a childID < 0 if it should parse from
+// the beginning.
 func NewBranchParser[Output any](
 	name string,
 	children func() []AnyParser,
-	parseAfterChild func(childResult ParseResult) ParseResult,
-) OutputBranchParser[Output] {
+	parseAfterChild func(childID int32, childResult ParseResult) ParseResult,
+) outputBranchParser[Output] {
 	return &brnchprsr[Output]{
 		id:            -1,
 		name:          name,
@@ -107,15 +106,15 @@ func (bp *brnchprsr[Output]) ID() int32 {
 func (bp *brnchprsr[Output]) Expected() string {
 	return bp.name
 }
-func (bp *brnchprsr[Output]) Parse(state State) (int32, State, Output, *ParserError) {
-	result := bp.parseAfterChild(ParseResult{ID: -1, State: state})
+func (bp *brnchprsr[Output]) Parse(state State) (State, Output, *ParserError) {
+	result := bp.parseAfterChild(-1, ParseResult{State: state})
 	if out, ok := result.Output.(Output); ok {
-		return result.ID, result.State, out, result.Error
+		return result.State, out, result.Error
 	}
-	return result.ID, result.State, ZeroOf[Output](), result.Error
+	return result.State, ZeroOf[Output](), result.Error
 }
 func (bp *brnchprsr[Output]) parse(state State) ParseResult {
-	return bp.parseAfterChild(ParseResult{ID: -1, State: state})
+	return bp.parseAfterChild(-1, ParseResult{State: state})
 }
 func (bp *brnchprsr[Output]) IsSaveSpot() bool {
 	return false
@@ -135,13 +134,10 @@ func (bp *brnchprsr[Output]) SwapRecoverer(_ Recoverer) {
 func (bp *brnchprsr[Output]) children() []AnyParser {
 	return bp.childs()
 }
-func (bp *brnchprsr[Output]) parseAfterChild(childResult ParseResult) ParseResult {
-	result := bp.prsAfterChild(childResult)
-	if result.Error != nil && result.Error.ParserID() < 0 {
+func (bp *brnchprsr[Output]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
+	result := bp.prsAfterChild(childID, childResult)
+	if result.Error != nil && result.Error.parserID < 0 {
 		result.Error.parserID = bp.id
-	}
-	if result.ID < 0 {
-		result.ID = bp.id
 	}
 	return result
 }
@@ -182,7 +178,7 @@ func (lp *lazyprsr[Output]) Expected() string {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.Expected()
 }
-func (lp *lazyprsr[Output]) Parse(state State) (int32, State, Output, *ParserError) {
+func (lp *lazyprsr[Output]) Parse(state State) (State, Output, *ParserError) {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.Parse(state)
 }
@@ -256,7 +252,7 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	}
 
 	nParse := func(state State) (State, Output, *ParserError) {
-		_, nState, output, err := p.Parse(state)
+		nState, output, err := p.Parse(state)
 		if err == nil {
 			nState.saveSpot = nState.input.pos // move the mark!
 		}

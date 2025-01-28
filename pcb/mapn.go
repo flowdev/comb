@@ -50,18 +50,16 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	}
 
 	md := &mapData[PO1, PO2, PO3, PO4, PO5, MO]{
-		id:       -1,
 		expected: expected,
 		p1:       p1, p2: p2, p3: p3, p4: p4, p5: p5,
 		n:   n,
 		fn1: fn1, fn2: fn2, fn3: fn3, fn4: fn4, fn5: fn5,
 	}
 
-	return gomme.NewBranchParser[MO](expected, md.children, md.parseAfterChild, md.setID)
+	return gomme.NewBranchParser[MO](expected, md.children, md.parseAfterChild)
 }
 
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
-	id       int32
 	expected string
 	p1       gomme.Parser[PO1]
 	p2       gomme.Parser[PO2]
@@ -76,8 +74,24 @@ type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	fn5      func(PO1, PO2, PO3, PO4, PO5) (MO, error)
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childResult gomme.ParseResult,
-) (gomme.State, MO, *gomme.ParserError) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []gomme.AnyParser {
+	children := make([]gomme.AnyParser, md.n)
+	children[0] = md.p1
+	if md.n >= 2 {
+		children[1] = md.p2
+		if md.n >= 3 {
+			children[2] = md.p3
+			if md.n >= 4 {
+				children[3] = md.p4
+				if md.n >= 5 {
+					children[4] = md.p5
+				}
+			}
+		}
+	}
+	return children
+}
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childResult gomme.ParseResult) gomme.ParseResult {
 	var zero MO
 
 	gomme.Debugf("MapN - pos=%d", state.CurrentPos())

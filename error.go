@@ -27,9 +27,6 @@ type ParserError struct {
 func (e *ParserError) Error() string {
 	return singleErrorMsg(*e)
 }
-func (e *ParserError) ParserID() int32 {
-	return e.parserID
-}
 
 // ============================================================================
 // Error Reporting

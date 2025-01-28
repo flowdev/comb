@@ -10,7 +10,6 @@ import (
 
 // ParseResult is the result of a (leaf) parser.
 type ParseResult struct {
-	ID     int32       // ID of the parser that produced the result
 	State  State       // state after parsing
 	Output interface{} // output of the parser
 	Error  *ParserError
@@ -22,7 +21,7 @@ type ParseResult struct {
 // BranchParser just adds 2 methods to the Parser and AnyParser interfaces.
 type BranchParser interface {
 	children() []AnyParser
-	parseAfterChild(childResult ParseResult) ParseResult
+	parseAfterChild(childID int32, childResult ParseResult) ParseResult
 }
 
 // AnyParser is an internal interface used by the orchestrator.
@@ -86,28 +85,34 @@ func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
 	var id int32 = 0 // this is always the root parser
 	p := o.parsers[id]
 	result := p.parser.parse(state)
-	nextID := id
-	for result.Error != nil || nextID != id {
-		nState := result.State.SaveError(result.Error)
+	nextID, nState := id, result.State
+	for result.Error != nil {
+		Debugf("parseAll - got Error=%v", result.Error)
+		nState = result.State.SaveError(result.Error)
 		if nState.AtEnd() { // give up
+			Debugf("parseAll - at EOF")
 			return zero, nState.Errors()
 		}
 		result.State = nState
 		nState, nextID = o.handleError(result)
 		if nextID < 0 { // give up
+			Debugf("parseAll - no recoverer found")
 			return zero, nState.Errors()
 		}
 		p = o.parsers[nextID]
 		result = p.parser.parse(nState)
-		for p.parentID >= 0 && result.ID == nextID {
+		for p.parentID >= 0 { // force the new result through all levels (error or not)
+			childID := nextID
 			nextID = p.parentID
 			p = o.parsers[nextID]
-			result = (p.parser.(BranchParser)).parseAfterChild(result)
+			result = (p.parser.(BranchParser)).parseAfterChild(childID, result)
+			Debugf("parseAll - parent (ID=%d) Error?=%v", nextID, result.Error)
 		}
 	}
 	return result.Output.(Output), result.State.Errors()
 }
 func (o *orchestrator[Output]) handleError(r ParseResult) (state State, nextID int32) {
+	Debugf("handleError - Error=%v", r.Error)
 	pos := r.State.CurrentPos()
 	if !r.State.recover { // error recovery is turned off
 		state = r.State.SaveError(r.State.NewSemanticError("error recovery is turned off")).MoveBy(r.State.BytesRemaining())
@@ -117,12 +122,11 @@ func (o *orchestrator[Output]) handleError(r ParseResult) (state State, nextID i
 
 	Debugf("handleError - start: parserID=%d, pos=%d", r.Error.parserID, pos)
 
-	minWaste, minRec := o.findMinWaste(r.State, r.ID)
+	minWaste, minRec := o.findMinWaste(r.State, r.Error.parserID)
 
 	if minWaste < 0 {
-		state = r.State.MoveBy(r.State.BytesRemaining())
 		Debugf("handleError - no recoverer found")
-		return state, -1
+		return r.State.MoveBy(r.State.BytesRemaining()), -1
 	}
 	Debugf("handleError - best recoverer: ID=%d, waste=%d", minRec.ID(), minWaste)
 	return r.State.MoveBy(minWaste), minRec.ID()
