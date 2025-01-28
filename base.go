@@ -125,14 +125,15 @@ func newState(binary bool, bytes []byte, text string, recover bool) State {
 // Misc. stuff
 //
 
-// BetterOf returns the more advanced (in the input) state of the two.
+// BetterOf returns the more advanced (in the input) state of the two and
+// true iff it is the other.
 // This should be used for parsers that are alternatives.
 // So the best error is handled.
-func BetterOf(state, other State) State {
+func BetterOf(state, other State) (State, bool) {
 	if state.input.pos < other.input.pos {
-		return other
+		return other, true
 	}
-	return state
+	return state, false
 }
 
 func UnwrapErrors(err error) []error {

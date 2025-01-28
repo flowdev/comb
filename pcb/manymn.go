@@ -1,26 +1,18 @@
 package pcb
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
 	"github.com/oleiade/gomme"
 )
 
-// noSeparator is a parser used to signal that no separator should be parsed at all.
+// noSeparator is a parser that parses the empty string.
 // It basically turns SeparatedMN into ManyMN.
-var noSeparator = func() gomme.Parser[rune] {
-	// created a unique marker as expected string
-	bs := make([]byte, 16)
-	_, err := rand.Read(bs)
-	expected := "NO-SEPARATOR:"
-	if err != nil {
-		expected += err.Error()
-	} else {
-		expected += hex.EncodeToString(bs)
+func noSeparator[S gomme.Separator]() gomme.Parser[S] {
+	p := func(state gomme.State) (gomme.State, S, *gomme.ParserError) {
+		var zero S
+		return state, zero, nil
 	}
-	return gomme.NewParser[rune](expected, nil, false, nil, nil)
-}()
+	return gomme.NewParser("noSeparator", p, Forbidden("noSeparator"))
+}
 
 // SeparatedMN applies an element parser and a separator parser repeatedly in order
 // to produce a slice of elements.
@@ -43,25 +35,14 @@ func SeparatedMN[Output any, S gomme.Separator](
 		panic("SeparatedMN is unable to handle negative `atMost`")
 	}
 
-	md := &separatedData[Output, S]{
-		id:                  gomme.NewBranchParserID(),
+	sd := &separatedData[Output, S]{
 		parse:               parse,
 		separator:           separator,
 		atLeast:             atLeast,
 		atMost:              atMost,
 		parseSeparatorAtEnd: parseSeparatorAtEnd,
 	}
-	parseSep := func(state gomme.State) (gomme.State, []Output) {
-		outputs := make([]Output, 0, min(32, md.atMost))
-		return md.any(state, state, -1, -1, outputs)
-	}
-
-	recoverer := Forbidden("SeparatedMN(atLeast=0)")
-	if atLeast > 0 {
-		recoverer = BasicRecovererFunc(parseSep)
-	}
-	return gomme.NewParser[[]Output]("SeparatedMN", parseSep, true,
-		recoverer, parse.SaveSpotRecoverer)
+	return gomme.NewBranchParser[[]Output]("FirstSuccessful", sd.children, sd.parseAfterChild)
 }
 
 type separatedData[Output any, S gomme.Separator] struct {
@@ -73,227 +54,70 @@ type separatedData[Output any, S gomme.Separator] struct {
 	parseSeparatorAtEnd bool
 }
 
-func (sd *separatedData[Output, S]) any(
-	state, remaining gomme.State,
-	saveSpotIdx, saveSpotStart int,
-	outputs []Output,
-) (gomme.State, []Output) {
-	count := len(outputs)
-
-	gomme.Debugf("SeparatedMN - mode=%s, pos=%d, count=%d", remaining.ParsingMode(), remaining.CurrentPos(), count)
-	if count >= sd.atMost {
-		return remaining, outputs
-	}
-	switch remaining.ParsingMode() {
-	case gomme.ParsingModeHappy: // normal parsing
-		return sd.happy(state, remaining, count, saveSpotIdx, saveSpotStart, outputs)
-	case gomme.ParsingModeError: // find previous SafeSpot (backward)
-		return sd.error(state, outputs)
-	case gomme.ParsingModeHandle: // find error again (forward)
-		return sd.handle(state, outputs)
-	case gomme.ParsingModeRewind: // go back to error / witness parser (1) (backward)
-		return sd.rewind(state, outputs)
-	case gomme.ParsingModeEscape: // escape the mess the hard way: use recoverer (forward)
-		return sd.escape(state, remaining, outputs)
-	}
-	return state.NewSemanticError(fmt.Sprintf(
-		"programming error: SeparatedMN didn't handle parsing mode `%s`", state.ParsingMode())), nil
-
+func (sd *separatedData[Output, S]) children() []gomme.AnyParser {
+	return []gomme.AnyParser{sd.parse, sd.separator}
 }
 
-func (sd *separatedData[Output, S]) happy(
-	state, remaining gomme.State,
-	count int,
-	saveSpotIdx, saveSpotStart int,
-	outputs []Output,
-) (gomme.State, []Output) {
+func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult gomme.ParseResult) gomme.ParseResult {
+	gomme.Debugf("SeparatedMN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+
+	if childResult.Error != nil {
+		return childResult // we can't avoid any errors by going another path
+	}
+
+	if childID >= 0 && childID != sd.parse.ID() && childID != sd.separator.ID() {
+		childResult.Error = childResult.EndState.NewSemanticError(
+			"unable to parse after child with unknown ID %d", childID)
+		return childResult
+	}
+
+	state := childResult.StartState
+	remaining := childResult.EndState
 	retState := remaining
+	outputs := make([]Output, 0, min(32, sd.atMost))
+	count := 0
+	if childID < 0 {
+		state = childResult.EndState
+	} else {
+		out, _ := childResult.Output.(Output)
+		outputs = append(outputs, out)
+		count = 1
+	}
 
 	for {
 		if count >= sd.atMost {
-			return retState, outputs
+			return gomme.ParseResult{StartState: state, EndState: remaining, Output: outputs, Error: nil}
 		}
 
-		newState, output := sd.parse.It(remaining)
-		if newState.Failed() {
-			if remaining.SaveSpotMoved(newState) { // fail because of SafeSpot
-				state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, newState, outputs)
-				state = gomme.IWitnessed(state, sd.id, 0, newState)
-				return sd.error(state, outputs)
+		nState, out, err := sd.parse.Parse(remaining)
+		if err != nil {
+			if remaining.SaveSpotMoved(nState) || count < sd.atLeast { // fail
+				return gomme.ParseResult{StartState: remaining, EndState: nState, Output: out, Error: err}
 			}
-			if count >= sd.atLeast { // success!
-				state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, retState, outputs)
-				return retState, outputs
-			}
-			// fail:
-			state.CacheParserResult(sd.id, 0, saveSpotIdx, saveSpotStart, newState, outputs)
-			state = gomme.IWitnessed(state, sd.id, 0, newState)
-			if saveSpotStart < 0 { // we can't do anything here
-				return state, nil
-			}
-			return sd.error(state, outputs) // handle error locally
+			return gomme.ParseResult{StartState: state, EndState: retState, Output: outputs, Error: nil}
 		}
-		if remaining.SaveSpotMoved(newState) {
-			saveSpotIdx = 0
-			saveSpotStart = state.ByteCount(remaining)
-		}
-		outputs = append(outputs, output)
+		outputs = append(outputs, out)
 		count++
 
-		retState = newState
-		sepState := newState
-		if sd.separator.Expected() != noSeparator.Expected() {
-			sepState, _ = sd.separator.It(newState)
-			if sepState.Failed() {
-				if newState.SaveSpotMoved(sepState) { // fail because of SafeSpot
-					state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, sepState, outputs)
-					state = gomme.IWitnessed(state, sd.id, 1, sepState)
-					return sd.error(state, outputs)
-				}
-				if count >= sd.atLeast { // success!
-					state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, newState, outputs)
-					return retState, outputs
-				}
-				// fail:
-				state.CacheParserResult(sd.id, 1, saveSpotIdx, saveSpotStart, sepState, outputs)
-				state = gomme.IWitnessed(state, sd.id, 1, sepState)
-				if saveSpotStart < 0 { // we can't do anything here
-					return state, nil
-				}
-				return sd.error(state, outputs) // handle error locally
+		retState = nState
+		sepState, sepOut, err := sd.separator.Parse(nState)
+		if err != nil {
+			if nState.SaveSpotMoved(sepState) || count < sd.atLeast { // fail
+				return gomme.ParseResult{StartState: nState, EndState: sepState, Output: sepOut, Error: err}
 			}
-			if newState.SaveSpotMoved(sepState) {
-				saveSpotIdx = 1
-				saveSpotStart = state.ByteCount(newState)
-			}
-			if sd.parseSeparatorAtEnd {
-				retState = sepState
-			}
+			return gomme.ParseResult{StartState: state, EndState: retState, Output: outputs, Error: nil}
+		}
+		if sd.parseSeparatorAtEnd {
+			retState = sepState
 		}
 
 		// Checking for infinite loops, if nothing was consumed,
 		// the provided parser would make us go around in circles.
-		if !sepState.Moved(remaining) {
-			return state.NewError(fmt.Sprintf(
-				"many %s (empty element incl. separator => endless loop)", sd.parse.Expected())), nil
+		if !remaining.Moved(sepState) {
+			err = sepState.NewSyntaxError(
+				"many %s (empty element incl. separator => endless loop)", sd.parse.Expected())
+			return gomme.ParseResult{StartState: remaining, EndState: sepState, Output: outputs, Error: err}
 		}
 		remaining = sepState
 	}
-}
-
-func (sd *separatedData[Output, S]) error(state gomme.State, outputs []Output) (gomme.State, []Output) {
-	// use cache to know result immediately (HasSaveSpot, SaveSpotIdx, SaveSpotStart)
-	result, ok := state.CachedParserResult(sd.id)
-	if !ok {
-		return state.NewSemanticError(
-			"grammar error: cache was empty in `SeparatedMN(error)` parser",
-		), nil
-	}
-	// found in cache
-	if result.HasSaveSpot { // we should be able to switch to mode=handle
-		newState := state
-		if result.Idx == 0 {
-			newState, _ = sd.parse.It(state.MoveBy(result.SaveSpotStart))
-		} else {
-			newState, _ = sd.separator.It(state.MoveBy(result.SaveSpotStart))
-		}
-		if newState.ParsingMode() != gomme.ParsingModeHandle {
-			return state.NewSemanticError(fmt.Sprintf(
-				"programming error: sub-parser (expected: %q) didn't switch to "+
-					"parsing mode `handle` in `SeparatedMN(error)` parser, but mode is: `%s`",
-				sd.parse.Expected(), newState.ParsingMode())), nil
-		}
-		if result.Failed {
-			return sd.handle(newState, outputs)
-		}
-		return state.Preserve(newState), nil
-	}
-	return state, nil // we can't do anything
-}
-
-func (sd *separatedData[Output, S]) handle(state gomme.State, outputs []Output) (gomme.State, []Output) {
-	// use cache to know result immediately (Failed, Idx, ErrorStart)
-	result, ok := state.CachedParserResult(sd.id)
-	if !ok {
-		return state.NewSemanticError(
-			"grammar error: cache was empty in `SeparatedMN(handle)` parser",
-		), nil
-	}
-	// found in cache
-	if result.Failed { // we should be able to switch to mode=happy (or escape)
-		outputs = result.Output.([]Output)
-		newState, output := gomme.HandleWitness(
-			state.MoveBy(result.ErrorStart), sd.id, result.Idx, sd.parse, gomme.ParserToZeroOutput[Output, S](sd.separator),
-		)
-		outputs = append(outputs, output)
-		return sd.any(
-			state,
-			newState,
-			result.SaveSpotStart,
-			result.SaveSpotIdx,
-			outputs,
-		)
-	}
-	return state, nil // we can't do anything
-}
-
-func (sd *separatedData[Output, S]) rewind(state gomme.State, outputs []Output) (gomme.State, []Output) {
-	// use cache to know result immediately (Failed, Idx, ErrorStart)
-	result, ok := state.CachedParserResult(sd.id)
-	if !ok {
-		return state.NewSemanticError(
-			"grammar error: cache was empty in `SeparatedMN(rewind)` parser",
-		), nil
-	}
-	// found in cache
-	if result.Failed { // we should be able to switch to mode=happy (or escape)
-		outputs = result.Output.([]Output)
-		newState, output := gomme.HandleWitness(
-			state.MoveBy(result.ErrorStart), sd.id, result.Idx, sd.parse, gomme.ParserToZeroOutput[Output, S](sd.separator),
-		)
-		outputs = append(outputs, output)
-		return sd.any(
-			state, newState,
-			result.SaveSpotStart, result.SaveSpotIdx,
-			outputs,
-		)
-	}
-	return state, nil // we can't do anything
-}
-
-func (sd *separatedData[Output, S]) escape(state, remaining gomme.State, outputs []Output) (gomme.State, []Output) {
-	// use cache to know result immediately (Failed, Idx, ErrorStart)
-	result, ok := state.CachedParserResult(sd.id)
-	if !ok {
-		return state.NewSemanticError(
-			"grammar error: cache was empty in `SeparatedMN(escape)` parser",
-		), nil
-	}
-
-	waste := 0
-	if result.SaveSpotIdx == 0 {
-		waste = sd.parse.SaveSpotRecoverer(remaining)
-	} else {
-		waste = sd.separator.SaveSpotRecoverer(remaining)
-	}
-
-	if waste < 0 { // give up
-		return remaining.NewSemanticError(
-			"found no way to recover from previous error",
-		).MoveBy(remaining.BytesRemaining()), nil
-	}
-
-	outputs = result.Output.([]Output)
-	remaining = remaining.MoveBy(waste)
-	var newState gomme.State
-	var output Output
-	if result.SaveSpotIdx == 0 {
-		newState, output = sd.parse.It(remaining)
-		if newState.ParsingMode() == gomme.ParsingModeHappy {
-			outputs = append(outputs, output)
-		}
-	} else {
-		newState, _ = sd.separator.It(remaining)
-	}
-	return newState, outputs
 }

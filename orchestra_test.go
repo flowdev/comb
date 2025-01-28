@@ -468,14 +468,15 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult Par
 		return childResult // we can't avoid any errors by going another path
 	}
 
-	state := childResult.State
+	state := childResult.EndState
 	id := childID
 	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), id)
 	if id >= 0 && id != md.p1.ID() && id != md.p2.ID() {
 		return ParseResult{
-			State:  state,
-			Output: zero,
-			Error:  state.NewSemanticError("unable to parse after child with ID %d; unknown ID", id),
+			StartState: state,
+			EndState:   state,
+			Output:     zero,
+			Error:      state.NewSemanticError("unable to parse after child with unknown ID %d", id),
 		}
 	}
 
@@ -483,24 +484,24 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult Par
 	if id < 0 {
 		state1, out1, err1 = md.p1.Parse(state)
 		if err1 != nil {
-			return ParseResult{State: state1, Output: out1, Error: err1}
+			return ParseResult{StartState: state, EndState: state1, Output: out1, Error: err1}
 		}
 	}
 	if id == md.p1.ID() {
-		state1 = childResult.State
+		state1 = childResult.EndState
 		out1, _ = childResult.Output.(PO1)
 		err1 = childResult.Error
 	}
 
 	state2, out2, err2 := state, zero2, (*ParserError)(nil)
 	if id == md.p2.ID() {
-		state2 = childResult.State
+		state2 = childResult.EndState
 		out2, _ = childResult.Output.(PO2)
 		err2 = childResult.Error
 	} else {
 		state2, out2, err2 = md.p2.Parse(state1)
 		if err2 != nil {
-			return ParseResult{State: state2, Output: out2, Error: err2}
+			return ParseResult{StartState: state1, EndState: state2, Output: out2, Error: err2}
 		}
 	}
 
@@ -510,11 +511,7 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult Par
 		pErr = state2.NewSemanticError(err.Error())
 	}
 
-	return ParseResult{
-		State:  state2,
-		Output: out,
-		Error:  pErr,
-	}
+	return ParseResult{StartState: state, EndState: state2, Output: out, Error: pErr}
 }
 func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2) (MO, error)) Parser[MO] {
 	if p1 == nil {
@@ -522,6 +519,9 @@ func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2
 	}
 	if p2 == nil {
 		panic("Map2: p2 is nil")
+	}
+	if fn == nil {
+		panic("Map2: fn is nil")
 	}
 
 	m2d := &map2data[PO1, PO2, MO]{

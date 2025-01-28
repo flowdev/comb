@@ -44,11 +44,7 @@ func (p *prsr[Output]) Parse(state State) (State, Output, *ParserError) {
 }
 func (p *prsr[Output]) parse(state State) ParseResult {
 	nState, output, err := p.Parse(state)
-	return ParseResult{
-		State:  nState,
-		Output: output,
-		Error:  err,
-	}
+	return ParseResult{StartState: state, EndState: nState, Output: output, Error: err}
 }
 func (p *prsr[Output]) IsSaveSpot() bool {
 	return p.saveSpot
@@ -107,14 +103,14 @@ func (bp *brnchprsr[Output]) Expected() string {
 	return bp.name
 }
 func (bp *brnchprsr[Output]) Parse(state State) (State, Output, *ParserError) {
-	result := bp.parseAfterChild(-1, ParseResult{State: state})
+	result := bp.parseAfterChild(-1, ParseResult{EndState: state})
 	if out, ok := result.Output.(Output); ok {
-		return result.State, out, result.Error
+		return result.EndState, out, result.Error
 	}
-	return result.State, ZeroOf[Output](), result.Error
+	return result.EndState, ZeroOf[Output](), result.Error
 }
 func (bp *brnchprsr[Output]) parse(state State) ParseResult {
-	return bp.parseAfterChild(-1, ParseResult{State: state})
+	return bp.parseAfterChild(-1, ParseResult{EndState: state})
 }
 func (bp *brnchprsr[Output]) IsSaveSpot() bool {
 	return false
