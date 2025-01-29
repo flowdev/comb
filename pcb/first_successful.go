@@ -53,12 +53,10 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 			return childResult
 		}
 		idx++
-	} else {
-		state = childResult.EndState
 	}
 
 	for i := idx; i < len(fsd.parsers); i++ {
-		p := fsd.parsers[idx]
+		p := fsd.parsers[i]
 		nState, out, err := p.Parse(state)
 		if err == nil || state.SaveSpotMoved(nState) {
 			return gomme.ParseResult{StartState: state, EndState: nState, Output: out, Error: err}

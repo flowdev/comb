@@ -3,6 +3,7 @@ package pcb
 import (
 	"bytes"
 	"github.com/oleiade/gomme"
+	"math"
 	"reflect"
 	"strings"
 )
@@ -10,15 +11,9 @@ import (
 // Forbidden is the Recoverer for parsers that MUST NOT be used to recover at all.
 // These are all parsers that are happy to consume the empty input and
 // all look ahead parsers.
-//
-// The returned Recoverer panics if used.
-// So by the general contract that panics during runtime aren't allowed,
-// it has to be used during the construction phase.
-// So `SafeSpot` simply calls the Recoverer of its parser with empty input
-// during the construction phase.
 func Forbidden(name string) gomme.Recoverer {
-	return func(state gomme.State) int {
-		panic("must not use parser `" + name + "` accepting empty input for recovering from an error")
+	return func(_ gomme.State) int {
+		return math.MinInt // don't recover at all with this parser
 	}
 }
 

@@ -390,8 +390,7 @@ func TestParseRESPMessage(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
-
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

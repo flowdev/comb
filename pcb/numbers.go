@@ -141,9 +141,20 @@ func Int64(signAllowed bool, base int) gomme.Parser[int64] {
 	if base == 0 {
 		underscoreAllowed = true
 	}
-	return Map(Integer(signAllowed, base, underscoreAllowed), func(integer string) (int64, error) {
-		return strconv.ParseInt(integer, base, 64)
-	})
+	intParser := Integer(signAllowed, base, underscoreAllowed)
+
+	parser := func(state gomme.State) (gomme.State, int64, *gomme.ParserError) {
+		nState, str, pErr := intParser.Parse(state)
+		if pErr != nil {
+			return state, 0, gomme.ClaimError(pErr)
+		}
+		i, err := strconv.ParseInt(str, base, 64)
+		if err != nil {
+			return nState, i, state.NewSemanticError(err.Error())
+		}
+		return nState, i, nil
+	}
+	return gomme.NewParser[int64](intParser.Expected(), parser, intParser.Recover)
 }
 
 // Int8 parses an integer from the input using `strconv.ParseInt`.
@@ -152,10 +163,20 @@ func Int8(signAllowed bool, base int) gomme.Parser[int8] {
 	if base == 0 {
 		underscoreAllowed = true
 	}
-	return Map(Integer(signAllowed, base, underscoreAllowed), func(integer string) (int8, error) {
-		i, err := strconv.ParseInt(integer, base, 8)
-		return int8(i), err
-	})
+	intParser := Integer(signAllowed, base, underscoreAllowed)
+
+	parser := func(state gomme.State) (gomme.State, int8, *gomme.ParserError) {
+		nState, str, pErr := intParser.Parse(state)
+		if pErr != nil {
+			return state, 0, gomme.ClaimError(pErr)
+		}
+		i, err := strconv.ParseInt(str, base, 8)
+		if err != nil {
+			return nState, int8(i), state.NewSemanticError(err.Error())
+		}
+		return nState, int8(i), nil
+	}
+	return gomme.NewParser[int8](intParser.Expected(), parser, intParser.Recover)
 }
 
 // UInt8 parses an integer from the input using `strconv.ParseUint`.
@@ -164,11 +185,18 @@ func UInt8(signAllowed bool, base int) gomme.Parser[uint8] {
 	if base == 0 {
 		underscoreAllowed = true
 	}
-	return Map(Integer(signAllowed, base, underscoreAllowed), func(integer string) (uint8, error) {
-		if integer[0] == '+' {
-			integer = integer[1:]
+	intParser := Integer(signAllowed, base, underscoreAllowed)
+
+	parser := func(state gomme.State) (gomme.State, uint8, *gomme.ParserError) {
+		nState, str, pErr := intParser.Parse(state)
+		if pErr != nil {
+			return state, 0, gomme.ClaimError(pErr)
 		}
-		ui, err := strconv.ParseUint(integer, base, 8)
-		return uint8(ui), err
-	})
+		ui, err := strconv.ParseUint(str, base, 8)
+		if err != nil {
+			return nState, uint8(ui), state.NewSemanticError(err.Error())
+		}
+		return nState, uint8(ui), nil
+	}
+	return gomme.NewParser[uint8](intParser.Expected(), parser, intParser.Recover)
 }

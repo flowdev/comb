@@ -1,6 +1,9 @@
 package gomme
 
-import "sync"
+import (
+	"math"
+	"sync"
+)
 
 // ============================================================================
 // Leaf Parser
@@ -114,10 +117,10 @@ func (bp *brnchprsr[Output]) setSaveSpot() {
 	panic("a branch parser can never be a save spot")
 }
 func (bp *brnchprsr[Output]) Recover(_ State) int {
-	panic("must not use a branch parser for recovering from an error")
+	return math.MinInt // don't recover at all with a branch parser
 }
 func (bp *brnchprsr[Output]) IsStepRecoverer() bool {
-	return true
+	return false
 }
 func (bp *brnchprsr[Output]) SwapRecoverer(_ Recoverer) {
 	panic("a branch parser can never have a special recoverer")
@@ -226,16 +229,16 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 //   - Parsers that accept the empty input or only perform look ahead are
 //     NOT allowed as sub-parsers.
 //     SafeSpot tests the optional recoverer of the parser during the
-//     construction phase to provoke an early panic.
-//     This way we won't have a panic at the runtime of the parser.
+//     construction phase to do a timely panic.
+//     This way we won't have to panic at the runtime of the parser.
 //   - Only leaf parsers MUST be given to SafeSpot as sub-parsers.
 //     SafeSpot will treat the sub-parser as a leaf parser.
 //     Any error will look as if coming from SafeSpot itself.
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
-	// call Recoverer to make a Forbidden recoverer panic during the construction phase
+	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
 	recoverer := p.Recover
-	if recoverer != nil {
-		recoverer(NewFromBytes([]byte{}, true))
+	if recoverer != nil && recoverer(NewFromBytes([]byte{}, true)) == math.MinInt {
+		panic("can't make parser with Forbidden recoverer a safe spot")
 	}
 
 	if _, ok := p.(BranchParser); ok {

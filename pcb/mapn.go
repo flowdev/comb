@@ -155,16 +155,16 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 	}
 
 	state1, out1, err1 := state, zero1, (*gomme.ParserError)(nil)
-	if id == md.p1.ID() {
-		state1 = childResult.EndState
-		out1, _ = childResult.Output.(PO1)
-		err1 = childResult.Error
-		id = -1
-	} else if id < 0 {
+	if id < 0 {
 		state1, out1, err1 = md.p1.Parse(state)
 		if err1 != nil {
 			return gomme.ParseResult{StartState: state, EndState: state1, Output: out1, Error: err1}
 		}
+	} else if id == md.p1.ID() {
+		state1 = childResult.EndState
+		out1, _ = childResult.Output.(PO1)
+		err1 = childResult.Error
+		id = -1
 	}
 
 	if md.n > 1 {
@@ -226,7 +226,6 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 					if err != nil {
 						pErr = state5.NewSemanticError(err.Error())
 					}
-
 					return gomme.ParseResult{StartState: state, EndState: state5, Output: out, Error: pErr}
 				}
 
@@ -235,7 +234,6 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 				if err != nil {
 					pErr = state4.NewSemanticError(err.Error())
 				}
-
 				return gomme.ParseResult{StartState: state, EndState: state4, Output: out, Error: pErr}
 			}
 
@@ -244,7 +242,6 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 			if err != nil {
 				pErr = state3.NewSemanticError(err.Error())
 			}
-
 			return gomme.ParseResult{StartState: state, EndState: state3, Output: out, Error: pErr}
 		}
 
@@ -253,7 +250,6 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 		if err != nil {
 			pErr = state2.NewSemanticError(err.Error())
 		}
-
 		return gomme.ParseResult{StartState: state, EndState: state2, Output: out, Error: pErr}
 	}
 
@@ -262,6 +258,5 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 	if err != nil {
 		pErr = state1.NewSemanticError(err.Error())
 	}
-
 	return gomme.ParseResult{StartState: state, EndState: state1, Output: out, Error: pErr}
 }

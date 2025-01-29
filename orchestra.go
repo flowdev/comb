@@ -139,7 +139,7 @@ func (o *orchestrator[Output]) findMinWaste(state State, id int32) (minWaste int
 	if !minRec.IsStepRecoverer() {
 		minWaste = minRec.Recover(state)
 		Debugf("findMinWaste - failed parser has fast recoverer: ID=%d, waste=%d", id, minWaste)
-		if minWaste < 0 {
+		if minWaste < 0 { // recoverer is either forbidden or unsuccessful
 			minWaste = math.MaxInt
 		}
 		failed = true

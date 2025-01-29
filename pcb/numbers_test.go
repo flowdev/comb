@@ -53,7 +53,7 @@ func TestInt64(t *testing.T) {
 			parser:        Int64(true, 10),
 			input:         "9223372036854775808", // max int64 + 1
 			wantErr:       true,
-			wantOutput:    0,
+			wantOutput:    9223372036854775807,
 			wantRemaining: "",
 		},
 		{
@@ -67,14 +67,13 @@ func TestInt64(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
-
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
-			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
+			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -91,11 +90,11 @@ func TestInt64(t *testing.T) {
 
 func BenchmarkInt64(b *testing.B) {
 	parser := Int64(false, 10)
-	input := gomme.NewFromString(1, nil, -1, "123")
+	input := gomme.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser.It(input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -147,7 +146,7 @@ func TestInt8(t *testing.T) {
 			parser:        Int8(true, 10),
 			input:         "128", // max int8 + 1
 			wantErr:       true,
-			wantOutput:    0,
+			wantOutput:    127,
 			wantRemaining: "",
 		},
 		{
@@ -161,14 +160,13 @@ func TestInt8(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
-
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
-			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
+			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -185,11 +183,11 @@ func TestInt8(t *testing.T) {
 
 func BenchmarkInt8(b *testing.B) {
 	parser := Int8(false, 10)
-	input := gomme.NewFromString(1, nil, -1, "123")
+	input := gomme.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser.It(input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -225,7 +223,7 @@ func TestUInt8(t *testing.T) {
 			parser:        UInt8(true, 10),
 			input:         "256", // max uint8 + 1
 			wantErr:       true,
-			wantOutput:    0,
+			wantOutput:    255,
 			wantRemaining: "",
 		},
 		{
@@ -239,14 +237,13 @@ func TestUInt8(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
-
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult := tc.parser.It(gomme.NewFromString(-1, nil, -1, tc.input))
-			if newState.HasError() != tc.wantErr {
-				t.Errorf("got error %v, want error %v", newState.Errors(), tc.wantErr)
+			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
 
 			if gotResult != tc.wantOutput {
@@ -263,10 +260,10 @@ func TestUInt8(t *testing.T) {
 
 func BenchmarkUInt8(b *testing.B) {
 	parser := UInt8(false, 10)
-	input := gomme.NewFromString(1, nil, -1, "253")
+	input := gomme.NewFromString("253", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = parser.It(input)
+		_, _, _ = parser.Parse(input)
 	}
 }

@@ -331,7 +331,7 @@ func TestBranchParserToAnyParser(t *testing.T) {
 				t.Errorf("output=%v (OK=%t), want=%v", got, ok, want)
 			}
 
-			if got, want := aParse.IsStepRecoverer(), true; got != want {
+			if got, want := aParse.IsStepRecoverer(), false; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 		})
