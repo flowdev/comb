@@ -4,27 +4,19 @@ import (
 	"github.com/oleiade/gomme"
 )
 
-// noSeparator is a parser that parses the empty string.
-// It basically turns SeparatedMN into ManyMN.
-func noSeparator[S gomme.Separator]() gomme.Parser[S] {
-	p := func(state gomme.State) (gomme.State, S, *gomme.ParserError) {
-		var zero S
-		return state, zero, nil
-	}
-	return gomme.NewParser("noSeparator", p, Forbidden("noSeparator"))
-}
-
 // SeparatedMN applies an element parser and a separator parser repeatedly in order
 // to produce a slice of elements.
 //
-// Because the `SeparatedListMN` is really looking to produce a list of elements resulting
-// from the provided main parser, it will succeed even if the separator parser fails to
+// Because SeparatedMN is really looking to produce a list of elements resulting
+// from the provided main parser, it will succeed if the separator parser fails to
 // match at the end.
+//
+// If the separator parser is nil, SeparatedMN acts as ManyMN.
 //
 // The parser will fail if both parsers together accepted an empty input
 // in order to prevent infinite loops.
 func SeparatedMN[Output any, S gomme.Separator](
-	parse gomme.Parser[Output], separator gomme.Parser[S],
+	parser gomme.Parser[Output], separator gomme.Parser[S],
 	atLeast, atMost int,
 	parseSeparatorAtEnd bool,
 ) gomme.Parser[[]Output] {
@@ -35,19 +27,23 @@ func SeparatedMN[Output any, S gomme.Separator](
 		panic("SeparatedMN is unable to handle negative `atMost`")
 	}
 
+	expected := "SeparatedMN"
+	if separator == nil {
+		expected = "ManyMN"
+	}
 	sd := &separatedData[Output, S]{
-		parse:               parse,
+		parser:              parser,
 		separator:           separator,
 		atLeast:             atLeast,
 		atMost:              atMost,
 		parseSeparatorAtEnd: parseSeparatorAtEnd,
 	}
-	return gomme.NewBranchParser[[]Output]("FirstSuccessful", sd.children, sd.parseAfterChild)
+	return gomme.NewBranchParser[[]Output](expected, sd.children, sd.parseAfterChild)
 }
 
 type separatedData[Output any, S gomme.Separator] struct {
 	id                  uint64
-	parse               gomme.Parser[Output]
+	parser              gomme.Parser[Output]
 	separator           gomme.Parser[S]
 	atLeast             int
 	atMost              int
@@ -55,19 +51,24 @@ type separatedData[Output any, S gomme.Separator] struct {
 }
 
 func (sd *separatedData[Output, S]) children() []gomme.AnyParser {
-	return []gomme.AnyParser{sd.parse, sd.separator}
+	if sd.separator == nil {
+		return []gomme.AnyParser{sd.parser}
+	}
+	return []gomme.AnyParser{sd.parser, sd.separator}
 }
 
 func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult gomme.ParseResult) gomme.ParseResult {
+	var zeroSep S
+
 	gomme.Debugf("SeparatedMN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
 	if childResult.Error != nil {
 		return childResult // we can't avoid any errors by going another path
 	}
 
-	if childID >= 0 && childID != sd.parse.ID() && childID != sd.separator.ID() {
+	if childID >= 0 && childID != sd.parser.ID() && childID != sd.separator.ID() {
 		childResult.Error = childResult.EndState.NewSemanticError(
-			"unable to parse after child with unknown ID %d", childID)
+			"unable to parser after child with unknown ID %d", childID)
 		return childResult
 	}
 
@@ -86,10 +87,10 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult g
 
 	for {
 		if count >= sd.atMost {
-			return gomme.ParseResult{StartState: state, EndState: remaining, Output: outputs, Error: nil}
+			return gomme.ParseResult{StartState: state, EndState: retState, Output: outputs, Error: nil}
 		}
 
-		nState, out, err := sd.parse.Parse(remaining)
+		nState, out, err := sd.parser.Parse(remaining)
 		if err != nil {
 			if remaining.SaveSpotMoved(nState) || count < sd.atLeast { // fail
 				return gomme.ParseResult{StartState: remaining, EndState: nState, Output: out, Error: err}
@@ -98,24 +99,27 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult g
 		}
 		outputs = append(outputs, out)
 		count++
-
 		retState = nState
-		sepState, sepOut, err := sd.separator.Parse(nState)
-		if err != nil {
-			if nState.SaveSpotMoved(sepState) || count < sd.atLeast { // fail
-				return gomme.ParseResult{StartState: nState, EndState: sepState, Output: sepOut, Error: err}
+
+		sepState, sepOut := nState, zeroSep
+		if sd.separator != nil {
+			sepState, sepOut, err = sd.separator.Parse(nState)
+			if err != nil {
+				if nState.SaveSpotMoved(sepState) || count < sd.atLeast { // fail
+					return gomme.ParseResult{StartState: nState, EndState: sepState, Output: sepOut, Error: err}
+				}
+				return gomme.ParseResult{StartState: state, EndState: retState, Output: outputs, Error: nil}
 			}
-			return gomme.ParseResult{StartState: state, EndState: retState, Output: outputs, Error: nil}
-		}
-		if sd.parseSeparatorAtEnd {
-			retState = sepState
+			if sd.parseSeparatorAtEnd {
+				retState = sepState
+			}
 		}
 
 		// Checking for infinite loops, if nothing was consumed,
 		// the provided parser would make us go around in circles.
 		if !remaining.Moved(sepState) {
 			err = sepState.NewSyntaxError(
-				"many %s (empty element incl. separator => endless loop)", sd.parse.Expected())
+				"many %s (empty element incl. separator => endless loop)", sd.parser.Expected())
 			return gomme.ParseResult{StartState: remaining, EndState: sepState, Output: outputs, Error: err}
 		}
 		remaining = sepState

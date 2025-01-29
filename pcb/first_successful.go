@@ -14,9 +14,7 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 		panic("FirstSuccessful(missing parsers)")
 	}
 
-	fsd := &firstSuccessfulData[Output]{
-		parsers: parsers,
-	}
+	fsd := &firstSuccessfulData[Output]{parsers: parsers}
 
 	return gomme.NewBranchParser[Output]("FirstSuccessful", fsd.children, fsd.parseAfterChild)
 }
@@ -32,14 +30,7 @@ func (fsd *firstSuccessfulData[Output]) children() []gomme.AnyParser {
 	}
 	return children
 }
-func (fsd *firstSuccessfulData[Output]) indexForID(id int32) int {
-	for i, p := range fsd.parsers {
-		if p.ID() == id {
-			return i
-		}
-	}
-	return -1
-}
+
 func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResult gomme.ParseResult,
 ) gomme.ParseResult {
 	gomme.Debugf("FirstSuccessful.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
@@ -48,12 +39,13 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 		return childResult
 	}
 
-	state := childResult.StartState
+	state := childResult.EndState
+	idx := 0
 	bestState := childResult.EndState
 	bestOut, _ := childResult.Output.(Output)
 	bestErr := childResult.Error
-	idx := 0
 	if childID >= 0 {
+		state = childResult.StartState
 		idx = fsd.indexForID(childID)
 		if idx < 0 {
 			childResult.Error = childResult.EndState.NewSemanticError(
@@ -61,6 +53,8 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 			return childResult
 		}
 		idx++
+	} else {
+		state = childResult.EndState
 	}
 
 	for i := idx; i < len(fsd.parsers); i++ {
@@ -85,4 +79,13 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 		}
 	}
 	return gomme.ParseResult{StartState: state, EndState: bestState, Output: bestOut, Error: bestErr}
+}
+
+func (fsd *firstSuccessfulData[Output]) indexForID(id int32) int {
+	for i, p := range fsd.parsers {
+		if p.ID() == id {
+			return i
+		}
+	}
+	return -1
 }

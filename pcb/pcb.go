@@ -4,29 +4,27 @@
 package pcb
 
 import (
-	"fmt"
 	"github.com/oleiade/gomme"
 )
 
 // EOF parses the end of the input.
-// If there is still input left to parse, an error result is returned.
-// This IS already a `SafeSpot` parser.
+// If there is still input left to parse, an error is returned.
+// This IS already a `SafeSpot` parser (its recoverer consumes the rest of the input).
 func EOF() gomme.Parser[interface{}] {
 	expected := "end of the input"
 
-	parse := func(state gomme.State) (gomme.State, interface{}) {
+	parse := func(state gomme.State) (gomme.State, interface{}, *gomme.ParserError) {
 		remaining := state.BytesRemaining()
 		if remaining > 0 {
-			return state.NewError(fmt.Sprintf("%s (still %d bytes of input left)", expected, remaining)),
-				nil
+			return state, nil, state.NewSyntaxError("%s (still %d bytes of input left)", expected, remaining)
 		}
 
-		return state, nil
+		return state, nil, nil
 	}
 
 	return gomme.SafeSpot(
-		gomme.NewParser[interface{}](expected, parse, false, func(state gomme.State) int {
+		gomme.NewParser[interface{}](expected, parse, func(state gomme.State) int {
 			return state.BytesRemaining()
-		}, nil),
+		}),
 	)
 }
