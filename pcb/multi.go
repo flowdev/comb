@@ -43,7 +43,7 @@ func Many1[Output any](parse gomme.Parser[Output]) gomme.Parser[[]Output] {
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
 // `Digit0`, or `Alpha0`) in order to prevent infinite loops.
 func ManyMN[Output any](parse gomme.Parser[Output], atLeast, atMost int) gomme.Parser[[]Output] {
-	return SeparatedMN(parse, noSeparator, atLeast, atMost, false)
+	return SeparatedMN[Output, string](parse, nil, atLeast, atMost, false)
 }
 
 // Separated0 applies an element parser and a separator parser repeatedly in order

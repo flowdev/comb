@@ -51,14 +51,14 @@ func (seq *sequenceData[Output]) parseAfterChild(childID int32, childResult gomm
 		idx++
 	}
 
-	outputs := make([]Output, 0, len(seq.parsers))
+	outputs := make([]Output, len(seq.parsers))
 	for i := idx; i < len(seq.parsers); i++ {
 		parse := seq.parsers[i]
 		nState, out, err := parse.Parse(remaining)
 		if err != nil {
 			return gomme.ParseResult{StartState: remaining, EndState: nState, Output: out, Error: err}
 		}
-		outputs = saveOutput(outputs, out, i)
+		outputs[i] = out
 		remaining = nState
 	}
 
@@ -72,13 +72,4 @@ func (seq *sequenceData[Output]) indexForID(id int32) int {
 		}
 	}
 	return -1
-}
-
-func saveOutput[Output any](outputs []Output, output Output, i int) []Output {
-	var zero Output
-	for i >= len(outputs) {
-		outputs = append(outputs, zero)
-	}
-	outputs[i] = output
-	return outputs
 }

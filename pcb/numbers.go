@@ -2,13 +2,12 @@ package pcb
 
 import (
 	"fmt"
-	"github.com/oleiade/gomme"
 	"strconv"
 	"strings"
 	"unicode"
-)
 
-// import "math"
+	"github.com/oleiade/gomme"
+)
 
 // Integer parses any kind of integer number.
 // `signAllowed` can be false to parse only unsigned integers.
@@ -41,11 +40,11 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 
 	const allDigits = "0123456789abcdefghijklmnopqrstuvwxyz"
 
-	parse := func(state gomme.State) (gomme.State, string) {
+	parser := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
 		fullInput := state.CurrentString()
 		input := fullInput
 		if input == "" {
-			return state.NewError(expected + " at EOF"), ""
+			return state, "", state.NewSyntaxError(expected + " at EOF")
 		}
 
 		n := 0 // number of bytes read from input
@@ -56,7 +55,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 				input = input[1:]
 				n = 1
 				if input == "" {
-					return state.NewError(expected + " at EOF"), ""
+					return state, "", state.NewSyntaxError(expected + " at EOF")
 				}
 			}
 		}
@@ -64,9 +63,10 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 		input, base, n = rebaseInput(input, base, n)
 		digits := allDigits[:base]
 		good := false
+		digit := ' '
 
 	ForLoop:
-		for _, digit := range input {
+		for _, digit = range input {
 			switch {
 			case digit == '_':
 				if !underscoreAllowed {
@@ -82,10 +82,9 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 		}
 
 		if !good {
-			return state.NewError(expected), ""
+			return state, "", state.NewSyntaxError("%s found '%c'", expected, digit)
 		}
-		return state.MoveBy(n), fullInput[:n]
-
+		return state.MoveBy(n), fullInput[:n], nil
 	}
 
 	recovererBase := base
@@ -93,8 +92,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 		recovererBase = 10
 	}
 	allRunes := digitsToRunes(allDigits)
-	return gomme.NewParser[string](expected, parse, false,
-		IndexOfAny(allRunes[:recovererBase]...), nil)
+	return gomme.NewParser[string](expected, parser, IndexOfAny(allRunes[:recovererBase]...))
 }
 
 func rebaseInput(input string, base, n int) (string, int, int) {
@@ -174,59 +172,3 @@ func UInt8(signAllowed bool, base int) gomme.Parser[uint8] {
 		return uint8(ui), err
 	})
 }
-
-// Float parses a sequence of numerical characters into a float64.
-// The '.' character is used as the optional decimal delimiter. Any
-// number without a decimal part will still be parsed as a float64.
-//
-// N.B: it is not the parser's role to make sure the floating point
-// number you're attempting to parse fits into a 64 bits float.
-
-// func Float[I bytes]() Parser[I, float64] {
-// 	digitsParser := TakeWhileOneOf[I]([]rune("0123456789")...)
-// 	minusParser := Char[I]('-')
-// 	dotParser := Char[I]('.')
-
-// 	return func(input I) Result[float64, I] {
-// 		var negative bool
-
-// 		minusresult := minusParser(input)
-// 		if !result.Failed() {
-// 			negative = true
-// 		}
-
-// 		result = digitsParser(result.Remaining)
-// 		// result = Expect(digitsParser, "digits")(result.Remaining)
-// 		// if result.Failed() {
-// 		// 	return result
-// 		// }
-
-// 		parsed, ok := result.Output.(string)
-// 		if !ok {
-// 			err := fmt.Errorf("failed parsing floating point value; " +
-// 				"reason: converting Float() parser result's output to string failed",
-// 			)
-// 			return Preserve(NewFatalError(input, err, "float"), input)
-// 		}
-// 		if resultTest := dotParser(result.Remaining); resultTest.Err == nil {
-// 			if resultTest = digitsParser(resultTest.Remaining); resultTest.Err == nil {
-// 				parsed = parsed + "." + resultTest.Output.(string)
-// 				result = resultTest
-// 			}
-// 		}
-
-// 		floatingPointValue, err := strconv.ParseFloat(parsed, 64)
-// 		if err != nil {
-// 			err = fmt.Errorf("failed to parse '%v' as float; reason: %w", parsed, err)
-// 			return Preserve(NewFatalError(input, err), input)
-// 		}
-
-// 		if negative {
-// 			floatingPointValue = -floatingPointValue
-// 		}
-
-// 		result.Output = floatingPointValue
-
-// 		return result
-// 	}
-// }

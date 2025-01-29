@@ -159,9 +159,3 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 		return indexOfOneOfString
 	}
 }
-
-// BasicRecovererFunc recovers by trying to parse again and again and again.
-// It moves forward in the input using the Deleter one token at a time.
-func BasicRecovererFunc[Output any](parse func(gomme.State) (gomme.State, Output, *gomme.ParserError)) func(gomme.State) int {
-	return gomme.DefaultRecovererFunc(parse)
-}

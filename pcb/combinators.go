@@ -7,15 +7,37 @@ import (
 // Optional applies an optional child parser. Will return a zero value
 // if not successful.
 // Optional will ignore any parsing error except if a SafeSpot is active.
-func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	optParse := func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
-		newState, output, err := parse.It(state)
-		if newState.Failed() && !state.SaveSpotMoved(newState) {
-			return state.Succeed(newState), gomme.ZeroOf[Output](), nil
-		}
-		return newState, output, err
-	}
-	return gomme.NewParser[Output]("Optional", optParse, Forbidden("Optional"))
+func Optional[Output any](parser gomme.Parser[Output]) gomme.Parser[Output] {
+	return gomme.NewBranchParser[Output](
+		"Optional",
+		func() []gomme.AnyParser {
+			return []gomme.AnyParser{parser}
+		}, func(childID int32, childResult gomme.ParseResult) gomme.ParseResult {
+			gomme.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+			state := childResult.EndState
+			nState, out, err := state, gomme.ZeroOf[Output](), (*gomme.ParserError)(nil)
+			if childID >= 0 {
+				if childID != parser.ID() {
+					childResult.Error = state.NewSemanticError(
+						"unable to parse after child with unknown ID %d", childID)
+					return childResult
+				}
+				state = childResult.StartState
+				nState = childResult.EndState
+				out, _ = childResult.Output.(Output)
+				err = childResult.Error
+			} else {
+				nState, out, err = parser.Parse(state)
+			}
+			if err != nil && state.SaveSpotMoved(nState) { // we can't ignore the error
+				return gomme.ParseResult{StartState: state, EndState: nState, Output: out, Error: err}
+			}
+			if err != nil { // successful result without input consumption
+				return gomme.ParseResult{StartState: state, EndState: state, Output: out, Error: nil}
+			}
+			return gomme.ParseResult{StartState: state, EndState: nState, Output: out, Error: nil}
+		},
+	)
 }
 
 // Peek tries to apply the provided parser without consuming any input.
@@ -24,16 +46,11 @@ func Optional[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // NOTE:
 //   - SafeSpot isn't honored here because we aren't officially parsing anything.
 //   - Even though Peek accepts a parser as argument it behaves like a leaf parser
-//     to the outside. So it doesn't need to use MapN or the like.
+//     to the outside. There will be no error recovery as we don't parse anything.
 func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	peekParse := func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
-		newState, output, err := parse.It(state)
-		if err != nil {
-			// avoid SafeSpot and consumption because we only peek
-			return state.Fail(newState), output, err
-		}
-
-		return state, output, nil
+		_, out, err := parse.Parse(state)
+		return state, out, gomme.ClaimError(err)
 	}
 	return gomme.NewParser[Output]("Peek", peekParse, Forbidden("Peek"))
 }
@@ -41,60 +58,31 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // Not tries to apply the provided parser without consuming any input.
 // Not succeeds if the parser fails and succeeds if the parser fails.
 // It effectively allows to look ahead in the input.
-// The returned boolean value indicates its own success and not the given parsers.
+// An error returned should be handled (or ignored) by the parent parser.
 //
 // NOTE:
 //   - SafeSpot isn't honored here because we aren't officially parsing anything.
 //   - Even though Not accepts a parser as argument it behaves like a leaf parser
-//     to the outside. So it doesn't need to use MapN or the like.
-func Not[Output any](parse gomme.Parser[Output]) gomme.Parser[bool] {
-	expected := "not " + parse.Expected()
+//     to the outside. There will be no error recovery as we don't parse anything.
+//   - The returned boolean value indicates its own success and not the given parsers.
+func Not[Output any](parser gomme.Parser[Output]) gomme.Parser[bool] {
+	expected := "not " + parser.Expected()
 	notParse := func(state gomme.State) (gomme.State, bool, *gomme.ParserError) {
-		_, _, err := parse.It(state)
+		_, _, err := parser.Parse(state)
 		if err != nil {
 			return state, true, nil
 		}
-
-		// avoid SafeSpot because we only peek; error message and consumption don't really matter
-		return state.NewError(expected), false, err
+		return state, false, state.NewSyntaxError(expected)
 	}
 	return gomme.NewParser[bool](expected, notParse, Forbidden("Not"))
 }
 
-// Recognize returns the consumed input (instead of the original parsers output)
-// as the produced value when the provided parser succeeds.
-//
-// Note:
-//   - Using this parser is a code smell as it effectively removes type safety.
-//   - Rather use one of the MapX functions instead.
-func Recognize[Output any](parse gomme.Parser[Output]) gomme.Parser[[]byte] {
-	recParse := func(state gomme.State) (gomme.State, []byte, *gomme.ParserError) {
-		newState, _, err := parse.It(state)
-		if newState.Failed() {
-			return state.Preserve(newState), nil, err
-		}
-		return newState, state.BytesTo(newState), nil
-	}
-	recParser := gomme.NewParser[[]byte](
-		"Recognize",
-		recParse,
-		parse.Recover,
-	)
-	return MapN[[]byte, interface{}, interface{}, interface{}, interface{}](
-		"Recognize",
-		recParser, nil, nil, nil, nil,
-		1,
-		func(bs []byte) ([]byte, error) {
-			return bs, nil
-		}, nil, nil, nil, nil)
-}
-
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
-func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) gomme.Parser[Output1] {
+func Assign[Output1, Output2 any](value Output1, parser gomme.Parser[Output2]) gomme.Parser[Output1] {
 	return MapN[Output2, interface{}, interface{}, interface{}, interface{}](
 		"Assign",
-		parse, nil, nil, nil, nil,
+		parser, nil, nil, nil, nil,
 		1,
 		func(_ Output2) (Output1, error) {
 			return value, nil
@@ -105,10 +93,10 @@ func Assign[Output1, Output2 any](value Output1, parse gomme.Parser[Output2]) go
 // Delimited parses and discards the result from the prefix parser, then
 // parses the result of the main parser, and finally parses and discards
 // the result of the suffix parser.
-func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
+func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parser gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
 	return MapN[OP, O, OS, interface{}, interface{}](
 		"Delimited",
-		prefix, parse, suffix, nil, nil, 3, nil, nil,
+		prefix, parser, suffix, nil, nil, 3, nil, nil,
 		func(output1 OP, output2 O, output3 OS) (O, error) {
 			return output2, nil
 		}, nil, nil)
@@ -116,10 +104,10 @@ func Delimited[OP, O, OS any](prefix gomme.Parser[OP], parse gomme.Parser[O], su
 
 // Prefixed parses and discards a result from the prefix parser. It
 // then parses a result from the main parser and returns its result.
-func Prefixed[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.Parser[O] {
+func Prefixed[OP, O any](prefix gomme.Parser[OP], parser gomme.Parser[O]) gomme.Parser[O] {
 	return MapN[OP, O, interface{}, interface{}, interface{}](
 		"Prefixed",
-		prefix, parse, nil, nil, nil, 2, nil,
+		prefix, parser, nil, nil, nil, 2, nil,
 		func(output1 OP, output2 O) (O, error) {
 			return output2, nil
 		}, nil, nil, nil)
@@ -128,10 +116,10 @@ func Prefixed[OP, O any](prefix gomme.Parser[OP], parse gomme.Parser[O]) gomme.P
 // Suffixed parses a result from the main parser, it then
 // parses the result from the suffix parser and discards it; only
 // returning the result of the main parser.
-func Suffixed[O, OS any](parse gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
+func Suffixed[O, OS any](parser gomme.Parser[O], suffix gomme.Parser[OS]) gomme.Parser[O] {
 	return MapN[O, OS, interface{}, interface{}, interface{}](
 		"Suffixed",
-		parse, suffix, nil, nil, nil, 2, nil,
+		parser, suffix, nil, nil, nil, 2, nil,
 		func(output1 O, output2 OS) (O, error) {
 			return output1, nil
 		}, nil, nil, nil)

@@ -28,6 +28,14 @@ func (e *ParserError) Error() string {
 	return singleErrorMsg(*e)
 }
 
+// ClaimError is used by a parser to take over an error from a sub-parser.
+func ClaimError(err *ParserError) *ParserError {
+	if err != nil {
+		err.parserID = -1
+	}
+	return err
+}
+
 // ============================================================================
 // Error Reporting
 //

@@ -69,14 +69,9 @@ func (p *prsr[Output]) setID(id int32) {
 // Branch Parser
 //
 
-type outputBranchParser[Output any] interface {
-	Parser[Output]
-	BranchParser
-}
-
 type brnchprsr[Output any] struct {
 	id            int32
-	name          string
+	expected      string
 	childs        func() []AnyParser
 	prsAfterChild func(childID int32, childResult ParseResult) ParseResult
 }
@@ -85,13 +80,13 @@ type brnchprsr[Output any] struct {
 // parseAfterChild will be called with a childID < 0 if it should parse from
 // the beginning.
 func NewBranchParser[Output any](
-	name string,
+	expected string,
 	children func() []AnyParser,
 	parseAfterChild func(childID int32, childResult ParseResult) ParseResult,
-) outputBranchParser[Output] {
+) Parser[Output] {
 	return &brnchprsr[Output]{
 		id:            -1,
-		name:          name,
+		expected:      expected,
 		childs:        children,
 		prsAfterChild: parseAfterChild,
 	}
@@ -100,7 +95,7 @@ func (bp *brnchprsr[Output]) ID() int32 {
 	return bp.id
 }
 func (bp *brnchprsr[Output]) Expected() string {
-	return bp.name
+	return bp.expected
 }
 func (bp *brnchprsr[Output]) Parse(state State) (State, Output, *ParserError) {
 	result := bp.parseAfterChild(-1, ParseResult{EndState: state})
@@ -227,7 +222,7 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 // So you don't need this parser at all if your input is always correct.
 // SafeSpot is THE cornerstone of good and performant parsing otherwise.
 //
-// Note:
+// NOTE:
 //   - Parsers that accept the empty input or only perform look ahead are
 //     NOT allowed as sub-parsers.
 //     SafeSpot tests the optional recoverer of the parser during the
@@ -235,7 +230,7 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 //     This way we won't have a panic at the runtime of the parser.
 //   - Only leaf parsers MUST be given to SafeSpot as sub-parsers.
 //     SafeSpot will treat the sub-parser as a leaf parser.
-//     SafeSpot will panic if the output of the sub-parser isn't of the right type.
+//     Any error will look as if coming from SafeSpot itself.
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	// call Recoverer to make a Forbidden recoverer panic during the construction phase
 	recoverer := p.Recover
@@ -252,7 +247,7 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 		if err == nil {
 			nState.saveSpot = nState.input.pos // move the mark!
 		}
-		return nState, output, err
+		return nState, output, ClaimError(err)
 	}
 	sp := NewParser[Output](p.Expected(), nParse, p.Recover)
 	sp.setSaveSpot()
