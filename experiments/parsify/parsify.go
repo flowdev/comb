@@ -9,7 +9,7 @@ import (
 
 // Parser is a simple function here.
 // An interface wouldn't work at all.
-type Parser[Output any] func(gomme.State) (gomme.State, Output)
+type Parser[Output any] func(gomme.State) (gomme.State, Output, *gomme.ParserError)
 
 // Parserish types are any type that can be turned into a Parser by Parsify
 type Parserish[Output any] interface {
@@ -30,19 +30,19 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 			iruneErr := interface{}(utf8.RuneError)
 			oruneErr, _ := iruneErr.(Output)
 			expected := strconv.QuoteRune(ap)
-			return func(state gomme.State) (gomme.State, Output) {
+			return func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
 				r, size := utf8.DecodeRuneInString(state.CurrentString())
 				if r == utf8.RuneError {
 					if size == 0 {
-						return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), oruneErr
+						return state, oruneErr, state.NewSyntaxError("%q (at EOF)", expected)
 					}
-					return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected)), oruneErr
+					return state, oruneErr, state.NewSyntaxError("%q (got UTF-8 error)", expected)
 				}
 				if r != ap {
-					return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), oruneErr
+					return state, oruneErr, state.NewSyntaxError("%q (got %q)", expected, r)
 				}
 
-				return state.MoveBy(size), op
+				return state.MoveBy(size), op, nil
 			}
 		}
 		panic(fmt.Errorf("can't turn a rune into a parser of type `%T`", zeroOutput))

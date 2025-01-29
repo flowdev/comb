@@ -1,7 +1,6 @@
 package parsify
 
 import (
-	"fmt"
 	"github.com/oleiade/gomme"
 	"strconv"
 	"strings"
@@ -28,28 +27,30 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 	pparse2 := Parsify[PO2, ParserPO2](parse2)
 	pparse3 := Parsify[PO3, ParserPO3](parse3)
 
-	return func(state gomme.State) (gomme.State, MO) {
-		newState1, output1 := pparse1(state)
-		if newState1.Failed() {
-			return state.Preserve(newState1), gomme.ZeroOf[MO]()
+	return func(state gomme.State) (gomme.State, MO, *gomme.ParserError) {
+		var zero MO
+
+		newState1, output1, err1 := pparse1(state)
+		if err1 != nil {
+			return newState1, zero, err1
 		}
 
-		newState2, output2 := pparse2(newState1)
-		if newState2.Failed() {
-			return state.Preserve(newState2), gomme.ZeroOf[MO]()
+		newState2, output2, err2 := pparse2(newState1)
+		if err2 != nil {
+			return newState2, zero, err2
 		}
 
-		newState3, output3 := pparse3(newState2)
-		if newState3.Failed() {
-			return state.Preserve(newState3), gomme.ZeroOf[MO]()
+		newState3, output3, err3 := pparse3(newState2)
+		if err3 != nil {
+			return newState3, zero, err3
 		}
 
 		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return state.NewError(err.Error()), gomme.ZeroOf[MO]()
+			return state, zero, state.NewSemanticError(err.Error())
 		}
 
-		return newState3, mapped
+		return newState3, mapped, nil
 	}
 }
 
@@ -58,19 +59,19 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 func Char(char rune) Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
-	return func(state gomme.State) (gomme.State, rune) {
+	return func(state gomme.State) (gomme.State, rune, *gomme.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), utf8.RuneError
+				return state, utf8.RuneError, state.NewSyntaxError("%q (at EOF)", expected)
 			}
-			return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%q (got UTF-8 error)", expected)
 		}
 		if r != char {
-			return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%q (got %q)", expected, r)
 		}
 
-		return state.MoveBy(size), r
+		return state.MoveBy(size), r, nil
 	}
 }
 
@@ -79,19 +80,19 @@ func Char(char rune) Parser[rune] {
 func Char2[Output rune](char rune) Parser[Output] {
 	expected := strconv.QuoteRune(char)
 
-	return func(state gomme.State) (gomme.State, Output) {
+	return func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state.NewError(fmt.Sprintf("%q (at EOF)", expected)), utf8.RuneError
+				return state, utf8.RuneError, state.NewSyntaxError("%q (at EOF)", expected)
 			}
-			return state.NewError(fmt.Sprintf("%q (got UTF-8 error)", expected)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%q (got UTF-8 error)", expected)
 		}
 		if r != char {
-			return state.NewError(fmt.Sprintf("%q (got %q)", expected, r)), utf8.RuneError
+			return state, utf8.RuneError, state.NewSyntaxError("%q (got %q)", expected, r)
 		}
 
-		return state.MoveBy(size), Output(r)
+		return state.MoveBy(size), Output(r), nil
 	}
 }
 
@@ -100,14 +101,14 @@ func Char2[Output rune](char rune) Parser[Output] {
 // If found the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
 func UntilString(stop string) Parser[string] {
-	return func(state gomme.State) (gomme.State, string) {
+	return func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state.NewError(fmt.Sprintf("... %q", stop)), ""
+			return state, "", state.NewSyntaxError("... %q", stop)
 		}
 
 		newState := state.MoveBy(i + len(stop))
-		return newState, input[:i]
+		return newState, input[:i], nil
 	}
 }

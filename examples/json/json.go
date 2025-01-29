@@ -121,34 +121,25 @@ var arrayp gomme.Parser[JSONValue]
 
 // parseNumber parses a JSON number.
 func parseNumber() gomme.Parser[JSONValue] {
-	return pcb.Map[[]string, JSONValue](
-		pcb.Sequence(
-			pcb.Map(integer, func(i int) (string, error) { return strconv.Itoa(i), nil }),
-			pcb.Optional(fraction),
-			pcb.Optional(exponent),
-		),
-		func(parts []string) (JSONValue, error) {
+	return pcb.Map3[string, string, string, JSONValue](
+		integer,
+		pcb.Optional(fraction),
+		pcb.Optional(exponent),
+		func(part1, part2, part3 string) (JSONValue, error) {
 			// Construct the float string from parts
 			var floatStr string
 
 			// Integer part
-			floatStr += parts[0]
+			floatStr = part1
 
 			// Fraction part
-			if parts[1] != "" {
-				fractionPart, err := strconv.Atoi(parts[1])
-				if err != nil {
-					return 0, err
-				}
-
-				if fractionPart != 0 {
-					floatStr += "." + parts[1]
-				}
+			if part2 != "" {
+				floatStr += "." + part2
 			}
 
 			// Exponent part
-			if parts[2] != "" {
-				floatStr += "e" + parts[2]
+			if part3 != "" {
+				floatStr += "e" + part3
 			}
 
 			f, err := strconv.ParseFloat(floatStr, 64)
@@ -290,18 +281,18 @@ func stringParser() gomme.Parser[string] {
 
 var pstring = stringParser()
 
-// integer creates a parser for a JSON number's integer part.
+// integerParser creates a parser for a JSON number's integer part.
 //
 // It handles negative and positive integers including zero.
-func integerParser() gomme.Parser[int] {
+func integerParser() gomme.Parser[string] {
 	return FirstSuccessful(
 		// "-" onenine digits
 		pcb.Prefixed(
 			pcb.Char('-'),
 			pcb.Map2(
 				onenine, digits,
-				func(first rune, rest string) (int, error) {
-					return strconv.Atoi("-" + string(first) + rest)
+				func(first rune, rest string) (string, error) {
+					return "-" + string(first) + rest, nil
 				},
 			),
 		),
@@ -309,8 +300,8 @@ func integerParser() gomme.Parser[int] {
 		// onenine digits
 		pcb.Map2(
 			onenine, digits,
-			func(first rune, rest string) (int, error) {
-				return strconv.Atoi(string(first) + rest)
+			func(first rune, rest string) (string, error) {
+				return string(first) + rest, nil
 			},
 		),
 
@@ -319,8 +310,8 @@ func integerParser() gomme.Parser[int] {
 			pcb.Char('-'),
 			pcb.Map(
 				digit,
-				func(r rune) (int, error) {
-					return strconv.Atoi("-" + string(r))
+				func(r rune) (string, error) {
+					return "-" + string(r), nil
 				},
 			),
 		),
@@ -328,8 +319,8 @@ func integerParser() gomme.Parser[int] {
 		// digit
 		pcb.Map(
 			digit,
-			func(r rune) (int, error) {
-				return strconv.Atoi(string(r))
+			func(r rune) (string, error) {
+				return string(r), nil
 			},
 		),
 	)
@@ -443,15 +434,9 @@ var character = characterParser()
 //
 // It handles common escape sequences like '\n', '\t', etc., and unicode escapes.
 func escapeParser() gomme.Parser[rune] {
-	mapFunc := func(chars []rune) (rune, error) {
-		// chars[0] will always be '\\'
-		switch chars[1] {
-		case '"':
-			return '"', nil
-		case '\\':
-			return '\\', nil
-		case '/':
-			return '/', nil
+	mapFunc := func(char1, char2 rune) (rune, error) {
+		// char1 will always be '\\'
+		switch char2 {
 		case 'b':
 			return '\b', nil
 		case 'f':
@@ -463,17 +448,15 @@ func escapeParser() gomme.Parser[rune] {
 		case 't':
 			return '\t', nil
 		default: // for unicode escapes
-			return chars[1], nil
+			return char2, nil
 		}
 	}
 
-	return pcb.Map(
-		pcb.Sequence(
-			pcb.Char('\\'),
-			FirstSuccessful(
-				pcb.OneOfRunes('"', '\\', '/', 'b', 'f', 'n', 'r', 't'),
-				unicodeEscape,
-			),
+	return pcb.Map2(
+		pcb.Char('\\'),
+		FirstSuccessful(
+			pcb.OneOfRunes('"', '\\', '/', 'b', 'f', 'n', 'r', 't'),
+			unicodeEscape,
 		),
 		mapFunc,
 	)
@@ -486,9 +469,8 @@ var escape = escapeParser()
 // It expects a sequence starting with 'u' followed by four hexadecimal digits and
 // converts them to the corresponding rune.
 func unicodeEscapeParser() gomme.Parser[rune] {
-	mapFunc := func(chars []rune) (rune, error) {
-		// chars[0] will always be 'u'
-		hex := string(chars[1:5])
+	mapFunc := func(_ rune, hex string) (rune, error) {
+		// char will always be 'u'
 		codePoint, err := strconv.ParseInt(hex, 16, 32)
 		if err != nil {
 			return 0, err
@@ -496,14 +478,9 @@ func unicodeEscapeParser() gomme.Parser[rune] {
 		return rune(codePoint), nil
 	}
 
-	return pcb.Map(
-		pcb.Sequence(
-			pcb.Char('u'),
-			hex,
-			hex,
-			hex,
-			hex,
-		),
+	return pcb.Map2(
+		pcb.Char('u'),
+		pcb.SatisfyMN("hex digit", 4, 4, pcb.IsHexDigit),
 		mapFunc,
 	)
 }
