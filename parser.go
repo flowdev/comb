@@ -18,6 +18,9 @@ type prsr[Output any] struct {
 }
 
 // NewParser is THE way to create leaf parsers.
+// recover can be nil to signal that there is no optimized recoverer available.
+// In case of an error the parser will be called again and again moving forward
+// one byte/rune at a time instead.
 func NewParser[Output any](
 	expected string,
 	parse func(State) (State, Output, *ParserError),
@@ -117,7 +120,7 @@ func (bp *brnchprsr[Output]) setSaveSpot() {
 	panic("a branch parser can never be a save spot")
 }
 func (bp *brnchprsr[Output]) Recover(_ State) int {
-	return math.MinInt // don't recover at all with a branch parser
+	return RecoverWasteNever // never recover with a branch parser
 }
 func (bp *brnchprsr[Output]) IsStepRecoverer() bool {
 	return false

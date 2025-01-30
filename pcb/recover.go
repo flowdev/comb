@@ -3,7 +3,6 @@ package pcb
 import (
 	"bytes"
 	"github.com/oleiade/gomme"
-	"math"
 	"reflect"
 	"strings"
 )
@@ -11,15 +10,15 @@ import (
 // Forbidden is the Recoverer for parsers that MUST NOT be used to recover at all.
 // These are all parsers that are happy to consume the empty input and
 // all look ahead parsers.
-func Forbidden(name string) gomme.Recoverer {
+func Forbidden() gomme.Recoverer {
 	return func(_ gomme.State) int {
-		return math.MinInt // don't recover at all with this parser
+		return gomme.RecoverWasteNever // don't recover at all with this parser
 	}
 }
 
 // IndexOf searches until it finds the stop token in the input.
 // If found the Recoverer returns the number of bytes up to the stop.
-// If the token could not be found, the recoverer returns -1.
+// If the token could not be found, the recoverer returns gomme.RecoverWasteTooMuch.
 // This function panics during the construction phase if `stop` is empty.
 func IndexOf[S gomme.Separator](stop S) gomme.Recoverer {
 	// This IS type safe because of the `Separator` constraint!
@@ -29,12 +28,20 @@ func IndexOf[S gomme.Separator](stop S) gomme.Recoverer {
 	case reflect.Uint8:
 		xstop := interface{}(stop).(byte)
 		return func(state gomme.State) int {
-			return bytes.IndexByte(state.CurrentBytes(), xstop)
+			waste := bytes.IndexByte(state.CurrentBytes(), xstop)
+			if waste < 0 {
+				return gomme.RecoverWasteTooMuch
+			}
+			return waste
 		}
 	case reflect.Int32:
 		rstop := interface{}(stop).(rune)
 		return func(state gomme.State) int {
-			return strings.IndexRune(state.CurrentString(), rstop)
+			waste := strings.IndexRune(state.CurrentString(), rstop)
+			if waste < 0 {
+				return gomme.RecoverWasteTooMuch
+			}
+			return waste
 		}
 	case reflect.String:
 		sstop := interface{}(stop).(string)
@@ -42,7 +49,11 @@ func IndexOf[S gomme.Separator](stop S) gomme.Recoverer {
 			panic("stop is empty")
 		}
 		return func(state gomme.State) int {
-			return strings.Index(state.CurrentString(), sstop)
+			waste := strings.Index(state.CurrentString(), sstop)
+			if waste < 0 {
+				return gomme.RecoverWasteTooMuch
+			}
+			return waste
 		}
 	case reflect.Slice:
 		bstop := interface{}(stop).([]byte)
@@ -50,7 +61,11 @@ func IndexOf[S gomme.Separator](stop S) gomme.Recoverer {
 			panic("stop is empty")
 		}
 		return func(state gomme.State) int {
-			return bytes.Index(state.CurrentBytes(), bstop)
+			waste := bytes.Index(state.CurrentBytes(), bstop)
+			if waste < 0 {
+				return gomme.RecoverWasteTooMuch
+			}
+			return waste
 		}
 	default:
 		return nil // can never happen because of the `Separator` constraint!
@@ -59,7 +74,7 @@ func IndexOf[S gomme.Separator](stop S) gomme.Recoverer {
 
 // IndexOfAny searches until it finds a stop token in the input.
 // If found the recoverer returns the number of bytes up to the stop.
-// If no stop token could be found, the recoverer returns -1.
+// If no stop token could be found, the recoverer returns gomme.RecoverWasteTooMuch.
 //
 // NOTE:
 //   - If any of the `stops` is empty it returns 0.
@@ -98,14 +113,16 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 	indexOfOneOfByte := func(state gomme.State) int {
 		input := state.CurrentBytes()
 		xstops := interface{}(stops).([]byte)
-		pos := -1
+		pos := gomme.RecoverWasteTooMuch
 		for i := 0; i < n; i++ {
 			switch j := bytes.IndexByte(input, xstops[i]); j {
 			case -1: // ignore
 			case 0: // it won't get better than this
 				return 0
 			default:
-				pos = min(pos, j)
+				if pos < 0 || j < pos {
+					pos = j
+				}
 			}
 		}
 		return pos
@@ -116,14 +133,16 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 	indexOfOneOfBytes := func(state gomme.State) int {
 		input := state.CurrentBytes()
 		bstops := interface{}(stops).([][]byte)
-		pos := -1
+		pos := gomme.RecoverWasteTooMuch
 		for i := 0; i < n; i++ {
 			switch j := bytes.Index(input, bstops[i]); j {
 			case -1: // ignore
 			case 0: // it won't get better than this
 				return 0
 			default:
-				pos = min(pos, j)
+				if pos < 0 || j < pos {
+					pos = j
+				}
 			}
 		}
 		return pos
@@ -131,14 +150,16 @@ func IndexOfAny[S gomme.Separator](stops ...S) gomme.Recoverer {
 	indexOfOneOfString := func(state gomme.State) int {
 		input := state.CurrentString()
 		sstops := interface{}(stops).([]string)
-		pos := -1
+		pos := gomme.RecoverWasteTooMuch
 		for i := 0; i < n; i++ {
 			switch j := strings.Index(input, sstops[i]); j {
 			case -1: // ignore
 			case 0: // it won't get better than this
 				return 0
 			default:
-				pos = min(pos, j)
+				if pos < 0 || j < pos {
+					pos = j
+				}
 			}
 		}
 		return pos

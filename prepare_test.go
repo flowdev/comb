@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-func TestOrchestratorParseAll(t *testing.T) {
+func TestPreparedParserParseAll(t *testing.T) {
 	runePlusRune := func(out1 rune, out2 rune) (string, error) {
 		return string([]rune{out1, out2}), nil
 	}
@@ -243,8 +243,8 @@ func TestOrchestratorParseAll(t *testing.T) {
 	SetDebug(true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orch := newOrchestrator[string](tt.givenParser) // this calls ParserToAnyParser
-			output, err := orch.parseAll(NewFromString(tt.givenInput, true))
+			prepp := NewPreparedParser[string](tt.givenParser) // this calls ParserToAnyParser
+			output, err := prepp.parseAll(NewFromString(tt.givenInput, true))
 			t.Logf("err=%v", err)
 			if got, want := len(UnwrapErrors(err)), tt.expectedErrors; got != want {
 				t.Errorf("err=%v, want=%d", err, want)
@@ -308,8 +308,8 @@ func TestBranchParserToAnyParser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orch := newOrchestrator[string](tt.givenParser) // this calls ParserToAnyParser
-			aParse := orch.parsers[0].parser
+			prepp := NewPreparedParser[string](tt.givenParser) // this calls ParserToAnyParser
+			aParse := prepp.parsers[0].parser
 			result := aParse.parse(NewFromString(tt.givenInput, true))
 			if got, want := aParse.IsSaveSpot(), false; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
@@ -378,7 +378,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 			expectedStepRecoverer: false,
 			expectedOutput:        utf8.RuneError,
 			expectedError:         true,
-			expectedWaste:         -1,
+			expectedWaste:         RecoverWasteTooMuch,
 		}, {
 			name:                  "emptySaveSpot",
 			givenInput:            "",
@@ -387,7 +387,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 			expectedStepRecoverer: false,
 			expectedOutput:        utf8.RuneError,
 			expectedError:         true,
-			expectedWaste:         -1,
+			expectedWaste:         RecoverWasteTooMuch,
 		}, {
 			name:                  "twoBytesOffSimple",
 			givenInput:            "bca",
@@ -410,8 +410,8 @@ func TestLeafParserToAnyParser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orch := newOrchestrator[rune](tt.givenParser) // this calls ParserToAnyParser
-			aParse := orch.parsers[0].parser
+			prepp := NewPreparedParser[rune](tt.givenParser) // this calls ParserToAnyParser
+			aParse := prepp.parsers[0].parser
 			result := aParse.parse(NewFromString(tt.givenInput, true))
 			if got, want := tt.givenParser.IsSaveSpot(), tt.expectedSaveSpot; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
@@ -565,12 +565,20 @@ func IndexOf[S Separator](stop S) Recoverer {
 	case reflect.Uint8:
 		xstop := interface{}(stop).(byte)
 		return func(state State) int {
-			return bytes.IndexByte(state.CurrentBytes(), xstop)
+			waste := bytes.IndexByte(state.CurrentBytes(), xstop)
+			if waste < 0 {
+				return RecoverWasteTooMuch
+			}
+			return waste
 		}
 	case reflect.Int32:
 		rstop := interface{}(stop).(rune)
 		return func(state State) int {
-			return strings.IndexRune(state.CurrentString(), rstop)
+			waste := strings.IndexRune(state.CurrentString(), rstop)
+			if waste < 0 {
+				return RecoverWasteTooMuch
+			}
+			return waste
 		}
 	case reflect.String:
 		sstop := interface{}(stop).(string)
@@ -578,7 +586,11 @@ func IndexOf[S Separator](stop S) Recoverer {
 			panic("stop is empty")
 		}
 		return func(state State) int {
-			return strings.Index(state.CurrentString(), sstop)
+			waste := strings.Index(state.CurrentString(), sstop)
+			if waste < 0 {
+				return RecoverWasteTooMuch
+			}
+			return waste
 		}
 	case reflect.Slice:
 		bstop := interface{}(stop).([]byte)
@@ -586,7 +598,11 @@ func IndexOf[S Separator](stop S) Recoverer {
 			panic("stop is empty")
 		}
 		return func(state State) int {
-			return bytes.Index(state.CurrentBytes(), bstop)
+			waste := bytes.Index(state.CurrentBytes(), bstop)
+			if waste < 0 {
+				return RecoverWasteTooMuch
+			}
+			return waste
 		}
 	default:
 		return nil // can never happen because of the `Separator` constraint!

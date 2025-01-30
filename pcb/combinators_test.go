@@ -66,7 +66,7 @@ func BenchmarkOptional(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -121,7 +121,7 @@ func BenchmarkPeek(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -176,7 +176,7 @@ func BenchmarkAssign(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -252,7 +252,7 @@ func BenchmarkDelimited(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -323,7 +323,7 @@ func BenchmarkPrefixed(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -394,7 +394,7 @@ func BenchmarkTerminated(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -479,7 +479,7 @@ func BenchmarkMap(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -571,6 +571,6 @@ func BenchmarkMap2(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = gomme.RunOnState(input, parser)
+		_, _, _ = parser.Parse(input)
 	}
 }

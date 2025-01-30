@@ -22,13 +22,18 @@ type Separator interface {
 
 // Recoverer is a simplified parser that only returns the number of bytes
 // to reach a SafeSpot.
-// If it can't recover it should return -1.
+// If it can't recover from the given state it should return RecoverWasteTooMuch.
+// If it can't recover AT ALL it should return RecoverWasteNever.
 //
 // A Recoverer is used for recovering from an error in the input.
 // It helps to move forward to the next SafeSpot.
-// The basic Recoverer will have to try the parser until it succeeds moving
+// If no special recoverer is given we will try the parser until it succeeds moving
 // forward 1 rune/byte at a time. :(
 type Recoverer func(state State) int
+
+const RecoverWasteUnknown = -1 // default value; 0 can't be used because it's a valid normal value
+const RecoverWasteTooMuch = -2 // used by recoverers to convey that they can't recover from the current state
+const RecoverWasteNever = -3   // used by recoverers to convey that they can't recover ever at all
 
 // Parser defines the type of a generic Parser.
 // A few rules should be followed to prevent unexpected behaviour:
@@ -39,13 +44,13 @@ type Parser[Output any] interface {
 	ID() int32
 	Expected() string
 	Parse(state State) (State, Output, *ParserError) // used by branch parsers and compiler (type inference)
-	parse(state State) ParseResult                   // used by orchestrator
+	parse(state State) ParseResult                   // used by PreparedParser
 	IsSaveSpot() bool
 	setSaveSpot() // used by SafeSpot parser
 	Recover(State) int
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during construction phase
-	setID(int32)             // used by orchestrator; only sets own ID
+	setID(int32)             // used by PreparedParser; only sets own ID
 }
 
 // ============================================================================
@@ -57,7 +62,7 @@ type Parser[Output any] interface {
 // the number of recoverers to try and the deleter to use.
 // It also uses the default value for the number of recursions to support.
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromString(input, true), parse)
+	return RunOnState[Output](NewFromString(input, true), NewPreparedParser(parse))
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
@@ -66,11 +71,11 @@ func RunOnString[Output any](input string, parse Parser[Output]) (Output, error)
 // It also uses the default value for the number of recursions to support.
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromBytes(input, true), parse)
+	return RunOnState[Output](NewFromBytes(input, true), NewPreparedParser(parse))
 }
 
-func RunOnState[Output any](state State, parse Parser[Output]) (Output, error) {
-	return newOrchestrator[Output](parse).parseAll(state)
+func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output, error) {
+	return parser.parseAll(state)
 }
 
 // ============================================================================

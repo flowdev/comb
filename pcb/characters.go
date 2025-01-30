@@ -165,7 +165,7 @@ func UntilString(stop string) gomme.Parser[string] {
 			if strings.Contains(state.CurrentString(), stop) {
 				return 0 // this is probably not what the user wants but the only correct value :(
 			}
-			return -1
+			return gomme.RecoverWasteTooMuch
 		},
 	)
 }
@@ -240,7 +240,7 @@ func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) gomme.Recoverer 
 				count = 0
 			}
 		}
-		return -1
+		return gomme.RecoverWasteTooMuch
 	}
 }
 

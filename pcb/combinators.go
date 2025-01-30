@@ -52,7 +52,7 @@ func Peek[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 		_, out, err := parse.Parse(state)
 		return state, out, gomme.ClaimError(err)
 	}
-	return gomme.NewParser[Output]("Peek", peekParse, Forbidden("Peek"))
+	return gomme.NewParser[Output]("Peek", peekParse, Forbidden())
 }
 
 // Not tries to apply the provided parser without consuming any input.
@@ -74,7 +74,7 @@ func Not[Output any](parser gomme.Parser[Output]) gomme.Parser[bool] {
 		}
 		return state, false, state.NewSyntaxError(expected)
 	}
-	return gomme.NewParser[bool](expected, notParse, Forbidden("Not"))
+	return gomme.NewParser[bool](expected, notParse, Forbidden())
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise

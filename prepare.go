@@ -2,10 +2,11 @@ package gomme
 
 import (
 	"math"
+	"slices"
 )
 
 // ============================================================================
-// AnyParser interface and implementation
+// Data Types For General Parser Preparation
 //
 
 // ParseResult is the result of a parser.
@@ -25,7 +26,7 @@ type BranchParser interface {
 	parseAfterChild(childID int32, childResult ParseResult) ParseResult
 }
 
-// AnyParser is an internal interface used by the orchestrator.
+// AnyParser is an internal interface used by PreparedParser.
 // It intentionally avoids generics for easy storage of parsers in collections
 // (slices, maps, ...).
 type AnyParser interface {
@@ -38,54 +39,62 @@ type AnyParser interface {
 }
 
 // ============================================================================
-// orchestra data structures and construction
+// PreparedParser: Data Structures And Construction
 //
 
 type parserData struct { // all data about a single parser
 	parser   AnyParser
 	parentID int32
 }
-type orchestrator[Output any] struct {
+type PreparedParser[Output any] struct {
 	parsers        []parserData
 	recoverers     []AnyParser
 	stepRecoverers []AnyParser
+	recoverCache   []int
 }
 
-func newOrchestrator[Output any](p Parser[Output]) *orchestrator[Output] {
-	o := &orchestrator[Output]{
+// NewPreparedParser prepares a parser for error recovery.
+// Call this directly if you have a parser that you want to run on many inputs.
+// You can use this together with RunOnState.
+func NewPreparedParser[Output any](p Parser[Output]) *PreparedParser[Output] {
+	o := &PreparedParser[Output]{
 		parsers:        make([]parserData, 0, 64),
 		recoverers:     make([]AnyParser, 0, 64),
 		stepRecoverers: make([]AnyParser, 0, 64),
 	}
 	o.registerParsers(p, -1)
+	o.recoverCache = slices.Repeat([]int{RecoverWasteUnknown}, len(o.parsers))
 	return o
 }
-func (o *orchestrator[Output]) registerParsers(ap AnyParser, parentID int32) {
-	id := int32(len(o.parsers))
+
+func (pp *PreparedParser[Output]) registerParsers(ap AnyParser, parentID int32) {
+	id := int32(len(pp.parsers))
 	ap.setID(id)
-	o.parsers = append(o.parsers, parserData{parser: ap, parentID: parentID})
+	pp.parsers = append(pp.parsers, parserData{parser: ap, parentID: parentID})
 
 	if bp, ok := ap.(BranchParser); ok {
 		for _, cp := range bp.children() {
-			o.registerParsers(cp, id)
+			pp.registerParsers(cp, id)
 		}
 	} else if ap.IsSaveSpot() {
 		if ap.IsStepRecoverer() {
-			o.stepRecoverers = append(o.stepRecoverers, ap)
+			pp.stepRecoverers = append(pp.stepRecoverers, ap)
 		} else {
-			o.recoverers = append(o.recoverers, ap)
+			pp.recoverers = append(pp.recoverers, ap)
 		}
 	}
 }
 
 // ============================================================================
-// parser orchestration: parseAll
+// PreparedParser: parseAll
 //
 
-func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
+func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	var zero Output
 	var id int32 = 0 // this is always the root parser
-	p := o.parsers[id]
+	recoverCache := slices.Clone(pp.recoverCache)
+
+	p := pp.parsers[id]
 	result := p.parser.parse(state)
 	nextID, nState := id, result.EndState
 	for result.Error != nil {
@@ -96,48 +105,51 @@ func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
 			return zero, nState.Errors()
 		}
 		result.EndState = nState
-		nState, nextID = o.handleError(result)
+		nState, nextID = pp.handleError(result, recoverCache)
 		if nextID < 0 { // give up
 			Debugf("parseAll - no recoverer found")
 			return zero, nState.Errors()
 		}
-		p = o.parsers[nextID]
+		p = pp.parsers[nextID]
 		result = p.parser.parse(nState)
 		for p.parentID >= 0 { // force the new result through all levels (error or not)
 			childID := nextID
 			nextID = p.parentID
-			p = o.parsers[nextID]
+			p = pp.parsers[nextID]
 			result = (p.parser.(BranchParser)).parseAfterChild(childID, result)
 			Debugf("parseAll - parent (ID=%d) Error?=%v", nextID, result.Error)
 		}
 	}
 	return result.Output.(Output), result.EndState.Errors()
 }
-func (o *orchestrator[Output]) handleError(r ParseResult) (state State, nextID int32) {
+
+func (pp *PreparedParser[Output]) handleError(r ParseResult, recoverCache []int) (state State, nextID int32) {
 	Debugf("handleError - parserID=%d, pos=%d, Error=%v", r.Error.parserID, r.EndState.CurrentPos(), r.Error)
 
-	minWaste, minRec := o.findMinWaste(r.EndState, r.Error.parserID)
+	minWaste, minRec := pp.findMinWaste(r.EndState, r.Error.parserID, recoverCache)
 
 	if minWaste < 0 {
 		Debugf("handleError - no recoverer found")
-		return r.EndState.MoveBy(r.EndState.BytesRemaining()), -1
+		return r.EndState.MoveBy(r.EndState.BytesRemaining()), RecoverWasteTooMuch
 	}
 	Debugf("handleError - best recoverer: ID=%d, waste=%d", minRec.ID(), minWaste)
 	return r.EndState.MoveBy(minWaste), minRec.ID()
 }
-func (o *orchestrator[Output]) findMinWaste(state State, id int32) (minWaste int, minRec AnyParser) {
+
+func (pp *PreparedParser[Output]) findMinWaste(state State, id int32, recoverCache []int,
+) (minWaste int, minRec AnyParser) {
 	failed := false
-	minRec = o.parsers[id].parser // try failed parser first
+	minRec = pp.parsers[id].parser // try failed parser first
 	minWaste = math.MaxInt
 	if !minRec.IsStepRecoverer() {
-		minWaste = minRec.Recover(state)
+		minWaste = pp.recover(state, minRec, recoverCache)
 		Debugf("findMinWaste - failed parser has fast recoverer: ID=%d, waste=%d", id, minWaste)
 		if minWaste < 0 { // recoverer is either forbidden or unsuccessful
 			minWaste = math.MaxInt
 		}
 		failed = true
 	}
-	for _, rec := range o.recoverers { // try all fast recoverers
+	for _, rec := range pp.recoverers { // try all fast recoverers
 		if waste := rec.Recover(state); waste >= 0 && waste < minWaste {
 			if waste == 0 { // it can't get better than this
 				Debugf("findMinWaste - optimal fast recoverer: ID=%d, waste=%d", rec.ID(), waste)
@@ -148,16 +160,34 @@ func (o *orchestrator[Output]) findMinWaste(state State, id int32) (minWaste int
 		}
 	}
 	Debugf("findMinWaste - best fast recoverer: ID=%d, waste=%d", minRec.ID(), minWaste)
-	stepRecs := o.stepRecoverers
+	stepRecs := pp.stepRecoverers
 	if !failed {
-		stepRecs = make([]AnyParser, len(o.stepRecoverers)+1)
-		copy(stepRecs, o.stepRecoverers)
-		stepRecs[len(o.stepRecoverers)] = o.parsers[id].parser
+		stepRecs = make([]AnyParser, len(pp.stepRecoverers)+1)
+		copy(stepRecs, pp.stepRecoverers)
+		stepRecs[len(pp.stepRecoverers)] = pp.parsers[id].parser
 		Debugf("findMinWaste - failed parser has slow recoverer: ID=%d", id)
 	}
-	return o.findMinStepWaste(stepRecs, state, minWaste, minRec)
+	return pp.findMinStepWaste(stepRecs, state, minWaste, minRec)
 }
-func (o *orchestrator[Output]) findMinStepWaste(stepRecs []AnyParser, state State, waste int, rec AnyParser,
+
+func (pp *PreparedParser[Output]) recover(state State, rec AnyParser, recoverCache []int) int {
+	waste := recoverCache[rec.ID()]
+	if waste < RecoverWasteUnknown {
+		return waste
+	}
+	pos := state.CurrentPos()
+	if waste >= 0 && waste >= pos {
+		return waste - pos
+	}
+	waste = rec.Recover(state)
+	recoverCache[rec.ID()] = waste
+	if waste == RecoverWasteNever {
+		pp.recoverCache[rec.ID()] = waste
+	}
+	return waste
+}
+
+func (pp *PreparedParser[Output]) findMinStepWaste(stepRecs []AnyParser, state State, waste int, rec AnyParser,
 ) (minWaste int, minRec AnyParser) {
 	maxWaste := waste
 	if maxWaste == math.MaxInt {
@@ -178,7 +208,7 @@ func (o *orchestrator[Output]) findMinStepWaste(stepRecs []AnyParser, state Stat
 	}
 	Debugf("findMinStepWaste - ALL slow recoverers failed!")
 	if waste == math.MaxInt {
-		return -1, rec
+		return RecoverWasteTooMuch, rec
 	}
 	return waste, rec
 }
