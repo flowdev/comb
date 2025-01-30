@@ -198,32 +198,28 @@ func TestDelimited(t *testing.T) {
 			wantErr:       false,
 			wantOutput:    "1",
 			wantRemaining: "",
-		},
-		{
+		}, {
 			name:          "no prefix match should fail",
 			input:         "1\r\n",
 			parser:        Delimited(Char('+'), gomme.SafeSpot(Digit1()), CRLF()),
 			wantErr:       true,
 			wantOutput:    "1",
 			wantRemaining: "",
-		},
-		{
+		}, {
 			name:          "no parser match should fail",
 			input:         "+\r\n",
 			parser:        Delimited(Char('+'), Digit1(), CRLF()),
 			wantErr:       true,
 			wantOutput:    "",
 			wantRemaining: "",
-		},
-		{
+		}, {
 			name:          "no suffix match should fail",
 			input:         "+1",
 			parser:        Delimited(Char('+'), Digit1(), CRLF()),
 			wantErr:       true,
 			wantOutput:    "",
 			wantRemaining: "",
-		},
-		{
+		}, {
 			name:          "empty input should fail",
 			input:         "",
 			parser:        Delimited(Char('+'), Digit1(), CRLF()),
@@ -232,6 +228,7 @@ func TestDelimited(t *testing.T) {
 			wantRemaining: "",
 		},
 	}
+	gomme.SetDebug(true)
 	for _, tc := range testCases {
 		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {

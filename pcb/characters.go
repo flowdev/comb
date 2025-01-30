@@ -223,15 +223,19 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 	return gomme.NewParser[string](expected, parse, satisfyMNRecoverer(atLeast, predicate))
 }
 
-func satisfyMNRecoverer(atLeast int, predicate func(rune2 rune) bool) gomme.Recoverer {
+func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) gomme.Recoverer {
 	return func(state gomme.State) int {
 		count := 0
+		start := 0
 		for i, r := range state.CurrentString() {
 			if predicate(r) {
-				if count >= atLeast {
-					return i - count
+				if count == 0 {
+					start = i
 				}
 				count++
+				if count >= atLeast {
+					return start
+				}
 			} else {
 				count = 0
 			}

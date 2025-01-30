@@ -53,8 +53,9 @@ type orchestrator[Output any] struct {
 
 func newOrchestrator[Output any](p Parser[Output]) *orchestrator[Output] {
 	o := &orchestrator[Output]{
-		parsers:    make([]parserData, 0, 64),
-		recoverers: make([]AnyParser, 0, 64),
+		parsers:        make([]parserData, 0, 64),
+		recoverers:     make([]AnyParser, 0, 64),
+		stepRecoverers: make([]AnyParser, 0, 64),
 	}
 	o.registerParsers(p, -1)
 	return o
@@ -90,8 +91,8 @@ func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
 	for result.Error != nil {
 		Debugf("parseAll - got Error=%v", result.Error)
 		nState = result.EndState.SaveError(result.Error)
-		if nState.AtEnd() { // give up
-			Debugf("parseAll - at EOF")
+		if nState.AtEnd() || !nState.recover { // give up
+			Debugf("parseAll - at EOF or recovery is turned off")
 			return zero, nState.Errors()
 		}
 		result.EndState = nState
@@ -113,15 +114,7 @@ func (o *orchestrator[Output]) parseAll(state State) (Output, error) {
 	return result.Output.(Output), result.EndState.Errors()
 }
 func (o *orchestrator[Output]) handleError(r ParseResult) (state State, nextID int32) {
-	Debugf("handleError - Error=%v", r.Error)
-	pos := r.EndState.CurrentPos()
-	if !r.EndState.recover { // error recovery is turned off
-		state = r.EndState.SaveError(r.EndState.NewSemanticError("error recovery is turned off")).MoveBy(r.EndState.BytesRemaining())
-		Debugf("handleError - recovery is turned off: parserID=%d, pos=%d", r.Error.parserID, pos)
-		return state, -1
-	}
-
-	Debugf("handleError - start: parserID=%d, pos=%d", r.Error.parserID, pos)
+	Debugf("handleError - parserID=%d, pos=%d, Error=%v", r.Error.parserID, r.EndState.CurrentPos(), r.Error)
 
 	minWaste, minRec := o.findMinWaste(r.EndState, r.Error.parserID)
 

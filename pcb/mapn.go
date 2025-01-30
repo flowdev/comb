@@ -169,56 +169,57 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 
 	if md.n > 1 {
 		state2, out2, err2 := state, zero2, (*gomme.ParserError)(nil)
-		if id == md.p2.ID() {
-			state2 = childResult.EndState
-			out2, _ = childResult.Output.(PO2)
-			err2 = childResult.Error
-			id = -1
-		} else if id < 0 {
+		if id < 0 {
 			state2, out2, err2 = md.p2.Parse(state1)
 			if err2 != nil {
 				return gomme.ParseResult{StartState: state1, EndState: state2, Output: out2, Error: err2}
 			}
+		} else if id == md.p2.ID() {
+			state2 = childResult.EndState
+			out2, _ = childResult.Output.(PO2)
+			err2 = childResult.Error
+			id = -1
 		}
 
 		if md.n > 2 {
 			state3, out3, err3 := state, zero3, (*gomme.ParserError)(nil)
-			if id == md.p3.ID() {
-				state3 = childResult.EndState
-				out3, _ = childResult.Output.(PO3)
-				err3 = childResult.Error
-				id = -1
-			} else if id < 0 {
+			if id < 0 {
 				state3, out3, err3 = md.p3.Parse(state2)
 				if err3 != nil {
 					return gomme.ParseResult{StartState: state2, EndState: state3, Output: out3, Error: err3}
 				}
+			} else if id == md.p3.ID() {
+				state3 = childResult.EndState
+				out3, _ = childResult.Output.(PO3)
+				err3 = childResult.Error
+				id = -1
 			}
 
 			if md.n > 3 {
 				state4, out4, err4 := state, zero4, (*gomme.ParserError)(nil)
-				if id == md.p4.ID() {
-					state4 = childResult.EndState
-					out4, _ = childResult.Output.(PO4)
-					err4 = childResult.Error
-				} else if id < 0 {
+				if id < 0 {
 					state4, out4, err4 = md.p4.Parse(state3)
 					if err4 != nil {
 						return gomme.ParseResult{StartState: state3, EndState: state4, Output: out4, Error: err4}
 					}
+				} else if id == md.p4.ID() {
+					state4 = childResult.EndState
+					out4, _ = childResult.Output.(PO4)
+					err4 = childResult.Error
+					id = -1
 				}
 
 				if md.n > 4 {
 					state5, out5, err5 := state, zero5, (*gomme.ParserError)(nil)
-					if id == md.p5.ID() {
-						state5 = childResult.EndState
-						out5, _ = childResult.Output.(PO5)
-						err5 = childResult.Error
-					} else if id < 0 {
+					if id < 0 {
 						state5, out5, err5 = md.p5.Parse(state4)
 						if err5 != nil {
 							return gomme.ParseResult{StartState: state4, EndState: state5, Output: out5, Error: err5}
 						}
+					} else if id == md.p5.ID() {
+						state5 = childResult.EndState
+						out5, _ = childResult.Output.(PO5)
+						err5 = childResult.Error
 					}
 
 					out, err := md.fn5(out1, out2, out3, out4, out5)

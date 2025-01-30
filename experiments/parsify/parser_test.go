@@ -42,13 +42,14 @@ func TestDelimitedByChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var state gomme.State
 			var firstOutput rune
+			var firstError *gomme.ParserError
 
 			if tc.basicParser2 != nil {
-				state, firstOutput = tc.basicParser2(gomme.NewFromString(-1, nil, -1, input[:1]))
+				state, firstOutput, firstError = tc.basicParser2(gomme.NewFromString(input[:1], true))
 			} else {
-				state, firstOutput = tc.basicParser1.It(gomme.NewFromString(-1, nil, -1, input[:1]))
+				state, firstOutput, firstError = tc.basicParser1.Parse(gomme.NewFromString(input[:1], true))
 			}
-			t.Log("Error1? :", state.Errors())
+			t.Log("Error1? :", firstError)
 
 			if firstOutput != '{' {
 				t.Errorf("got output %q, want output %q", firstOutput, '{')
@@ -63,13 +64,14 @@ func TestDelimitedByChar(t *testing.T) {
 
 			var newState gomme.State
 			var gotOutput string
+			var gotError *gomme.ParserError
 
 			if tc.basicParser2 != nil {
-				newState, gotOutput = tc.complexParser2(gomme.NewFromString(-1, nil, -1, input))
+				state, gotOutput, gotError = tc.complexParser2(gomme.NewFromString(input, true))
 			} else {
-				newState, gotOutput = tc.complexParser1.It(gomme.NewFromString(-1, nil, -1, input))
+				state, gotOutput, gotError = tc.complexParser1.Parse(gomme.NewFromString(input, true))
 			}
-			t.Log("Error2? :", newState.Errors())
+			t.Log("Error2? :", gotError)
 
 			if gotOutput != wantOutput {
 				t.Errorf("got output %q, want output %q", gotOutput, wantOutput)

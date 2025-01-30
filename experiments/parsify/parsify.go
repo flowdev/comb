@@ -13,7 +13,7 @@ type Parser[Output any] func(gomme.State) (gomme.State, Output, *gomme.ParserErr
 
 // Parserish types are any type that can be turned into a Parser by Parsify
 type Parserish[Output any] interface {
-	~rune | ~func(gomme.State) (gomme.State, Output)
+	~rune | ~func(gomme.State) (gomme.State, Output, *gomme.ParserError)
 }
 
 // Parsify turns p of type Parserish into a real Parser.
