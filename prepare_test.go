@@ -80,7 +80,7 @@ func TestPreparedParserParseAll(t *testing.T) {
 			name:           "middleCharMissingGoodParser",
 			givenInput:     "ac",
 			givenParser:    goodParse,
-			expectedOutput: "c",
+			expectedOutput: "a\ufffdc",
 			expectedErrors: 1,
 		}, {
 			name:           "firstCharMissingBadParser",
@@ -92,7 +92,7 @@ func TestPreparedParserParseAll(t *testing.T) {
 			name:           "firstCharMissingGoodParser",
 			givenInput:     "bc",
 			givenParser:    goodParse,
-			expectedOutput: "\x00bc",
+			expectedOutput: "\ufffdbc",
 			expectedErrors: 1,
 		}, {
 			name:           "firstCharOffBadParser",
@@ -110,37 +110,37 @@ func TestPreparedParserParseAll(t *testing.T) {
 			name:           "secondCharOffBadParser",
 			givenInput:     "a1bc",
 			givenParser:    badParse,
-			expectedOutput: "\x00bc",
+			expectedOutput: "abc",
 			expectedErrors: 1,
 		}, {
 			name:           "secondCharOffGoodParser",
 			givenInput:     "a1bc",
 			givenParser:    goodParse,
-			expectedOutput: "\x00bc",
+			expectedOutput: "abc",
 			expectedErrors: 1,
 		}, {
 			name:           "thirdCharOffBadParser",
 			givenInput:     "ab1c",
 			givenParser:    badParse,
-			expectedOutput: "c",
+			expectedOutput: "abc",
 			expectedErrors: 1,
 		}, {
 			name:           "thirdCharOffGoodParser",
 			givenInput:     "ab1c",
 			givenParser:    goodParse,
-			expectedOutput: "c",
+			expectedOutput: "abc",
 			expectedErrors: 1,
 		}, {
 			name:           "firstAndLastCharOffBadParser",
 			givenInput:     "1ab2c",
 			givenParser:    badParse,
-			expectedOutput: "c",
+			expectedOutput: "abc",
 			expectedErrors: 2,
 		}, {
 			name:           "firstAndLastCharOffGoodParser",
 			givenInput:     "1ab2c",
 			givenParser:    goodParse,
-			expectedOutput: "c",
+			expectedOutput: "abc",
 			expectedErrors: 2,
 		}, {
 			name:           "firstCharOffMiddleCharMissingBadParser",
@@ -158,13 +158,13 @@ func TestPreparedParserParseAll(t *testing.T) {
 			name:           "allCharsOffBadParser",
 			givenInput:     "1a2b3c",
 			givenParser:    badParse,
-			expectedOutput: "c",
+			expectedOutput: "abc",
 			expectedErrors: 3,
 		}, {
 			name:           "allCharsOffGoodParser",
 			givenInput:     "1a2b3c",
 			givenParser:    goodParse,
-			expectedOutput: "c",
+			expectedOutput: "abc",
 			expectedErrors: 3,
 		}, {
 			name:           "firstCharMissingLastCharOffBadParser",
@@ -176,7 +176,7 @@ func TestPreparedParserParseAll(t *testing.T) {
 			name:           "firstCharMissingLastCharOffGoodParser",
 			givenInput:     "b1c",
 			givenParser:    goodParse,
-			expectedOutput: "c",
+			expectedOutput: "\ufffdbc",
 			expectedErrors: 2,
 		}, {
 			name:           "firstCharOffMiddleCharMissingBadParser",
@@ -236,7 +236,7 @@ func TestPreparedParserParseAll(t *testing.T) {
 			name:           "firstCharLastGoodParser",
 			givenInput:     "bca",
 			givenParser:    goodParse,
-			expectedOutput: "\x00bc",
+			expectedOutput: "\ufffdbc",
 			expectedErrors: 1,
 		},
 	}
@@ -295,14 +295,14 @@ func TestBranchParserToAnyParser(t *testing.T) {
 			givenInput:     "a",
 			givenParser:    bParse,
 			expectedID:     2,
-			expectedOutput: "",
+			expectedOutput: "a\ufffd",
 			expectedError:  true,
 		}, {
 			name:           "secondSubparserOneByteOff",
 			givenInput:     "a1b",
 			givenParser:    bParse,
 			expectedID:     2,
-			expectedOutput: "",
+			expectedOutput: "a\ufffd",
 			expectedError:  true,
 		},
 	}
@@ -461,57 +461,60 @@ func (md *map2data[PO1, PO2, MO]) children() []AnyParser {
 }
 func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
 	var zero MO
-	var zero1 PO1
-	var zero2 PO2
+	var out1 PO1
+
+	if childID >= 0 { // on the way up: Fetch
+		var o interface{}
+		o, childResult = childResult.FetchOutput()
+		out1, _ = o.(PO1)
+	}
 
 	if childResult.Error != nil {
-		return childResult // we can't avoid any errors by going another path
+		return childResult.AddOutput(out1) // we can't avoid any errors by going another path
 	}
 
 	state := childResult.EndState
-	id := childID
-	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), id)
-	if id >= 0 && id != md.p1.ID() && id != md.p2.ID() {
-		return ParseResult{
-			StartState: state,
-			EndState:   state,
-			Output:     zero,
-			Error:      state.NewSemanticError("unable to parse after child with unknown ID %d", id),
-		}
+	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), childID)
+	if childID >= 0 && childID != md.p1.ID() && childID != md.p2.ID() {
+		childResult.Error = state.NewSemanticError("unable to parse after child with unknown ID %d", childID)
+		childResult.Output = zero
+		return childResult
 	}
 
-	state1, out1, err1 := state, zero1, (*ParserError)(nil)
-	if id < 0 {
-		state1, out1, err1 = md.p1.Parse(state)
-		if err1 != nil {
-			return ParseResult{StartState: state, EndState: state1, Output: out1, Error: err1}
+	result1 := childResult
+	if childID < 0 {
+		result1 = RunParser(md.p1, childResult)
+		if result1.Error != nil {
+			return result1.AddOutput(result1.Output)
 		}
-	}
-	if id == md.p1.ID() {
-		state1 = childResult.EndState
-		out1, _ = childResult.Output.(PO1)
-		err1 = childResult.Error
+		out1, _ = result1.Output.(PO1)
+	} else if childID == md.p1.ID() {
+		out1, _ = result1.Output.(PO1)
 	}
 
-	state2, out2, err2 := state, zero2, (*ParserError)(nil)
-	if id == md.p2.ID() {
-		state2 = childResult.EndState
-		out2, _ = childResult.Output.(PO2)
-		err2 = childResult.Error
-	} else {
-		state2, out2, err2 = md.p2.Parse(state1)
-		if err2 != nil {
-			return ParseResult{StartState: state1, EndState: state2, Output: out2, Error: err2}
+	result2 := childResult
+	if childID < 0 || childID == md.p1.ID() {
+		result2 = RunParser(md.p2, result1)
+		if result2.Error != nil {
+			out2, _ := result2.Output.(PO2)
+			out, _ := md.fn(out1, out2)
+			result2.Output = out
+			return result2.AddOutput(out1)
 		}
 	}
+	out2, _ := result2.Output.(PO2)
 
 	out, err := md.fn(out1, out2)
 	var pErr *ParserError
 	if err != nil {
-		pErr = state2.NewSemanticError(err.Error())
+		pErr = result2.EndState.NewSemanticError(err.Error())
 	}
 
-	return ParseResult{StartState: state, EndState: state2, Output: out, Error: pErr}
+	return ParseResult{
+		StartState: state, EndState: result2.EndState,
+		Output: out, Error: pErr,
+		parentResults: result2.parentResults,
+	}.AddOutput(out)
 }
 func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2) (MO, error)) Parser[MO] {
 	if p1 == nil {

@@ -6,25 +6,61 @@ import (
 )
 
 // ============================================================================
-// Data Types For General Parser Preparation
+// ParseResult - result of (branch) parsers
 //
+
+type parentResult struct {
+	id     int32
+	output interface{}
+}
 
 // ParseResult is the result of a parser.
 type ParseResult struct {
-	StartState State // state before parsing
-	EndState   State // state after parsing
-	Output     interface{}
-	Error      *ParserError
+	StartState    State // state before parsing
+	EndState      State // state after parsing
+	Output        interface{}
+	Error         *ParserError
+	parentResults []parentResult
 }
 
-// BranchParser is a more internal interface used by orchestrators.
-// It intentionally avoids generics for easy storage of parsers in collections
-// (slices, maps, ...).
-// BranchParser just adds 2 methods to the Parser and AnyParser interfaces.
-type BranchParser interface {
-	children() []AnyParser
-	parseAfterChild(childID int32, childResult ParseResult) ParseResult
+func (pr ParseResult) AddOutput(out interface{}) ParseResult {
+	pr.parentResults = append(pr.parentResults, parentResult{id: -1, output: out})
+	return pr
 }
+func (pr ParseResult) FetchOutput() (interface{}, ParseResult) {
+	if len(pr.parentResults) == 0 {
+		return nil, pr
+	}
+	result := pr.parentResults[0]
+	if result.id >= 0 { // it isn't our result
+		return nil, pr
+	}
+	pr.parentResults = pr.parentResults[1:]
+	return result.output, pr
+}
+func (pr ParseResult) SetID(id int32) {
+	if len(pr.parentResults) == 0 {
+		return
+	}
+	if pr.parentResults[len(pr.parentResults)-1].id < 0 {
+		pr.parentResults[len(pr.parentResults)-1].id = id
+	}
+}
+func (pr ParseResult) PrepareOutputFor(id int32) ParseResult {
+	i := slices.IndexFunc(pr.parentResults, func(result parentResult) bool {
+		return result.id == id
+	})
+	if i == -1 {
+		return pr
+	}
+	pr.parentResults = pr.parentResults[i:]
+	pr.parentResults[0].id = -1 // prepare result for fetch
+	return pr
+}
+
+// ============================================================================
+// Interfaces And Function For Parser Preparation
+//
 
 // AnyParser is an internal interface used by PreparedParser.
 // It intentionally avoids generics for easy storage of parsers in collections
@@ -36,6 +72,24 @@ type AnyParser interface {
 	Recover(state State) int
 	IsStepRecoverer() bool
 	setID(int32) // only sets own ID
+}
+
+// BranchParser is a more internal interface used by orchestrators.
+// It intentionally avoids generics for easy storage of parsers in collections
+// (slices, maps, ...).
+// BranchParser just adds 2 methods to the Parser and AnyParser interfaces.
+type BranchParser interface {
+	children() []AnyParser
+	parseAfterChild(childID int32, childResult ParseResult) ParseResult
+}
+
+func RunParser(ap AnyParser, inResult ParseResult) ParseResult {
+	if bp, ok := ap.(BranchParser); ok {
+		return bp.parseAfterChild(-1, inResult)
+	}
+	outResult := ap.parse(inResult.EndState)
+	outResult.parentResults = inResult.parentResults
+	return outResult
 }
 
 // ============================================================================
@@ -95,6 +149,10 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	recoverCache := slices.Clone(pp.recoverCache)
 
 	p := pp.parsers[id]
+	// TOP->DOWN: Normal parsing is starting with the root parser (ID=0)
+	// and goes all the way down to the leaf parsers until an error is found.
+	// ParseResult.AddOutput and .SetID are used;
+	//   .FetchOutput and .PrepareOutputFor are NOT used.
 	result := p.parser.parse(state)
 	nextID, nState := id, result.EndState
 	for result.Error != nil {
@@ -111,8 +169,13 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 			return zero, nState.Errors()
 		}
 		p = pp.parsers[nextID]
-		result = p.parser.parse(nState)
-		for p.parentID >= 0 { // force the new result through all levels (error or not)
+		result.EndState = nState
+		// BOTTOM->UP: Parsing is starting with a leaf parser
+		// and goes all the way up to the root parser.
+		// ParseResult.FetchOutput and .PrepareOutputFor are used;
+		//   .AddOutput and .SetID are NOT used (except for a new error).
+		result = RunParser(p.parser, result) // should always be successful (or the recoverer didn't do its job)
+		for p.parentID >= 0 {                // force the new result through all levels (error or not)
 			childID := nextID
 			nextID = p.parentID
 			p = pp.parsers[nextID]

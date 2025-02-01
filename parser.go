@@ -132,11 +132,22 @@ func (bp *brnchprsr[Output]) children() []AnyParser {
 	return bp.childs()
 }
 func (bp *brnchprsr[Output]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
+	bp.ensureIDs()
+	childResult = childResult.PrepareOutputFor(bp.id)
 	result := bp.prsAfterChild(childID, childResult)
+	result.SetID(bp.id)
 	if result.Error != nil && result.Error.parserID < 0 {
 		result.Error.parserID = bp.id
 	}
 	return result
+}
+func (bp *brnchprsr[Output]) ensureIDs() { // only needed if Parse was called directly
+	if bp.id < 0 { // ensure sane IDs
+		bp.id = 0
+		for i, child := range bp.childs() {
+			child.setID(int32(i + 1))
+		}
+	}
 }
 func (bp *brnchprsr[Output]) setID(id int32) {
 	bp.id = id
