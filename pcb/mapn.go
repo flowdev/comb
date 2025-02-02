@@ -4,6 +4,14 @@ import (
 	"github.com/oleiade/gomme"
 )
 
+// partialResult is internal to the parsing method and methods and functions called by it.
+type partialResult[PO1, PO2, PO3, PO4 any] struct {
+	out1 PO1
+	out2 PO2
+	out3 PO3
+	out4 PO4
+}
+
 // MapN is a helper for easily implementing Map like parsers.
 // It is not meant for writing grammars, but only for implementing parsers.
 // Only the `fn`n function has to be provided.
@@ -110,26 +118,29 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []gomme.AnyParser {
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, childResult gomme.ParseResult,
 ) gomme.ParseResult {
 	var zero MO
-	var zero1 PO1
-	var zero2 PO2
-	var zero3 PO3
-	var zero4 PO4
-	var zero5 PO5
+	var partRes partialResult[PO1, PO2, PO3, PO4]
 
 	gomme.Debugf("MapN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
+	if childID >= 0 { // on the way up: Fetch
+		var o interface{}
+		o, childResult = childResult.FetchOutput()
+		partRes, _ = o.(partialResult[PO1, PO2, PO3, PO4])
+	}
+
 	if childResult.Error != nil {
-		return childResult // we can't avoid any errors by going another path
+		return childResult.AddOutput(partRes) // we can't avoid any errors by going another path
 	}
 
 	state := childResult.EndState
-	id := childID
+	id := childID // use new variable to keep the original childID (for distinguishing way: up/down)
 	idErrResult := gomme.ParseResult{
 		StartState: state,
 		EndState:   state,
 		Output:     zero,
 		Error:      state.NewSemanticError("unable to parse after child with unknown ID %d", id),
 	}
+	idErrResult = idErrResult.GetParentResults(childResult).AddOutput(partRes)
 	if id >= 0 && id != md.p1.ID() {
 		if md.n <= 1 {
 			return idErrResult
@@ -154,110 +165,156 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 		}
 	}
 
-	state1, out1, err1 := state, zero1, (*gomme.ParserError)(nil)
+	result1 := childResult
 	if id < 0 {
-		state1, out1, err1 = md.p1.Parse(state)
-		if err1 != nil {
-			return gomme.ParseResult{StartState: state, EndState: state1, Output: out1, Error: err1}
+		result1 = gomme.RunParser(md.p1, childResult)
+		partRes.out1, _ = result1.Output.(PO1)
+		if result1.Error != nil {
+			return result1.AddOutput(partRes)
 		}
 	} else if id == md.p1.ID() {
-		state1 = childResult.EndState
-		out1, _ = childResult.Output.(PO1)
-		err1 = childResult.Error
+		partRes.out1, _ = childResult.Output.(PO1)
 		id = -1
 	}
 
 	if md.n > 1 {
-		state2, out2, err2 := state, zero2, (*gomme.ParserError)(nil)
+		result2 := childResult
 		if id < 0 {
-			state2, out2, err2 = md.p2.Parse(state1)
-			if err2 != nil {
-				return gomme.ParseResult{StartState: state1, EndState: state2, Output: out2, Error: err2}
+			result2 = gomme.RunParser(md.p2, result1)
+			partRes.out2, _ = result2.Output.(PO2)
+			if result2.Error != nil {
+				out, _ := md.fn(partRes)
+				result2.Output = out
+				return result2.AddOutput(partRes)
 			}
 		} else if id == md.p2.ID() {
-			state2 = childResult.EndState
-			out2, _ = childResult.Output.(PO2)
-			err2 = childResult.Error
+			partRes.out2, _ = childResult.Output.(PO2)
 			id = -1
 		}
 
 		if md.n > 2 {
-			state3, out3, err3 := state, zero3, (*gomme.ParserError)(nil)
+			result3 := childResult
 			if id < 0 {
-				state3, out3, err3 = md.p3.Parse(state2)
-				if err3 != nil {
-					return gomme.ParseResult{StartState: state2, EndState: state3, Output: out3, Error: err3}
+				result3 = gomme.RunParser(md.p3, result2)
+				partRes.out3, _ = result3.Output.(PO3)
+				if result3.Error != nil {
+					out, _ := md.fn(partRes)
+					result3.Output = out
+					return result3.AddOutput(partRes)
 				}
 			} else if id == md.p3.ID() {
-				state3 = childResult.EndState
-				out3, _ = childResult.Output.(PO3)
-				err3 = childResult.Error
+				partRes.out3, _ = childResult.Output.(PO3)
 				id = -1
 			}
 
 			if md.n > 3 {
-				state4, out4, err4 := state, zero4, (*gomme.ParserError)(nil)
+				result4 := childResult
 				if id < 0 {
-					state4, out4, err4 = md.p4.Parse(state3)
-					if err4 != nil {
-						return gomme.ParseResult{StartState: state3, EndState: state4, Output: out4, Error: err4}
+					result4 = gomme.RunParser(md.p4, result3)
+					partRes.out4, _ = result4.Output.(PO4)
+					if result4.Error != nil {
+						out, _ := md.fn(partRes)
+						result4.Output = out
+						return result4.AddOutput(partRes)
 					}
 				} else if id == md.p4.ID() {
-					state4 = childResult.EndState
-					out4, _ = childResult.Output.(PO4)
-					err4 = childResult.Error
+					partRes.out4, _ = childResult.Output.(PO4)
 					id = -1
 				}
 
 				if md.n > 4 {
-					state5, out5, err5 := state, zero5, (*gomme.ParserError)(nil)
+					var out5 PO5
+
+					result5 := childResult
 					if id < 0 {
-						state5, out5, err5 = md.p5.Parse(state4)
-						if err5 != nil {
-							return gomme.ParseResult{StartState: state4, EndState: state5, Output: out5, Error: err5}
+						result5 = gomme.RunParser(md.p5, result4)
+						out5, _ = result5.Output.(PO5)
+						if result5.Error != nil {
+							out, _ := md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, out5)
+							result5.Output = out
+							return result5.AddOutput(partRes)
 						}
-					} else if id == md.p5.ID() {
-						state5 = childResult.EndState
+					} else {
 						out5, _ = childResult.Output.(PO5)
-						err5 = childResult.Error
 					}
 
-					out, err := md.fn5(out1, out2, out3, out4, out5)
+					out, err := md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, out5)
 					var pErr *gomme.ParserError
 					if err != nil {
-						pErr = state5.NewSemanticError(err.Error())
+						pErr = result5.EndState.NewSemanticError(err.Error())
 					}
-					return gomme.ParseResult{StartState: state, EndState: state5, Output: out, Error: pErr}
+					return gomme.ParseResult{
+						StartState: state,
+						EndState:   result5.EndState,
+						Output:     out,
+						Error:      pErr,
+					}.GetParentResults(childResult).AddOutput(partRes)
 				}
 
-				out, err := md.fn4(out1, out2, out3, out4)
+				out, err := md.fn4(partRes.out1, partRes.out2, partRes.out3, partRes.out4)
 				var pErr *gomme.ParserError
 				if err != nil {
-					pErr = state4.NewSemanticError(err.Error())
+					pErr = result4.EndState.NewSemanticError(err.Error())
 				}
-				return gomme.ParseResult{StartState: state, EndState: state4, Output: out, Error: pErr}
+				return gomme.ParseResult{
+					StartState: state,
+					EndState:   result4.EndState,
+					Output:     out,
+					Error:      pErr,
+				}.GetParentResults(childResult).AddOutput(partRes)
 			}
 
-			out, err := md.fn3(out1, out2, out3)
+			out, err := md.fn3(partRes.out1, partRes.out2, partRes.out3)
 			var pErr *gomme.ParserError
 			if err != nil {
-				pErr = state3.NewSemanticError(err.Error())
+				pErr = result3.EndState.NewSemanticError(err.Error())
 			}
-			return gomme.ParseResult{StartState: state, EndState: state3, Output: out, Error: pErr}
+			return gomme.ParseResult{
+				StartState: state,
+				EndState:   result3.EndState,
+				Output:     out,
+				Error:      pErr,
+			}.GetParentResults(childResult).AddOutput(partRes)
 		}
 
-		out, err := md.fn2(out1, out2)
+		out, err := md.fn2(partRes.out1, partRes.out2)
 		var pErr *gomme.ParserError
 		if err != nil {
-			pErr = state2.NewSemanticError(err.Error())
+			pErr = result2.EndState.NewSemanticError(err.Error())
 		}
-		return gomme.ParseResult{StartState: state, EndState: state2, Output: out, Error: pErr}
+		return gomme.ParseResult{
+			StartState: state,
+			EndState:   result2.EndState,
+			Output:     out,
+			Error:      pErr,
+		}.GetParentResults(childResult).AddOutput(partRes)
 	}
 
-	out, err := md.fn1(out1)
+	out, err := md.fn1(partRes.out1)
 	var pErr *gomme.ParserError
 	if err != nil {
-		pErr = state1.NewSemanticError(err.Error())
+		pErr = result1.EndState.NewSemanticError(err.Error())
 	}
-	return gomme.ParseResult{StartState: state, EndState: state1, Output: out, Error: pErr}
+	return gomme.ParseResult{
+		StartState: state,
+		EndState:   result1.EndState,
+		Output:     out,
+		Error:      pErr,
+	}.GetParentResults(childResult).AddOutput(partRes)
+}
+
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) fn(partRes partialResult[PO1, PO2, PO3, PO4]) (MO, error) {
+	switch md.n {
+	case 1:
+		return md.fn1(partRes.out1)
+	case 2:
+		return md.fn2(partRes.out1, partRes.out2)
+	case 3:
+		return md.fn3(partRes.out1, partRes.out2, partRes.out3)
+	case 4:
+		return md.fn4(partRes.out1, partRes.out2, partRes.out3, partRes.out4)
+	case 5:
+		return md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, gomme.ZeroOf[PO5]())
+	}
+	return gomme.ZeroOf[MO](), nil // can't happen
 }

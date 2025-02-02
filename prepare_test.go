@@ -463,6 +463,9 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult Par
 	var zero MO
 	var out1 PO1
 
+	state := childResult.EndState
+	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), childID)
+
 	if childID >= 0 { // on the way up: Fetch
 		var o interface{}
 		o, childResult = childResult.FetchOutput()
@@ -473,8 +476,6 @@ func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult Par
 		return childResult.AddOutput(out1) // we can't avoid any errors by going another path
 	}
 
-	state := childResult.EndState
-	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), childID)
 	if childID >= 0 && childID != md.p1.ID() && childID != md.p2.ID() {
 		childResult.Error = state.NewSemanticError("unable to parse after child with unknown ID %d", childID)
 		childResult.Output = zero

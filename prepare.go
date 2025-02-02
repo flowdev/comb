@@ -23,6 +23,10 @@ type ParseResult struct {
 	parentResults []parentResult
 }
 
+func (pr ParseResult) GetParentResults(src ParseResult) ParseResult {
+	pr.parentResults = src.parentResults
+	return pr
+}
 func (pr ParseResult) AddOutput(out interface{}) ParseResult {
 	pr.parentResults = append(pr.parentResults, parentResult{id: -1, output: out})
 	return pr
@@ -147,10 +151,11 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	var zero Output
 	var id int32 = 0 // this is always the root parser
 	recoverCache := slices.Clone(pp.recoverCache)
-
 	p := pp.parsers[id]
-	// TOP->DOWN: Normal parsing is starting with the root parser (ID=0)
+
+	// TOP->DOWN: Normal parsing starts with the root parser (ID=0)
 	// and goes all the way down to the leaf parsers until an error is found.
+	// The childID is ALWAYS < 0.
 	// ParseResult.AddOutput and .SetID are used;
 	//   .FetchOutput and .PrepareOutputFor are NOT used.
 	result := p.parser.parse(state)
@@ -170,8 +175,10 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 		}
 		p = pp.parsers[nextID]
 		result.EndState = nState
-		// BOTTOM->UP: Parsing is starting with a leaf parser
-		// and goes all the way up to the root parser.
+
+		// BOTTOM->UP: Recovery parsing starts with a leaf parser
+		// and goes all the way up to the root parser (with or without error).
+		// The childID is NEVER < 0.
 		// ParseResult.FetchOutput and .PrepareOutputFor are used;
 		//   .AddOutput and .SetID are NOT used (except for a new error).
 		result = RunParser(p.parser, result) // should always be successful (or the recoverer didn't do its job)
