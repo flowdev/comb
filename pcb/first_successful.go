@@ -23,6 +23,12 @@ type firstSuccessfulData[Output any] struct {
 	parsers []gomme.Parser[Output]
 }
 
+// partialFSResult is internal to the parsing method and methods and functions called by it.
+type partialFSResult[Output any] struct {
+	out Output
+	pos int
+}
+
 func (fsd *firstSuccessfulData[Output]) children() []gomme.AnyParser {
 	children := make([]gomme.AnyParser, len(fsd.parsers))
 	for i, p := range fsd.parsers {
@@ -33,50 +39,60 @@ func (fsd *firstSuccessfulData[Output]) children() []gomme.AnyParser {
 
 func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResult gomme.ParseResult,
 ) gomme.ParseResult {
+	var bestRes partialFSResult[Output]
+	var bestResult gomme.ParseResult
+
 	gomme.Debugf("FirstSuccessful.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
-	if childID >= 0 && (childResult.Error == nil || childResult.StartState.SaveSpotMoved(childResult.EndState)) {
-		return childResult
+	if childID >= 0 { // on the way up: Fetch
+		var o interface{}
+		o, childResult = childResult.FetchOutput()
+		bestRes, _ = o.(partialFSResult[Output])
 	}
 
-	state := childResult.EndState
+	if childID >= 0 && (childResult.Error == nil || childResult.StartState.SaveSpotMoved(childResult.EndState)) {
+		return childResult.AddOutput(bestRes) // we can't avoid any errors by going another path
+	}
+
 	idx := 0
-	bestState := childResult.EndState
-	bestOut, _ := childResult.Output.(Output)
-	bestErr := childResult.Error
+	startResult := childResult
+	bestResult.Error = childResult.Error
 	if childID >= 0 {
-		state = childResult.StartState
 		idx = fsd.indexForID(childID)
 		if idx < 0 {
 			childResult.Error = childResult.EndState.NewSemanticError(
 				"unable to parse after child with unknown ID %d", childID)
-			return childResult
+			return childResult.AddOutput(bestRes)
 		}
+		startResult.EndState = childResult.StartState
+		bestResult = childResult
+		bestRes.out, _ = childResult.Output.(Output)
+		bestRes.pos = childResult.EndState.CurrentPos()
 		idx++
 	}
 
 	for i := idx; i < len(fsd.parsers); i++ {
 		p := fsd.parsers[i]
-		nState, out, err := p.Parse(state)
-		if err == nil || state.SaveSpotMoved(nState) {
-			return gomme.ParseResult{StartState: state, EndState: nState, Output: out, Error: err}
+		result := gomme.RunParser(p, startResult)
+		if result.Error == nil || startResult.EndState.SaveSpotMoved(result.EndState) {
+			return result.AddOutput(bestRes)
 		}
 
 		// may the best error win:
 		if i == 0 {
-			bestState = nState
-			bestOut = out
-			bestErr = err
+			bestResult = result
+			bestRes.out, _ = result.Output.(Output)
+			bestRes.pos = result.EndState.CurrentPos()
 		} else {
-			other := false
-			bestState, other = gomme.BetterOf(bestState, nState)
+			_, other := gomme.BetterOf(bestResult.EndState, result.EndState)
 			if other {
-				bestOut = out
-				bestErr = err
+				bestResult = result
+				bestRes.out, _ = result.Output.(Output)
+				bestRes.pos = result.EndState.CurrentPos()
 			}
 		}
 	}
-	return gomme.ParseResult{StartState: state, EndState: bestState, Output: bestOut, Error: bestErr}
+	return bestResult.AddOutput(bestRes)
 }
 
 func (fsd *firstSuccessfulData[Output]) indexForID(id int32) int {

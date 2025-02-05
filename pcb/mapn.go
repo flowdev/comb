@@ -4,14 +4,6 @@ import (
 	"github.com/oleiade/gomme"
 )
 
-// partialResult is internal to the parsing method and methods and functions called by it.
-type partialResult[PO1, PO2, PO3, PO4 any] struct {
-	out1 PO1
-	out2 PO2
-	out3 PO3
-	out4 PO4
-}
-
 // MapN is a helper for easily implementing Map like parsers.
 // It is not meant for writing grammars, but only for implementing parsers.
 // Only the `fn`n function has to be provided.
@@ -97,6 +89,14 @@ type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	fn5      func(PO1, PO2, PO3, PO4, PO5) (MO, error)
 }
 
+// partialMapResult is internal to the parsing method and methods and functions called by it.
+type partialMapResult[PO1, PO2, PO3, PO4 any] struct {
+	out1 PO1
+	out2 PO2
+	out3 PO3
+	out4 PO4
+}
+
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []gomme.AnyParser {
 	children := make([]gomme.AnyParser, md.n)
 	children[0] = md.p1
@@ -118,14 +118,14 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []gomme.AnyParser {
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, childResult gomme.ParseResult,
 ) gomme.ParseResult {
 	var zero MO
-	var partRes partialResult[PO1, PO2, PO3, PO4]
+	var partRes partialMapResult[PO1, PO2, PO3, PO4]
 
 	gomme.Debugf("MapN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
 	if childID >= 0 { // on the way up: Fetch
 		var o interface{}
 		o, childResult = childResult.FetchOutput()
-		partRes, _ = o.(partialResult[PO1, PO2, PO3, PO4])
+		partRes, _ = o.(partialMapResult[PO1, PO2, PO3, PO4])
 	}
 
 	if childResult.Error != nil {
@@ -303,7 +303,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 	}.GetParentResults(childResult).AddOutput(partRes)
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) fn(partRes partialResult[PO1, PO2, PO3, PO4]) (MO, error) {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) fn(partRes partialMapResult[PO1, PO2, PO3, PO4]) (MO, error) {
 	switch md.n {
 	case 1:
 		return md.fn1(partRes.out1)
