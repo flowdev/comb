@@ -1,15 +1,14 @@
-<p align="center"><img src="logo.png" alt="motus logo"/></p>
-<h1 align="center">A parser combinator library for Go</h1>
+# A Parser COMBinator Library For Go
+![comb logo](logo.png)
 
 <p align="center">
     <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
-    <a href="https://github.com/oleiade/gomme/actions/workflows/go.yml"><img src="https://github.com/oleiade/gomme/actions/workflows/go.yml/badge.svg" alt="Build Status"></a>
     <a href="https://pkg.go.dev/github.com/oleiade/gomme#pkg-types"><img src="https://pkg.go.dev/badge/github.com/oleiade/gomme#pkg-types.svg" alt="Go Documentation"></a>
     <a href="https://goreportcard.com/report/github.com/oleiade/gomme"><img src="https://goreportcard.com/badge/github.com/oleiade/gomme" alt="Go Report Card"></a>
-    <a href="https://img.shields.io/github/go-mod/go-version/oleiade/gomme" alt="Go Version"></a>
+    <a href="https://img.shields.io/github/go-mod/go-version/flowdev/comb" alt="Go Version"></a>
 </p>
 
-Gomme is a library that simplifies building parsers in Go.
+Comb is a library that simplifies building parsers in Go.
 
 Inspired by Rust's renowned `nom` crate, Gomme provides a developer-friendly toolkit that allows you to quickly and easily create reliable parsers for both textual and binary formats.
 
