@@ -15,7 +15,10 @@
 # vendor/
 
 examples/redis/testdata
+
+/.golangci.yml
 /.idea/.gitignore
 /.idea/modules.xml
-/.idea/parcomb.iml
+/.idea/comb.iml
 /.idea/vcs.xml
+/.idea/workspace.xml
