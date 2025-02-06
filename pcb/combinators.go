@@ -1,7 +1,7 @@
 package pcb
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // Optional applies an optional child parser. Will return a zero value

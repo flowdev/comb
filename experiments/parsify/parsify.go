@@ -2,7 +2,7 @@ package parsify
 
 import (
 	"fmt"
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 	"strconv"
 	"unicode/utf8"
 )

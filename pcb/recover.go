@@ -2,7 +2,7 @@ package pcb
 
 import (
 	"bytes"
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 	"reflect"
 	"strings"
 )

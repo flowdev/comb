@@ -1,7 +1,7 @@
 package gomme_test
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 	"testing"
 )
 

@@ -1,7 +1,7 @@
 package pcb
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // SeparatedMN applies an element parser and a separator parser repeatedly in order

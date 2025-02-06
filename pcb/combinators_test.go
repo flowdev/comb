@@ -2,7 +2,7 @@ package pcb
 
 import (
 	"errors"
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 	"strconv"
 	"testing"
 )

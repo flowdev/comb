@@ -1,7 +1,7 @@
 package pcb
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // FirstSuccessful tests a list of parsers in order, one by one,

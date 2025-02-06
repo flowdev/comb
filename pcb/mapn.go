@@ -1,7 +1,7 @@
 package pcb
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // MapN is a helper for easily implementing Map like parsers.

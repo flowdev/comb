@@ -8,9 +8,9 @@
 package csv
 
 import (
-	"github.com/oleiade/gomme"
-	. "github.com/oleiade/gomme/cute"
-	"github.com/oleiade/gomme/pcb"
+	"github.com/flowdev/comb"
+	. "github.com/flowdev/comb/cute"
+	"github.com/flowdev/comb/pcb"
 )
 
 func ParseCSV(input string) ([][]string, error) {

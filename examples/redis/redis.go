@@ -7,12 +7,12 @@ package redis
 import (
 	"errors"
 	"fmt"
-	. "github.com/oleiade/gomme/cute"
-	"github.com/oleiade/gomme/pcb"
+	. "github.com/flowdev/comb/cute"
+	"github.com/flowdev/comb/pcb"
 	"strconv"
 	"strings"
 
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // ParseRESPMessage parses a Redis' [RESP protocol] message.

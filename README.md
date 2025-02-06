@@ -127,7 +127,7 @@ For more detailled information, refer to the official [documentation](https://pk
 ## Installation
 
 ```bash
-go get github.com/oleiade/gomme
+go get github.com/flowdev/comb
 ```
 
 ## Guide
@@ -214,7 +214,7 @@ In this guide, we provide a detailed overview of the various combinators availab
 Add the library to your Go project with the following command:
 
 ```bash
-    go get github.com/oleiade/gomme@latest
+    go get github.com/flowdev/comb@latest
 ```
 
 ## Frequently asked questions

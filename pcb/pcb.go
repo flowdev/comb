@@ -4,7 +4,7 @@
 package pcb
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // EOF parses the end of the input.

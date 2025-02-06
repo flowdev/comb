@@ -1,7 +1,7 @@
 package parsify
 
 import (
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 	"strconv"
 	"strings"
 	"unicode/utf8"

@@ -3,7 +3,7 @@ package pcb
 import (
 	"bytes"
 	"fmt"
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 	"math"
 	"slices"
 	"strconv"

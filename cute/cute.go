@@ -1,14 +1,14 @@
 package cute
 
 import (
-	"github.com/oleiade/gomme"
-	"github.com/oleiade/gomme/pcb"
+	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/pcb"
 )
 
 // C is a shortened version of `pcb.Char`.
 // It is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
 func C(char rune) gomme.Parser[rune] {
@@ -18,7 +18,7 @@ func C(char rune) gomme.Parser[rune] {
 // S is a shortened version of `pcb.Char`.
 // It is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
 func S(token string) gomme.Parser[string] {
@@ -28,7 +28,7 @@ func S(token string) gomme.Parser[string] {
 // OneOfRunes is a shortened version of `pcb.OneOfRunes`.
 // It is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
 func OneOfRunes(collection ...rune) gomme.Parser[rune] {
@@ -39,7 +39,7 @@ func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 // OneOf is a shortened version of `pcb.OneOf`.
 // It is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
 func OneOf(collection ...string) gomme.Parser[string] {
@@ -58,7 +58,7 @@ func OneOf(collection ...string) gomme.Parser[string] {
 //
 // SaveSpot is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 func SaveSpot[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 	return gomme.SafeSpot[Output](parse)
 }
@@ -66,7 +66,7 @@ func SaveSpot[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
 // FirstSuccessful is a shortened version of `gomme.FirstSuccessful`.
 // It is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
 	return pcb.FirstSuccessful[Output](parsers...)
 }
@@ -74,7 +74,7 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 // ZeroOf returns the zero value of some type.
 // It is meant to be used without the package name with an import like:
 //
-//	import . "github.com/oleiade/gomme/cute"
+//	import . "github.com/flowdev/comb/cute"
 func ZeroOf[T any]() T {
 	return gomme.ZeroOf[T]()
 }

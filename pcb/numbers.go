@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 // Integer parses any kind of integer number.

@@ -1,8 +1,8 @@
 package gomme_test
 
 import (
-	"github.com/oleiade/gomme"
-	"github.com/oleiade/gomme/pcb"
+	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/pcb"
 	"strings"
 	"testing"
 )

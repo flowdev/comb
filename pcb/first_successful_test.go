@@ -3,7 +3,7 @@ package pcb
 import (
 	"testing"
 
-	"github.com/oleiade/gomme"
+	"github.com/flowdev/comb"
 )
 
 func TestFirstSuccessful(t *testing.T) {

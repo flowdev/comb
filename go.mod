@@ -1,4 +1,4 @@
-module github.com/oleiade/gomme
+module github.com/flowdev/comb
 
 go 1.21
 
