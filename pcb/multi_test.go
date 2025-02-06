@@ -60,6 +60,7 @@ func TestCount(t *testing.T) {
 		},
 	}
 
+	gomme.SetDebug(true)
 	for _, tc := range testCases {
 		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,7 +155,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	newState, output, err := parser.Parse(state)
 
 	assert.Error(t, err)
-	assert.Equal(t, output, []string{""})
+	assert.Equal(t, []string{""}, output)
 	assert.Equal(t, state.CurrentString(), newState.CurrentString())
 }
 
@@ -249,7 +250,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	newState, output, err := parser.Parse(state)
 
 	assert.Error(t, err)
-	assert.Equal(t, output, []string{""})
+	assert.Equal(t, []string{""}, output)
 	assert.Equal(t, state.CurrentString(), newState.CurrentString())
 }
 

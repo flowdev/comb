@@ -190,7 +190,8 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 			Debugf("parseAll - parent (ID=%d) Error?=%v", nextID, result.Error)
 		}
 	}
-	return result.Output.(Output), result.EndState.Errors()
+	out, _ := result.Output.(Output)
+	return out, result.EndState.Errors()
 }
 
 func (pp *PreparedParser[Output]) handleError(r ParseResult, recoverCache []int) (state State, nextID int32) {

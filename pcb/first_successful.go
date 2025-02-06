@@ -51,7 +51,7 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 	}
 
 	if childID >= 0 && (childResult.Error == nil || childResult.StartState.SaveSpotMoved(childResult.EndState)) {
-		return childResult.AddOutput(bestRes) // we can't avoid any errors by going another path
+		return childResult.AddOutput(bestRes) // we can't avoid this error by going another path
 	}
 
 	idx := 0

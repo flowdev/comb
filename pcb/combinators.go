@@ -13,29 +13,34 @@ func Optional[Output any](parser gomme.Parser[Output]) gomme.Parser[Output] {
 		func() []gomme.AnyParser {
 			return []gomme.AnyParser{parser}
 		}, func(childID int32, childResult gomme.ParseResult) gomme.ParseResult {
+			var out Output
 			gomme.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
-			state := childResult.EndState
-			nState, out, err := state, gomme.ZeroOf[Output](), (*gomme.ParserError)(nil)
+			if childID >= 0 { // on the way up: Fetch
+				var o interface{}
+				o, childResult = childResult.FetchOutput()
+				out, _ = o.(Output)
+			}
+			endResult := childResult
 			if childID >= 0 {
 				if childID != parser.ID() {
-					childResult.Error = state.NewSemanticError(
+					childResult.Error = childResult.EndState.NewSemanticError(
 						"unable to parse after child with unknown ID %d", childID)
 					return childResult
 				}
-				state = childResult.StartState
-				nState = childResult.EndState
 				out, _ = childResult.Output.(Output)
-				err = childResult.Error
 			} else {
-				nState, out, err = parser.Parse(state)
+				endResult = gomme.RunParser(parser, childResult)
+				childResult.StartState = childResult.EndState
 			}
-			if err != nil && state.SaveSpotMoved(nState) { // we can't ignore the error
-				return gomme.ParseResult{StartState: state, EndState: nState, Output: out, Error: err}
+			if endResult.Error != nil && childResult.StartState.SaveSpotMoved(endResult.EndState) { // we can't ignore the error
+				return endResult.AddOutput(out)
 			}
-			if err != nil { // successful result without input consumption
-				return gomme.ParseResult{StartState: state, EndState: state, Output: out, Error: nil}
+			if endResult.Error != nil { // successful result without input consumption
+				endResult.EndState = endResult.StartState
+				endResult.Error = nil
+				return endResult.AddOutput(out)
 			}
-			return gomme.ParseResult{StartState: state, EndState: nState, Output: out, Error: nil}
+			return endResult.AddOutput(out)
 		},
 	)
 }
