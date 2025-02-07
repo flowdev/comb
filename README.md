@@ -1,4 +1,4 @@
-# A Parser COMBinator Library For Go
+# A Parser Combinator Library For Go
 ![comb logo](logo.png)
 
 Comb is a library that simplifies building parsers in Go.
@@ -18,7 +18,7 @@ general developer experience and type safety right.
 ## Table of content
 
 <!-- TOC -->
-* [A Parser COMBinator Library For Go](#a-parser-combinator-library-for-go)
+* [A Parser Combinator Library For Go](#a-parser-combinator-library-for-go)
   * [Table of content](#table-of-content)
   * [Getting started](#getting-started)
   * [Examples](#examples)
