@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"github.com/flowdev/comb"
@@ -9,18 +9,18 @@ import (
 // All parsers have to be of the same type.
 //
 // If no parser succeeds, this combinator produces an error Result.
-func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
+func FirstSuccessful[Output any](parsers ...comb.Parser[Output]) comb.Parser[Output] {
 	if len(parsers) == 0 {
 		panic("FirstSuccessful(missing parsers)")
 	}
 
 	fsd := &firstSuccessfulData[Output]{parsers: parsers}
 
-	return gomme.NewBranchParser[Output]("FirstSuccessful", fsd.children, fsd.parseAfterChild)
+	return comb.NewBranchParser[Output]("FirstSuccessful", fsd.children, fsd.parseAfterChild)
 }
 
 type firstSuccessfulData[Output any] struct {
-	parsers []gomme.Parser[Output]
+	parsers []comb.Parser[Output]
 }
 
 // partialFSResult is internal to the parsing method and methods and functions called by it.
@@ -29,20 +29,20 @@ type partialFSResult[Output any] struct {
 	pos int
 }
 
-func (fsd *firstSuccessfulData[Output]) children() []gomme.AnyParser {
-	children := make([]gomme.AnyParser, len(fsd.parsers))
+func (fsd *firstSuccessfulData[Output]) children() []comb.AnyParser {
+	children := make([]comb.AnyParser, len(fsd.parsers))
 	for i, p := range fsd.parsers {
 		children[i] = p
 	}
 	return children
 }
 
-func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResult gomme.ParseResult,
-) gomme.ParseResult {
+func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResult comb.ParseResult,
+) comb.ParseResult {
 	var bestRes partialFSResult[Output]
-	var bestResult gomme.ParseResult
+	var bestResult comb.ParseResult
 
-	gomme.Debugf("FirstSuccessful.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+	comb.Debugf("FirstSuccessful.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
 	if childID >= 0 { // on the way up: Fetch
 		var o interface{}
@@ -73,7 +73,7 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 
 	for i := idx; i < len(fsd.parsers); i++ {
 		p := fsd.parsers[i]
-		result := gomme.RunParser(p, startResult)
+		result := comb.RunParser(p, startResult)
 		if result.Error == nil || startResult.EndState.SaveSpotMoved(result.EndState) {
 			return result.AddOutput(bestRes)
 		}
@@ -84,7 +84,7 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 			bestRes.out, _ = result.Output.(Output)
 			bestRes.pos = result.EndState.CurrentPos()
 		} else {
-			_, other := gomme.BetterOf(bestResult.EndState, result.EndState)
+			_, other := comb.BetterOf(bestResult.EndState, result.EndState)
 			if other {
 				bestResult = result
 				bestRes.out, _ = result.Output.(Output)

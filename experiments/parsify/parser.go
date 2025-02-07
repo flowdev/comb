@@ -27,7 +27,7 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 	pparse2 := Parsify[PO2, ParserPO2](parse2)
 	pparse3 := Parsify[PO3, ParserPO3](parse3)
 
-	return func(state gomme.State) (gomme.State, MO, *gomme.ParserError) {
+	return func(state comb.State) (comb.State, MO, *comb.ParserError) {
 		var zero MO
 
 		newState1, output1, err1 := pparse1(state)
@@ -59,7 +59,7 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 func Char(char rune) Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
-	return func(state gomme.State) (gomme.State, rune, *gomme.ParserError) {
+	return func(state comb.State) (comb.State, rune, *comb.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
@@ -80,7 +80,7 @@ func Char(char rune) Parser[rune] {
 func Char2[Output rune](char rune) Parser[Output] {
 	expected := strconv.QuoteRune(char)
 
-	return func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
+	return func(state comb.State) (comb.State, Output, *comb.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
@@ -101,7 +101,7 @@ func Char2[Output rune](char rune) Parser[Output] {
 // If found the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
 func UntilString(stop string) Parser[string] {
-	return func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
+	return func(state comb.State) (comb.State, string, *comb.ParserError) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {

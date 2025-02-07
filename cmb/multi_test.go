@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"github.com/flowdev/comb"
@@ -12,7 +12,7 @@ func TestCount(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[[]string]
+		parser        comb.Parser[[]string]
 		input         string
 		wantErr       bool
 		wantOutput    []string
@@ -60,13 +60,13 @@ func TestCount(t *testing.T) {
 		},
 	}
 
-	gomme.SetDebug(true)
+	comb.SetDebug(true)
 	for _, tc := range testCases {
 		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -82,7 +82,7 @@ func TestCount(t *testing.T) {
 
 func BenchmarkCount(b *testing.B) {
 	parser := Count(Char('#'), 3)
-	state := gomme.NewFromString("###", false)
+	state := comb.NewFromString("###", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -95,7 +95,7 @@ func TestMany0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[[]rune]
+		parser        comb.Parser[[]rune]
 		input         string
 		wantErr       bool
 		wantOutput    []rune
@@ -131,7 +131,7 @@ func TestMany0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -149,7 +149,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := gomme.NewFromString("abcdef", true)
+	state := comb.NewFromString("abcdef", true)
 	parser := Many0(Digit0())
 
 	newState, output, err := parser.Parse(state)
@@ -161,7 +161,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany0(b *testing.B) {
 	parser := Many0(Char('#'))
-	state := gomme.NewFromString("###", false)
+	state := comb.NewFromString("###", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -174,7 +174,7 @@ func TestMany1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[[]rune]
+		parser        comb.Parser[[]rune]
 		input         string
 		wantErr       bool
 		wantOutput    []rune
@@ -226,7 +226,7 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -244,7 +244,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := gomme.NewFromString("abcdef", true)
+	state := comb.NewFromString("abcdef", true)
 	parser := Many1(Digit0())
 
 	newState, output, err := parser.Parse(state)
@@ -256,7 +256,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany1(b *testing.B) {
 	parser := Many1(Char('#'))
-	state := gomme.NewFromString("###", false)
+	state := comb.NewFromString("###", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -269,7 +269,7 @@ func TestSeparated0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[[]string]
+		parser        comb.Parser[[]string]
 		input         string
 		wantErr       bool
 		wantOutput    []string
@@ -331,7 +331,7 @@ func TestSeparated0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -347,7 +347,7 @@ func TestSeparated0(t *testing.T) {
 
 func BenchmarkSeparated0(t *testing.B) {
 	parser := Separated0(Char('#'), Char(','), false)
-	state := gomme.NewFromString("#,#,#", false)
+	state := comb.NewFromString("#,#,#", false)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
@@ -360,7 +360,7 @@ func TestSeparated1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[[]string]
+		parser        comb.Parser[[]string]
 		input         string
 		wantErr       bool
 		wantOutput    []string
@@ -408,7 +408,7 @@ func TestSeparated1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -424,7 +424,7 @@ func TestSeparated1(t *testing.T) {
 
 func BenchmarkSeparated1(t *testing.B) {
 	parser := Separated1(Char('#'), Char(','), false)
-	state := gomme.NewFromString("#,#,#,#", false)
+	state := comb.NewFromString("#,#,#,#", false)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {

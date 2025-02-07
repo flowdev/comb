@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"github.com/flowdev/comb"
@@ -12,11 +12,11 @@ import (
 // All higher numbered parsers are expected to be nil.
 func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	expected string,
-	p1 gomme.Parser[PO1], p2 gomme.Parser[PO2], p3 gomme.Parser[PO3], p4 gomme.Parser[PO4], p5 gomme.Parser[PO5],
+	p1 comb.Parser[PO1], p2 comb.Parser[PO2], p3 comb.Parser[PO3], p4 comb.Parser[PO4], p5 comb.Parser[PO5],
 	n int,
 	fn1 func(PO1) (MO, error), fn2 func(PO1, PO2) (MO, error), fn3 func(PO1, PO2, PO3) (MO, error),
 	fn4 func(PO1, PO2, PO3, PO4) (MO, error), fn5 func(PO1, PO2, PO3, PO4, PO5) (MO, error),
-) gomme.Parser[MO] {
+) comb.Parser[MO] {
 	if p1 == nil {
 		panic("MapN: p1 is nil")
 	}
@@ -71,16 +71,16 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 		fn1: fn1, fn2: fn2, fn3: fn3, fn4: fn4, fn5: fn5,
 	}
 
-	return gomme.NewBranchParser[MO](expected, md.children, md.parseAfterChild)
+	return comb.NewBranchParser[MO](expected, md.children, md.parseAfterChild)
 }
 
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
 	expected string
-	p1       gomme.Parser[PO1]
-	p2       gomme.Parser[PO2]
-	p3       gomme.Parser[PO3]
-	p4       gomme.Parser[PO4]
-	p5       gomme.Parser[PO5]
+	p1       comb.Parser[PO1]
+	p2       comb.Parser[PO2]
+	p3       comb.Parser[PO3]
+	p4       comb.Parser[PO4]
+	p5       comb.Parser[PO5]
 	n        int
 	fn1      func(PO1) (MO, error)
 	fn2      func(PO1, PO2) (MO, error)
@@ -97,8 +97,8 @@ type partialMapResult[PO1, PO2, PO3, PO4 any] struct {
 	out4 PO4
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []gomme.AnyParser {
-	children := make([]gomme.AnyParser, md.n)
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []comb.AnyParser {
+	children := make([]comb.AnyParser, md.n)
 	children[0] = md.p1
 	if md.n >= 2 {
 		children[1] = md.p2
@@ -115,12 +115,12 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []gomme.AnyParser {
 	return children
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, childResult gomme.ParseResult,
-) gomme.ParseResult {
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, childResult comb.ParseResult,
+) comb.ParseResult {
 	var zero MO
 	var partRes partialMapResult[PO1, PO2, PO3, PO4]
 
-	gomme.Debugf("MapN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+	comb.Debugf("MapN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
 	if childID >= 0 { // on the way up: Fetch
 		var o interface{}
@@ -134,7 +134,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 
 	state := childResult.EndState
 	id := childID // use new variable to keep the original childID (for distinguishing way: up/down)
-	idErrResult := gomme.ParseResult{
+	idErrResult := comb.ParseResult{
 		StartState: state,
 		EndState:   state,
 		Output:     zero,
@@ -167,7 +167,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 
 	result1 := childResult
 	if id < 0 {
-		result1 = gomme.RunParser(md.p1, childResult)
+		result1 = comb.RunParser(md.p1, childResult)
 		partRes.out1, _ = result1.Output.(PO1)
 		if result1.Error != nil {
 			return result1.AddOutput(partRes)
@@ -180,7 +180,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 	if md.n > 1 {
 		result2 := childResult
 		if id < 0 {
-			result2 = gomme.RunParser(md.p2, result1)
+			result2 = comb.RunParser(md.p2, result1)
 			partRes.out2, _ = result2.Output.(PO2)
 			if result2.Error != nil {
 				out, _ := md.fn(partRes)
@@ -195,7 +195,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 		if md.n > 2 {
 			result3 := childResult
 			if id < 0 {
-				result3 = gomme.RunParser(md.p3, result2)
+				result3 = comb.RunParser(md.p3, result2)
 				partRes.out3, _ = result3.Output.(PO3)
 				if result3.Error != nil {
 					out, _ := md.fn(partRes)
@@ -210,7 +210,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 			if md.n > 3 {
 				result4 := childResult
 				if id < 0 {
-					result4 = gomme.RunParser(md.p4, result3)
+					result4 = comb.RunParser(md.p4, result3)
 					partRes.out4, _ = result4.Output.(PO4)
 					if result4.Error != nil {
 						out, _ := md.fn(partRes)
@@ -227,7 +227,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 
 					result5 := childResult
 					if id < 0 {
-						result5 = gomme.RunParser(md.p5, result4)
+						result5 = comb.RunParser(md.p5, result4)
 						out5, _ = result5.Output.(PO5)
 						if result5.Error != nil {
 							out, _ := md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, out5)
@@ -239,11 +239,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 					}
 
 					out, err := md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, out5)
-					var pErr *gomme.ParserError
+					var pErr *comb.ParserError
 					if err != nil {
 						pErr = result5.EndState.NewSemanticError(err.Error())
 					}
-					return gomme.ParseResult{
+					return comb.ParseResult{
 						StartState: state,
 						EndState:   result5.EndState,
 						Output:     out,
@@ -252,11 +252,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 				}
 
 				out, err := md.fn4(partRes.out1, partRes.out2, partRes.out3, partRes.out4)
-				var pErr *gomme.ParserError
+				var pErr *comb.ParserError
 				if err != nil {
 					pErr = result4.EndState.NewSemanticError(err.Error())
 				}
-				return gomme.ParseResult{
+				return comb.ParseResult{
 					StartState: state,
 					EndState:   result4.EndState,
 					Output:     out,
@@ -265,11 +265,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 			}
 
 			out, err := md.fn3(partRes.out1, partRes.out2, partRes.out3)
-			var pErr *gomme.ParserError
+			var pErr *comb.ParserError
 			if err != nil {
 				pErr = result3.EndState.NewSemanticError(err.Error())
 			}
-			return gomme.ParseResult{
+			return comb.ParseResult{
 				StartState: state,
 				EndState:   result3.EndState,
 				Output:     out,
@@ -278,11 +278,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 		}
 
 		out, err := md.fn2(partRes.out1, partRes.out2)
-		var pErr *gomme.ParserError
+		var pErr *comb.ParserError
 		if err != nil {
 			pErr = result2.EndState.NewSemanticError(err.Error())
 		}
-		return gomme.ParseResult{
+		return comb.ParseResult{
 			StartState: state,
 			EndState:   result2.EndState,
 			Output:     out,
@@ -291,11 +291,11 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, c
 	}
 
 	out, err := md.fn1(partRes.out1)
-	var pErr *gomme.ParserError
+	var pErr *comb.ParserError
 	if err != nil {
 		pErr = result1.EndState.NewSemanticError(err.Error())
 	}
-	return gomme.ParseResult{
+	return comb.ParseResult{
 		StartState: state,
 		EndState:   result1.EndState,
 		Output:     out,
@@ -314,7 +314,7 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) fn(partRes partialMapResult[PO1,
 	case 4:
 		return md.fn4(partRes.out1, partRes.out2, partRes.out3, partRes.out4)
 	case 5:
-		return md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, gomme.ZeroOf[PO5]())
+		return md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, comb.ZeroOf[PO5]())
 	}
-	return gomme.ZeroOf[MO](), nil // can't happen
+	return comb.ZeroOf[MO](), nil // can't happen
 }

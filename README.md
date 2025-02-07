@@ -1,45 +1,45 @@
 # A Parser COMBinator Library For Go
 ![comb logo](logo.png)
 
-<p align="center">
-    <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
-    <a href="https://pkg.go.dev/github.com/oleiade/gomme#pkg-types"><img src="https://pkg.go.dev/badge/github.com/oleiade/gomme#pkg-types.svg" alt="Go Documentation"></a>
-    <a href="https://goreportcard.com/report/github.com/oleiade/gomme"><img src="https://goreportcard.com/badge/github.com/oleiade/gomme" alt="Go Report Card"></a>
-    <a href="https://img.shields.io/github/go-mod/go-version/flowdev/comb" alt="Go Version"></a>
-</p>
-
 Comb is a library that simplifies building parsers in Go.
 
-Inspired by Rust's renowned `nom` crate, Gomme provides a developer-friendly toolkit that allows you to quickly and easily create reliable parsers for both textual and binary formats.
+For me, it has got the optimal feature set:
+* Simple maintainability of a normal library thanks to being a parser combinator library.
+* Report errors with exact (line and column) position.
+* Report **multiple** errors.
+* UNICODE support.
+* Support for binary input (including byte position and hex dump for errors).
+* Type safety (including filling arbitrary typed data) using generics.
+* Idiomatic Go code (no generated code, ...).
 
-With the power of Go's newly introduced Generics, Gomme gives you the flexibility to design your own parsers while ensuring optimal compile-time type safety. Whether you're a seasoned developer or just starting out, Gomme is designed to make the process of building parsers efficient, enjoyable, and less intimidating.
+It's based on [Gomme](https://github.com/oleiade/gomme) that showed how to get the
+general developer experience and type safety right.
 
 ## Table of content
 
-<!-- toc -->
-- [Table of content](#table-of-content)
-- [Getting started](#getting-started)
-- [Why Gomme?](#why-gomme)
-- [Examples](#examples)
-- [Documentation](#documentation)
-- [Table of content](#table-of-content-1)
-- [Documentation](#documentation-1)
-- [Installation](#installation)
-- [Guide](#guide)
-  - [List of combinators](#list-of-combinators)
-    - [Base combinators](#base-combinators)
-    - [Bytes combinators](#bytes-combinators)
-    - [Character combinators](#character-combinators)
-    - [Combinators for Sequences](#combinators-for-sequences)
-    - [Combinators for Applying Parsers Many Times](#combinators-for-applying-parsers-many-times)
-    - [Combinators for Choices](#combinators-for-choices)
-- [Installation](#installation-1)
-- [Frequently asked questions](#frequently-asked-questions)
-  - [Q: What are parser combinators?](#q-what-are-parser-combinators)
-  - [Q: Why would I use parser combinators instead of a specific parser?](#q-why-would-i-use-parser-combinators-instead-of-a-specific-parser)
-  - [Q: Where can I learn more about parser combinators?](#q-where-can-i-learn-more-about-parser-combinators)
-- [Acknowledgements](#acknowledgements)
-- [Authors](#authors)
+<!-- TOC -->
+* [A Parser COMBinator Library For Go](#a-parser-combinator-library-for-go)
+  * [Table of content](#table-of-content)
+  * [Getting started](#getting-started)
+  * [Examples](#examples)
+  * [Documentation](#documentation)
+  * [Installation](#installation)
+  * [Guide](#guide)
+    * [List of combinators](#list-of-combinators)
+      * [Base combinators](#base-combinators)
+      * [Bytes combinators](#bytes-combinators)
+      * [Character combinators](#character-combinators)
+      * [Combinators for Sequences](#combinators-for-sequences)
+      * [Combinators for Applying Parsers Many Times](#combinators-for-applying-parsers-many-times)
+      * [Combinators for Choices](#combinators-for-choices)
+  * [Frequently asked questions](#frequently-asked-questions)
+    * [Q: What's the name?](#q-whats-the-name)
+    * [Q: What are parser combinators?](#q-what-are-parser-combinators)
+    * [Q: Why would I use parser combinators instead of a specific parser?](#q-why-would-i-use-parser-combinators-instead-of-a-specific-parser)
+    * [Q: Where can I learn more about parser combinators?](#q-where-can-i-learn-more-about-parser-combinators)
+  * [Acknowledgements](#acknowledgements)
+  * [Authors](#authors)
+<!-- TOC -->
 
 
 ## Getting started
@@ -57,58 +57,37 @@ type RGBColor struct {
 // ParseRGBColor creates a new RGBColor from a hexadecimal color string.
 // The string must be a six-digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
-    parser := gomme.Preceded(
-        gomme.Token[string]("#"),
-        gomme.Map(
-            gomme.Count(HexColorComponent(), 3),
-            func(components []uint8) (RGBColor, error) {
-                return RGBColor{components[0], components[1], components[2]}, nil
-            },
-        ),
+    parse := cmb.Map4(
+        SaveSpot(C('#')),
+        HexColorComponent("red hex color"),
+        HexColorComponent("green hex color"),
+        HexColorComponent("blue hex color"),
+        func(_ rune, r, g, b string) (RGBColor, error) {
+            return RGBColor{fromHex(r), fromHex(g), fromHex(b)}, nil
+        },
     )
 
-    result := parser(input)
-    if result.Err != nil {
-        return RGBColor{}, result.Err
-    }
-
-    return result.Output, nil
+    return comb.RunOnString(input, parse)
 }
 
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two-digit hexadecimal number.
-func HexColorComponent() gomme.Parser[string, uint8] {
-    return func(input string) gomme.Result[uint8, string] {
-        return gomme.Map(
-            gomme.TakeWhileMN[string](2, 2, gomme.IsHexDigit),
-            fromHex,
-        )(input)
-    }
+func HexColorComponent() gomme.Parser[string] {
+    return SaveSpot(cmb.SatisfyMN(expected, 2, 2, cmb.IsHexDigit))
 }
 
-// fromHex converts two digits hexadecimal numbers to their decimal value.
-func fromHex(input string) (uint8, error) {
-    res, err := strconv.ParseInt(input, 16, 16)
-    if err != nil {
-        return 0, err
-    }
-
-    return uint8(res), nil
+// fromHex converts a two digits hexadecimal number to its decimal value.
+func fromHex(input string) uint8 {
+    res, _ := strconv.ParseUint(input, 16, 8) // errors have been caught by the parser
+    return uint8(res)
 }
-
 ```
 
-It's as simple as that! Feel free to explore more in the [examples](examples/) directory.
-
-## Why Gomme?
-
-While it's true that learning parser combinators might initially seem daunting, their power, flexibility, and efficiency make them an invaluable tool for parsing textual and binary formats. We've created Gomme with a focus on making this learning curve as smooth as possible, providing clear documentation and a wide array of examples.
-
-Once you get the hang of it, you'll find that Gomme's parser combinators are intuitive, adaptable, and perfect for quickly building parsers for various formats. They're easy to test and maintain, and they can help you create parsers that are as fast as their hand-written counterparts.
+It's as simple as that! Feel free to explore more in the [examples](./examples) directory.
 
 ## Examples
 
-See Gomme in action with these handy examples:
+See Comb in action with these handy examples:
 - [Parsing hexadecimal color codes](./examples/hexcolor)
 - [Parsing a simple CSV file](./examples/csv)
 - [Parsing Redis' RESP protocol](./examples/redis)
@@ -116,22 +95,23 @@ See Gomme in action with these handy examples:
 
 ## Documentation
 
-For more detailled information, refer to the official [documentation](https://pkg.go.dev/github.com/oleiade/gomme).
-## Table of content
-
-## Documentation
-
-[Documentation](https://pkg.go.dev/github.com/oleiade/gomme)
+For more detailed information, refer to the official [documentation](https://pkg.go.dev/github.com/flowdev/comb).
 
 ## Installation
 
+Like any other library:
 ```bash
 go get github.com/flowdev/comb
 ```
 
 ## Guide
 
-In this guide, we provide a detailed overview of the various combinators available in Gomme. Combinators are fundamental building blocks in parser construction, each designed for a specific task. By combining them, you can create complex parsers suited to your specific needs. For each combinator, we've provided a brief description and a usage example. Let's explore!
+In this guide, we provide a detailed overview of the various combinators available in Comb.
+Combinators are fundamental building blocks in parser construction,
+each designed for a specific task.
+By combining them, you can create complex parsers suited to your specific needs.
+For each combinator, we've provided a brief description and a usage example.
+Let's explore!
 
 ### List of combinators
 
@@ -208,23 +188,27 @@ In this guide, we provide a detailed overview of the various combinators availab
 | [`Alternative`](https://pkg.go.dev/github.com/oleiade/gomme#Alternative) | Tests a list of parsers, one by one, until one succeeds. Note that all parsers must share the same signature (`Parser[I, O]`). | `Alternative(Token("abc"), Token("123"))` |
 
 
-## Installation
-
-Add the library to your Go project with the following command:
-
-```bash
-    go get github.com/flowdev/comb@latest
-```
-
 ## Frequently asked questions
+
+### Q: What's the name?
+
+**A**: **Comb** first of all got its name from being a parser COMBinatior library.
+But it is also very good at "combing" through input, finding errors.
+Since the error handling system is the by far hardest part of the project the name feels right.
 
 ### Q: What are parser combinators?
 
-**A**: Parser combinators offer a new way of building parsers. Instead of writing a complex parser that analyzes an entire format, you create small, simple parsers that handle the smallest units of the format. These small parsers can then be combined to build more complex parsers. It's a bit like using building blocks to construct whatever structure you want.
+**A**: Parser combinators offer a new way of building parsers.
+Instead of writing a complex parser that analyzes an entire format,
+you create small, simple parsers that handle the smallest units of the format.
+These small parsers can then be combined to build more complex parsers.
+It's a bit like using building blocks to construct whatever structure you want.
 
 ### Q: Why would I use parser combinators instead of a specific parser?
 
-**A**: Parser combinators are incredibly flexible and intuitive. Once you're familiar with them, they enable you to quickly create, maintain, and modify parsers. They offer you a high degree of freedom in designing your parser and how it's used.
+**A**: Parser combinators are incredibly flexible and intuitive.
+Once you're familiar with them, they enable you to quickly create, maintain, and modify parsers.
+They offer you a high degree of freedom in designing your parser and how it's used.
 
 ### Q: Where can I learn more about parser combinators?
 
@@ -235,9 +219,15 @@ A: Here are some resources we recommend:
 
 ## Acknowledgements
 
-We can frankly take close to zero credit for this library, apart from work put into assembling the already existing elements of theory and implementation into a single autonomous project.
+We've stood on the shoulders of giants to create Comb.
+The library draws heavily on the extensive theoretical work done in the parser combinators space,
+and we owe a huge thanks to [Gomme](https://github.com/oleiade/gomme) that
+solved two important problems for us and gave hints for others.
 
-We've stood on the shoulders of giants to create Gomme. The library draws heavily on the extensive theoretical work done in the parser combinators space, and we owe a huge debt to Rust's [nom](https://github.com/Geal/nom) and [benthos'](https://github.com/benthosdev/benthos) blob lang implementation. Our goal was to consolidate these diverse elements into a single, easy-to-use Go library.
+Getting the error recovery mechanism right took at least 90% of the time
+put into the project until now.
+
 ## Authors
 
-- [@oleiade](https://github.com/oleiade)
+- [@ole108](https://github.com/ole108) (main developer behind the flowdev organization)
+- [@oleiade](https://github.com/oleiade) (for Gomme)

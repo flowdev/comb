@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"bytes"
@@ -17,10 +17,10 @@ import (
 // If the rune could not be found at the current position,
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
-func Char(char rune) gomme.Parser[rune] {
+func Char(char rune) comb.Parser[rune] {
 	expected := strconv.QuoteRune(char)
 
-	parse := func(state gomme.State) (gomme.State, rune, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
@@ -35,7 +35,7 @@ func Char(char rune) gomme.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	return gomme.NewParser[rune](expected, parse, IndexOf(char))
+	return comb.NewParser[rune](expected, parse, IndexOf(char))
 }
 
 // Byte parses a single byte and matches it with
@@ -43,10 +43,10 @@ func Char(char rune) gomme.Parser[rune] {
 // If the byte could not be found at the current position,
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
-func Byte(byt byte) gomme.Parser[byte] {
+func Byte(byt byte) comb.Parser[byte] {
 	expected := "0x" + strconv.FormatUint(uint64(byt), 16)
 
-	parse := func(state gomme.State) (gomme.State, byte, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, byte, *comb.ParserError) {
 		buf := state.CurrentBytes()
 		if len(buf) == 0 {
 			return state, 0, state.NewSyntaxError("%s (at EOF)", expected)
@@ -59,7 +59,7 @@ func Byte(byt byte) gomme.Parser[byte] {
 		return state.MoveBy(1), b, nil
 	}
 
-	return gomme.NewParser[byte](expected, parse, IndexOf(byt))
+	return comb.NewParser[byte](expected, parse, IndexOf(byt))
 }
 
 // Satisfy parses a single character, and ensures that it satisfies the given predicate.
@@ -67,8 +67,8 @@ func Byte(byt byte) gomme.Parser[byte] {
 //
 // This parser is a good candidate for SafeSpot and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer)`.
-func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
-	parse := func(state gomme.State) (gomme.State, rune, *gomme.ParserError) {
+func Satisfy(expected string, predicate func(rune) bool) comb.Parser[rune] {
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
@@ -83,11 +83,11 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	recoverer := func(state gomme.State) int {
+	recoverer := func(state comb.State) int {
 		return strings.IndexFunc(state.CurrentString(), predicate)
 	}
 
-	return gomme.NewParser[rune](expected, parse, recoverer)
+	return comb.NewParser[rune](expected, parse, recoverer)
 }
 
 // String parses a token from the input, and returns the part of the input that
@@ -95,10 +95,10 @@ func Satisfy(expected string, predicate func(rune) bool) gomme.Parser[rune] {
 // If the token could not be found at the current position,
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
-func String(token string) gomme.Parser[string] {
+func String(token string) comb.Parser[string] {
 	expected := strconv.Quote(token)
 
-	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
 		if !strings.HasPrefix(state.CurrentString(), token) {
 			return state, "", state.NewSyntaxError(expected)
 		}
@@ -107,17 +107,17 @@ func String(token string) gomme.Parser[string] {
 		return newState, token, nil
 	}
 
-	return gomme.NewParser[string](expected, parse, IndexOf(token))
+	return comb.NewParser[string](expected, parse, IndexOf(token))
 }
 
 // Bytes parses a token from the input, and returns the part of the input that
 // matched the token.
 // If the token could not be found at the current position,
 // the parser returns an error result.
-func Bytes(token []byte) gomme.Parser[[]byte] {
+func Bytes(token []byte) comb.Parser[[]byte] {
 	expected := fmt.Sprintf("0x%x", token)
 
-	parse := func(state gomme.State) (gomme.State, []byte, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, []byte, *comb.ParserError) {
 		if !bytes.HasPrefix(state.CurrentBytes(), token) {
 			return state, []byte{}, state.NewSyntaxError(expected)
 		}
@@ -126,7 +126,7 @@ func Bytes(token []byte) gomme.Parser[[]byte] {
 		return newState, token, nil
 	}
 
-	return gomme.NewParser[[]byte](expected, parse, IndexOf(token))
+	return comb.NewParser[[]byte](expected, parse, IndexOf(token))
 }
 
 // UntilString parses until it finds a token in the input, and returns
@@ -140,14 +140,14 @@ func Bytes(token []byte) gomme.Parser[[]byte] {
 //     because it potentially consumes much more input than expected.
 //     In error cases it will usually start earlier because other parsers are skipped.
 //     Especially using it as a `SafeSpot` parser is a bad idea!
-func UntilString(stop string) gomme.Parser[string] {
+func UntilString(stop string) comb.Parser[string] {
 	expected := fmt.Sprintf("... %q", stop)
 
 	if stop == "" {
 		panic("stop is empty")
 	}
 
-	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
@@ -158,14 +158,14 @@ func UntilString(stop string) gomme.Parser[string] {
 		return newState, input[:i], nil
 	}
 
-	return gomme.NewParser[string](
+	return comb.NewParser[string](
 		expected,
 		parse,
-		func(state gomme.State) int {
+		func(state comb.State) int {
 			if strings.Contains(state.CurrentString(), stop) {
 				return 0 // this is probably not what the user wants but the only correct value :(
 			}
-			return gomme.RecoverWasteTooMuch
+			return comb.RecoverWasteTooMuch
 		},
 	)
 }
@@ -178,14 +178,14 @@ func UntilString(stop string) gomme.Parser[string] {
 //
 // This parser is a good candidate for SafeSpot and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
-func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) gomme.Parser[string] {
+func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) comb.Parser[string] {
 	if atLeast < 0 {
 		panic("SatisfyMN is unable to handle negative `atLeast` argument")
 	}
 	if atMost < 0 {
 		panic("SatisfyMN is unable to handle negative `atMost` argument")
 	}
-	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
 		current := state
 		count := 0
 		for atMost > count {
@@ -220,11 +220,11 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 		return current, output, nil
 	}
 
-	return gomme.NewParser[string](expected, parse, satisfyMNRecoverer(atLeast, predicate))
+	return comb.NewParser[string](expected, parse, satisfyMNRecoverer(atLeast, predicate))
 }
 
-func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) gomme.Recoverer {
-	return func(state gomme.State) int {
+func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) comb.Recoverer {
+	return func(state comb.State) int {
 		count := 0
 		start := 0
 		for i, r := range state.CurrentString() {
@@ -240,88 +240,88 @@ func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) gomme.Recoverer 
 				count = 0
 			}
 		}
-		return gomme.RecoverWasteTooMuch
+		return comb.RecoverWasteTooMuch
 	}
 }
 
 // AlphaMN parses at least `atLeast` and at most `atMost` Unicode letters.
-func AlphaMN(atLeast, atMost int) gomme.Parser[string] {
+func AlphaMN(atLeast, atMost int) comb.Parser[string] {
 	return SatisfyMN("letter", atLeast, atMost, unicode.IsLetter)
 }
 
 // Alpha0 parses a zero or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input is empty, or no character is found, the parser
 // returns the input as is.
-func Alpha0() gomme.Parser[string] {
+func Alpha0() comb.Parser[string] {
 	return SatisfyMN("letter", 0, math.MaxInt, unicode.IsLetter)
 }
 
 // Alpha1 parses one or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
-func Alpha1() gomme.Parser[string] {
+func Alpha1() comb.Parser[string] {
 	return SatisfyMN("letter", 1, math.MaxInt, unicode.IsLetter)
 }
 
 // Alphanumeric0 parses zero or more alphabetical or numerical Unicode characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
-func Alphanumeric0() gomme.Parser[string] {
+func Alphanumeric0() comb.Parser[string] {
 	return SatisfyMN("letter or numeral", 0, math.MaxInt, IsAlphanumeric)
 }
 
 // Alphanumeric1 parses one or more alphabetical or numerical Unicode characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
-func Alphanumeric1() gomme.Parser[string] {
+func Alphanumeric1() comb.Parser[string] {
 	return SatisfyMN("letter or numeral", 1, math.MaxInt, IsAlphanumeric)
 }
 
 // Digit0 parses zero or more ASCII numerical characters: 0-9.
 // In the cases where the input is empty, or no digit character is found, the parser
 // returns the input as is.
-func Digit0() gomme.Parser[string] {
+func Digit0() comb.Parser[string] {
 	return SatisfyMN("digit", 0, math.MaxInt, IsDigit)
 }
 
 // Digit1 parses one or more numerical characters: 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
-func Digit1() gomme.Parser[string] {
+func Digit1() comb.Parser[string] {
 	return SatisfyMN("digit", 1, math.MaxInt, IsDigit)
 }
 
 // HexDigit0 parses zero or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input is empty, or no terminating character is found, the parser
 // returns the input as is.
-func HexDigit0() gomme.Parser[string] {
+func HexDigit0() comb.Parser[string] {
 	return SatisfyMN("hexadecimal digit", 0, math.MaxInt, IsHexDigit)
 }
 
 // HexDigit1 parses one or more ASCII hexadecimal characters: a-f, A-F, 0-9.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
-func HexDigit1() gomme.Parser[string] {
+func HexDigit1() comb.Parser[string] {
 	return SatisfyMN("hexadecimal digit", 1, math.MaxInt, IsHexDigit)
 }
 
 // Whitespace0 parses zero or more Unicode whitespace characters.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
-func Whitespace0() gomme.Parser[string] {
+func Whitespace0() comb.Parser[string] {
 	return SatisfyMN("whitespace", 0, math.MaxInt, unicode.IsSpace)
 }
 
 // Whitespace1 parses one or more Unicode whitespace characters.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
-func Whitespace1() gomme.Parser[string] {
+func Whitespace1() comb.Parser[string] {
 	return SatisfyMN("whitespace", 1, math.MaxInt, unicode.IsSpace)
 }
 
 // OneOfRunes parses a single character from the given set of characters.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
-func OneOfRunes(collection ...rune) gomme.Parser[rune] {
+func OneOfRunes(collection ...rune) comb.Parser[rune] {
 	n := len(collection)
 	if n == 0 {
 		panic("OneOfRunes has no characters to match")
@@ -331,7 +331,7 @@ func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 	parser := Satisfy(expected, func(r rune) bool {
 		return slices.Contains(collection, r)
 	})
-	parser.SwapRecoverer(func(state gomme.State) int {
+	parser.SwapRecoverer(func(state comb.State) int {
 		return strings.IndexAny(state.CurrentString(), string(collection))
 	})
 	return parser
@@ -339,14 +339,14 @@ func OneOfRunes(collection ...rune) gomme.Parser[rune] {
 
 // OneOf parses a single character from the given set of characters.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
-func OneOf(collection ...string) gomme.Parser[string] {
+func OneOf(collection ...string) comb.Parser[string] {
 	n := len(collection)
 	if n == 0 {
 		panic("OneOf has no characters to match")
 	}
 	expected := fmt.Sprintf("one of %q", collection)
 
-	parse := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
+	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
 		input := state.CurrentString()
 		for _, token := range collection {
 			if strings.HasPrefix(input, token) {
@@ -357,31 +357,31 @@ func OneOf(collection ...string) gomme.Parser[string] {
 		return state, "", state.NewSyntaxError(expected)
 	}
 
-	return gomme.NewParser[string](expected, parse, IndexOfAny(collection...))
+	return comb.NewParser[string](expected, parse, IndexOfAny(collection...))
 }
 
 // LF parses a line feed `\n` character.
-func LF() gomme.Parser[rune] {
+func LF() comb.Parser[rune] {
 	return Char('\n')
 }
 
 // CR parses a carriage return `\r` character.
-func CR() gomme.Parser[rune] {
+func CR() comb.Parser[rune] {
 	return Char('\r')
 }
 
 // CRLF parses the string `\r\n`.
-func CRLF() gomme.Parser[string] {
+func CRLF() comb.Parser[string] {
 	return String("\r\n")
 }
 
 // Space parses an ASCII space character (' ').
-func Space() gomme.Parser[rune] {
+func Space() comb.Parser[rune] {
 	return Char(' ')
 }
 
 // Tab parses an ASCII tab character ('\t').
-func Tab() gomme.Parser[rune] {
+func Tab() comb.Parser[rune] {
 	return Char('\t')
 }
 

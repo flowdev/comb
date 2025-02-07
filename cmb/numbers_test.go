@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"github.com/flowdev/comb"
@@ -10,7 +10,7 @@ func TestInt64(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[int64]
+		parser        comb.Parser[int64]
 		input         string
 		wantErr       bool
 		wantOutput    int64
@@ -71,7 +71,7 @@ func TestInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -90,7 +90,7 @@ func TestInt64(t *testing.T) {
 
 func BenchmarkInt64(b *testing.B) {
 	parser := Int64(false, 10)
-	input := gomme.NewFromString("123", false)
+	input := comb.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -103,7 +103,7 @@ func TestInt8(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[int8]
+		parser        comb.Parser[int8]
 		input         string
 		wantErr       bool
 		wantOutput    int8
@@ -164,7 +164,7 @@ func TestInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -183,7 +183,7 @@ func TestInt8(t *testing.T) {
 
 func BenchmarkInt8(b *testing.B) {
 	parser := Int8(false, 10)
-	input := gomme.NewFromString("123", false)
+	input := comb.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -196,7 +196,7 @@ func TestUInt8(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[uint8]
+		parser        comb.Parser[uint8]
 		input         string
 		wantErr       bool
 		wantOutput    uint8
@@ -241,7 +241,7 @@ func TestUInt8(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -260,7 +260,7 @@ func TestUInt8(t *testing.T) {
 
 func BenchmarkUInt8(b *testing.B) {
 	parser := UInt8(false, 10)
-	input := gomme.NewFromString("253", false)
+	input := comb.NewFromString("253", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

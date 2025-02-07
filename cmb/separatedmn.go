@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"github.com/flowdev/comb"
@@ -15,11 +15,11 @@ import (
 //
 // The parser will fail if both parsers together accepted an empty input
 // in order to prevent infinite loops.
-func SeparatedMN[Output any, S gomme.Separator](
-	parser gomme.Parser[Output], separator gomme.Parser[S],
+func SeparatedMN[Output any, S comb.Separator](
+	parser comb.Parser[Output], separator comb.Parser[S],
 	atLeast, atMost int,
 	parseSeparatorAtEnd bool,
-) gomme.Parser[[]Output] {
+) comb.Parser[[]Output] {
 	if atLeast < 0 {
 		panic("SeparatedMN is unable to handle negative `atLeast`")
 	}
@@ -38,13 +38,13 @@ func SeparatedMN[Output any, S gomme.Separator](
 		atMost:              atMost,
 		parseSeparatorAtEnd: parseSeparatorAtEnd,
 	}
-	return gomme.NewBranchParser[[]Output](expected, sd.children, sd.parseAfterChild)
+	return comb.NewBranchParser[[]Output](expected, sd.children, sd.parseAfterChild)
 }
 
-type separatedData[Output any, S gomme.Separator] struct {
+type separatedData[Output any, S comb.Separator] struct {
 	id                  uint64
-	parser              gomme.Parser[Output]
-	separator           gomme.Parser[S]
+	parser              comb.Parser[Output]
+	separator           comb.Parser[S]
 	atLeast             int
 	atMost              int
 	parseSeparatorAtEnd bool
@@ -55,17 +55,17 @@ type partialSepResult[Output any] struct {
 	outs []Output
 }
 
-func (sd *separatedData[Output, S]) children() []gomme.AnyParser {
+func (sd *separatedData[Output, S]) children() []comb.AnyParser {
 	if sd.separator == nil {
-		return []gomme.AnyParser{sd.parser}
+		return []comb.AnyParser{sd.parser}
 	}
-	return []gomme.AnyParser{sd.parser, sd.separator}
+	return []comb.AnyParser{sd.parser, sd.separator}
 }
 
-func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult gomme.ParseResult) gomme.ParseResult {
+func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult comb.ParseResult) comb.ParseResult {
 	var partRes partialSepResult[Output]
 
-	gomme.Debugf("SeparatedMN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+	comb.Debugf("SeparatedMN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
 	if childID >= 0 { // on the way up: Fetch
 		var o interface{}
@@ -106,7 +106,7 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult g
 			return endResult.AddOutput(partRes)
 		}
 
-		endResult = gomme.RunParser(sd.parser, childResult)
+		endResult = comb.RunParser(sd.parser, childResult)
 		if endResult.Error != nil {
 			if sd.atLeast > count || childResult.EndState.SaveSpotMoved(endResult.EndState) { // fail
 				return endResult.AddOutput(partRes)
@@ -121,7 +121,7 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult g
 
 		sepResult := endResult
 		if sd.separator != nil {
-			sepResult = gomme.RunParser(sd.separator, endResult)
+			sepResult = comb.RunParser(sd.separator, endResult)
 			if sepResult.Error != nil {
 				if sd.atLeast > count || endResult.EndState.SaveSpotMoved(sepResult.EndState) { // fail
 					return sepResult.AddOutput(partRes)

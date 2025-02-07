@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"github.com/flowdev/comb"
@@ -12,7 +12,7 @@ func TestChar(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -57,7 +57,7 @@ func TestChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -76,7 +76,7 @@ func TestChar(t *testing.T) {
 
 func BenchmarkChar(b *testing.B) {
 	parser := Char('a')
-	input := gomme.NewFromString("a", false)
+	input := comb.NewFromString("a", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -89,7 +89,7 @@ func TestAlpha0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -142,7 +142,7 @@ func TestAlpha0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -161,7 +161,7 @@ func TestAlpha0(t *testing.T) {
 
 func BenchmarkAlpha0(b *testing.B) {
 	parser := Alpha0()
-	input := gomme.NewFromString("abc", true)
+	input := comb.NewFromString("abc", true)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -174,7 +174,7 @@ func TestAlpha1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -235,7 +235,7 @@ func TestAlpha1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -254,7 +254,7 @@ func TestAlpha1(t *testing.T) {
 
 func BenchmarkAlpha1(b *testing.B) {
 	parser := Alpha1()
-	input := gomme.NewFromString("abc", false)
+	input := comb.NewFromString("abc", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -267,7 +267,7 @@ func TestDigit0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -320,7 +320,7 @@ func TestDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -339,7 +339,7 @@ func TestDigit0(t *testing.T) {
 
 func BenchmarkDigit0(b *testing.B) {
 	parser := Digit0()
-	input := gomme.NewFromString("123", false)
+	input := comb.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -352,7 +352,7 @@ func TestDigit1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -413,7 +413,7 @@ func TestDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -432,7 +432,7 @@ func TestDigit1(t *testing.T) {
 
 func BenchmarkDigit1(b *testing.B) {
 	parser := Digit1()
-	input := gomme.NewFromString("123", false)
+	input := comb.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -445,7 +445,7 @@ func TestHexDigit0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -498,7 +498,7 @@ func TestHexDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -517,7 +517,7 @@ func TestHexDigit0(t *testing.T) {
 
 func BenchmarkHexDigit0(b *testing.B) {
 	parser := HexDigit0()
-	input := gomme.NewFromString("1f3", false)
+	input := comb.NewFromString("1f3", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -530,7 +530,7 @@ func TestHexDigit1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -591,7 +591,7 @@ func TestHexDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -610,7 +610,7 @@ func TestHexDigit1(t *testing.T) {
 
 func BenchmarkHexDigit1(b *testing.B) {
 	parser := HexDigit1()
-	input := gomme.NewFromString("1f3", false)
+	input := comb.NewFromString("1f3", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -623,7 +623,7 @@ func TestWhitespace0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -716,7 +716,7 @@ func TestWhitespace0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -736,7 +736,7 @@ func TestWhitespace0(t *testing.T) {
 func BenchmarkWhitespace0(b *testing.B) {
 	b.ReportAllocs()
 	parser := Whitespace0()
-	input := gomme.NewFromString(" \t\n\r", false)
+	input := comb.NewFromString(" \t\n\r", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -749,7 +749,7 @@ func TestWhitespace1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -842,7 +842,7 @@ func TestWhitespace1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -861,7 +861,7 @@ func TestWhitespace1(t *testing.T) {
 
 func BenchmarkWhitespace1(b *testing.B) {
 	b.ReportAllocs()
-	input := gomme.NewFromString(" \t\n\r", false)
+	input := comb.NewFromString(" \t\n\r", false)
 	parser := Whitespace1()
 
 	b.ResetTimer()
@@ -875,7 +875,7 @@ func TestAlphanumeric0(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -968,7 +968,7 @@ func TestAlphanumeric0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -987,7 +987,7 @@ func TestAlphanumeric0(t *testing.T) {
 
 func BenchmarkAlphanumeric0(b *testing.B) {
 	parser := Alphanumeric0()
-	input := gomme.NewFromString("a1b2c3", false)
+	input := comb.NewFromString("a1b2c3", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1000,7 +1000,7 @@ func TestAlphanumeric1(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -1101,7 +1101,7 @@ func TestAlphanumeric1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1120,7 +1120,7 @@ func TestAlphanumeric1(t *testing.T) {
 
 func BenchmarkAlphanumeric1(b *testing.B) {
 	parser := Alphanumeric1()
-	input := gomme.NewFromString("a1b2c3", false)
+	input := comb.NewFromString("a1b2c3", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1133,7 +1133,7 @@ func TestLF(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -1186,7 +1186,7 @@ func TestLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1205,7 +1205,7 @@ func TestLF(t *testing.T) {
 
 func BenchmarkLF(b *testing.B) {
 	parser := LF()
-	input := gomme.NewFromString("\n", false)
+	input := comb.NewFromString("\n", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1218,7 +1218,7 @@ func TestCR(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -1271,7 +1271,7 @@ func TestCR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1290,7 +1290,7 @@ func TestCR(t *testing.T) {
 
 func BenchmarkCR(b *testing.B) {
 	parser := CR()
-	input := gomme.NewFromString("\r", false)
+	input := comb.NewFromString("\r", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1303,7 +1303,7 @@ func TestCRLF(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -1364,7 +1364,7 @@ func TestCRLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1383,7 +1383,7 @@ func TestCRLF(t *testing.T) {
 
 func BenchmarkCRLF(b *testing.B) {
 	parser := CRLF()
-	input := gomme.NewFromString("\r\n", false)
+	input := comb.NewFromString("\r\n", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1396,7 +1396,7 @@ func TestOneOf(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -1433,7 +1433,7 @@ func TestOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1452,7 +1452,7 @@ func TestOneOf(t *testing.T) {
 
 func BenchmarkOneOf(b *testing.B) {
 	parser := OneOfRunes('a', '1', '+')
-	input := gomme.NewFromString("+", false)
+	input := comb.NewFromString("+", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1465,7 +1465,7 @@ func TestSatisfy(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -1510,7 +1510,7 @@ func TestSatisfy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1529,7 +1529,7 @@ func TestSatisfy(t *testing.T) {
 
 func BenchmarkSatisfy(b *testing.B) {
 	parser := Satisfy("letter", unicode.IsLetter)
-	input := gomme.NewFromString("a", false)
+	input := comb.NewFromString("a", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1542,7 +1542,7 @@ func TestSpace(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -1595,7 +1595,7 @@ func TestSpace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1614,7 +1614,7 @@ func TestSpace(t *testing.T) {
 
 func BenchmarkSpace(b *testing.B) {
 	parser := Space()
-	input := gomme.NewFromString(" ", false)
+	input := comb.NewFromString(" ", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1627,7 +1627,7 @@ func TestTab(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[rune]
+		parser        comb.Parser[rune]
 		input         string
 		wantErr       bool
 		wantOutput    rune
@@ -1680,7 +1680,7 @@ func TestTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1699,7 +1699,7 @@ func TestTab(t *testing.T) {
 
 func BenchmarkTab(b *testing.B) {
 	parser := Tab()
-	input := gomme.NewFromString("\t", false)
+	input := comb.NewFromString("\t", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1712,7 +1712,7 @@ func TestToken(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -1749,7 +1749,7 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1767,7 +1767,7 @@ func TestToken(t *testing.T) {
 
 func BenchmarkToken(b *testing.B) {
 	parser := String("Bonjour")
-	input := gomme.NewFromString("Bonjour tout le monde", false)
+	input := comb.NewFromString("Bonjour tout le monde", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1779,7 +1779,7 @@ func TestSatisfyMN(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		p gomme.Parser[string]
+		p comb.Parser[string]
 	}
 	testCases := []struct {
 		name          string
@@ -1855,7 +1855,7 @@ func TestSatisfyMN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.args.p.Parse(gomme.NewFromString(tc.input, true))
+			newState, gotResult, gotErr := tc.args.p.Parse(comb.NewFromString(tc.input, true))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1874,7 +1874,7 @@ func TestSatisfyMN(t *testing.T) {
 
 func BenchmarkSatisfyMN(b *testing.B) {
 	p := SatisfyMN("letter", 3, 6, IsDigit)
-	input := gomme.NewFromString("13579", false)
+	input := comb.NewFromString("13579", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

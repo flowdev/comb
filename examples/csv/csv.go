@@ -9,23 +9,23 @@ package csv
 
 import (
 	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"github.com/flowdev/comb/pcb"
 )
 
 func ParseCSV(input string) ([][]string, error) {
-	parser := pcb.Separated1(
-		pcb.Separated1(
+	parser := cmb.Separated1(
+		cmb.Separated1(
 			FirstSuccessful(
-				pcb.Alphanumeric1(),
-				pcb.Delimited(pcb.Char('"'), pcb.Alphanumeric1(), pcb.Char('"')),
+				cmb.Alphanumeric1(),
+				cmb.Delimited(cmb.Char('"'), cmb.Alphanumeric1(), cmb.Char('"')),
 			),
-			pcb.Char(','),
+			cmb.Char(','),
 			false,
 		),
-		pcb.CRLF(),
+		cmb.CRLF(),
 		false,
 	)
 
-	return gomme.RunOnString(input, parser)
+	return comb.RunOnString(input, parser)
 }

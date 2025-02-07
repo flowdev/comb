@@ -2,23 +2,23 @@ package parsify
 
 import (
 	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"github.com/flowdev/comb/pcb"
 	"testing"
 )
 
 func TestDelimitedByChar(t *testing.T) {
 	specs := []struct {
 		name           string
-		basicParser1   gomme.Parser[rune]
-		complexParser1 gomme.Parser[string]
+		basicParser1   comb.Parser[rune]
+		complexParser1 comb.Parser[string]
 		basicParser2   Parser[rune]
 		complexParser2 Parser[string]
 	}{
 		{
 			name:           "normal parser without Parsify",
 			basicParser1:   C('{'),
-			complexParser1: pcb.Delimited(C('{'), pcb.UntilString("STOP"), C('}')),
+			complexParser1: cmb.Delimited(C('{'), cmb.UntilString("STOP"), C('}')),
 		}, {
 			name:           "normal parser with Parsify",
 			basicParser2:   Char('{'),
@@ -40,14 +40,14 @@ func TestDelimitedByChar(t *testing.T) {
 
 	for _, tc := range specs {
 		t.Run(tc.name, func(t *testing.T) {
-			var state gomme.State
+			var state comb.State
 			var firstOutput rune
-			var firstError *gomme.ParserError
+			var firstError *comb.ParserError
 
 			if tc.basicParser2 != nil {
-				state, firstOutput, firstError = tc.basicParser2(gomme.NewFromString(input[:1], true))
+				state, firstOutput, firstError = tc.basicParser2(comb.NewFromString(input[:1], true))
 			} else {
-				state, firstOutput, firstError = tc.basicParser1.Parse(gomme.NewFromString(input[:1], true))
+				state, firstOutput, firstError = tc.basicParser1.Parse(comb.NewFromString(input[:1], true))
 			}
 			t.Log("Error1? :", firstError)
 
@@ -62,14 +62,14 @@ func TestDelimitedByChar(t *testing.T) {
 
 			// ---------------------------------------------------------------
 
-			var newState gomme.State
+			var newState comb.State
 			var gotOutput string
-			var gotError *gomme.ParserError
+			var gotError *comb.ParserError
 
 			if tc.basicParser2 != nil {
-				state, gotOutput, gotError = tc.complexParser2(gomme.NewFromString(input, true))
+				state, gotOutput, gotError = tc.complexParser2(comb.NewFromString(input, true))
 			} else {
-				state, gotOutput, gotError = tc.complexParser1.Parse(gomme.NewFromString(input, true))
+				state, gotOutput, gotError = tc.complexParser1.Parse(comb.NewFromString(input, true))
 			}
 			t.Log("Error2? :", gotError)
 

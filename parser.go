@@ -1,4 +1,4 @@
-package gomme
+package comb
 
 import (
 	"math"

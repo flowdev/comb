@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 // `underscoreAllowed` can be true to allow '_' characters.
 // No check on position or number of (consecutive) underscores is done.
 // The Go parse functions will do more checks on this.
-func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[string] {
+func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[string] {
 	if base != 0 && (base < 2 || base > 36) {
 		panic(fmt.Sprintf(
 			"The base has to be 0 or between 2 and 36, but is: %d", base,
@@ -40,7 +40,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 
 	const allDigits = "0123456789abcdefghijklmnopqrstuvwxyz"
 
-	parser := func(state gomme.State) (gomme.State, string, *gomme.ParserError) {
+	parser := func(state comb.State) (comb.State, string, *comb.ParserError) {
 		fullInput := state.CurrentString()
 		input := fullInput
 		if input == "" {
@@ -92,7 +92,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) gomme.Parser[st
 		recovererBase = 10
 	}
 	allRunes := digitsToRunes(allDigits)
-	return gomme.NewParser[string](expected, parser, IndexOfAny(allRunes[:recovererBase]...))
+	return comb.NewParser[string](expected, parser, IndexOfAny(allRunes[:recovererBase]...))
 }
 
 func rebaseInput(input string, base, n int) (string, int, int) {
@@ -136,17 +136,17 @@ func digitsToRunes(digits string) []rune {
 }
 
 // Int64 parses an integer from the input using `strconv.ParseInt`.
-func Int64(signAllowed bool, base int) gomme.Parser[int64] {
+func Int64(signAllowed bool, base int) comb.Parser[int64] {
 	underscoreAllowed := false
 	if base == 0 {
 		underscoreAllowed = true
 	}
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
-	parser := func(state gomme.State) (gomme.State, int64, *gomme.ParserError) {
+	parser := func(state comb.State) (comb.State, int64, *comb.ParserError) {
 		nState, str, pErr := intParser.Parse(state)
 		if pErr != nil {
-			return state, 0, gomme.ClaimError(pErr)
+			return state, 0, comb.ClaimError(pErr)
 		}
 		i, err := strconv.ParseInt(str, base, 64)
 		if err != nil {
@@ -154,21 +154,21 @@ func Int64(signAllowed bool, base int) gomme.Parser[int64] {
 		}
 		return nState, i, nil
 	}
-	return gomme.NewParser[int64](intParser.Expected(), parser, intParser.Recover)
+	return comb.NewParser[int64](intParser.Expected(), parser, intParser.Recover)
 }
 
 // Int8 parses an integer from the input using `strconv.ParseInt`.
-func Int8(signAllowed bool, base int) gomme.Parser[int8] {
+func Int8(signAllowed bool, base int) comb.Parser[int8] {
 	underscoreAllowed := false
 	if base == 0 {
 		underscoreAllowed = true
 	}
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
-	parser := func(state gomme.State) (gomme.State, int8, *gomme.ParserError) {
+	parser := func(state comb.State) (comb.State, int8, *comb.ParserError) {
 		nState, str, pErr := intParser.Parse(state)
 		if pErr != nil {
-			return state, 0, gomme.ClaimError(pErr)
+			return state, 0, comb.ClaimError(pErr)
 		}
 		i, err := strconv.ParseInt(str, base, 8)
 		if err != nil {
@@ -176,21 +176,21 @@ func Int8(signAllowed bool, base int) gomme.Parser[int8] {
 		}
 		return nState, int8(i), nil
 	}
-	return gomme.NewParser[int8](intParser.Expected(), parser, intParser.Recover)
+	return comb.NewParser[int8](intParser.Expected(), parser, intParser.Recover)
 }
 
 // UInt8 parses an integer from the input using `strconv.ParseUint`.
-func UInt8(signAllowed bool, base int) gomme.Parser[uint8] {
+func UInt8(signAllowed bool, base int) comb.Parser[uint8] {
 	underscoreAllowed := false
 	if base == 0 {
 		underscoreAllowed = true
 	}
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
-	parser := func(state gomme.State) (gomme.State, uint8, *gomme.ParserError) {
+	parser := func(state comb.State) (comb.State, uint8, *comb.ParserError) {
 		nState, str, pErr := intParser.Parse(state)
 		if pErr != nil {
-			return state, 0, gomme.ClaimError(pErr)
+			return state, 0, comb.ClaimError(pErr)
 		}
 		ui, err := strconv.ParseUint(str, base, 8)
 		if err != nil {
@@ -198,5 +198,5 @@ func UInt8(signAllowed bool, base int) gomme.Parser[uint8] {
 		}
 		return nState, uint8(ui), nil
 	}
-	return gomme.NewParser[uint8](intParser.Expected(), parser, intParser.Recover)
+	return comb.NewParser[uint8](intParser.Expected(), parser, intParser.Recover)
 }

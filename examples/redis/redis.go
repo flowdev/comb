@@ -7,8 +7,8 @@ package redis
 import (
 	"errors"
 	"fmt"
+	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"github.com/flowdev/comb/pcb"
 	"strconv"
 	"strings"
 
@@ -39,7 +39,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		Array(),
 	)
 
-	return gomme.RunOnString(input, parser)
+	return comb.RunOnString(input, parser)
 }
 
 // ErrMessageTooShort is returned when a message is too short to be valid.
@@ -107,7 +107,7 @@ type SimpleStringMessage struct {
 //
 // Once parsed, the content of the simple string is available in the
 // simpleString field of the result's RESPMessage.
-func SimpleString() gomme.Parser[RESPMessage] {
+func SimpleString() comb.Parser[RESPMessage] {
 	mapFn := func(message string) (RESPMessage, error) {
 		if strings.ContainsAny(message, "\r\n") {
 			return RESPMessage{}, fmt.Errorf("malformed simple string: %s", message)
@@ -121,9 +121,9 @@ func SimpleString() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return pcb.Prefixed(
-		pcb.String(string(SimpleStringKind)),
-		pcb.Map(pcb.UntilString("\r\n"), mapFn),
+	return cmb.Prefixed(
+		cmb.String(string(SimpleStringKind)),
+		cmb.Map(cmb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -142,7 +142,7 @@ type ErrorStringMessage struct {
 //
 // The error message is available in the Error field of the result's
 // RESPMessage.
-func Error() gomme.Parser[RESPMessage] {
+func Error() comb.Parser[RESPMessage] {
 	mapFn := func(message string) (RESPMessage, error) {
 		if strings.ContainsAny(message, "\r\n") {
 			return RESPMessage{}, fmt.Errorf("malformed error string: %s", message)
@@ -157,9 +157,9 @@ func Error() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return pcb.Prefixed(
-		pcb.String(string(ErrorKind)),
-		pcb.Map(pcb.UntilString("\r\n"), mapFn),
+	return cmb.Prefixed(
+		cmb.String(string(ErrorKind)),
+		cmb.Map(cmb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -178,7 +178,7 @@ type IntegerMessage struct {
 //
 // The integer value is available in the IntegerMessage field of the result's
 // RESPMessage.
-func Integer() gomme.Parser[RESPMessage] {
+func Integer() comb.Parser[RESPMessage] {
 	mapFn := func(message string) (RESPMessage, error) {
 		value, err := strconv.Atoi(message)
 		if err != nil {
@@ -193,9 +193,9 @@ func Integer() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return pcb.Prefixed(
-		pcb.String(string(IntegerKind)),
-		pcb.Map(pcb.UntilString("\r\n"), mapFn),
+	return cmb.Prefixed(
+		cmb.String(string(IntegerKind)),
+		cmb.Map(cmb.UntilString("\r\n"), mapFn),
 	)
 }
 
@@ -214,7 +214,7 @@ type BulkStringMessage struct {
 //
 // The bulk string's data is available in the BulkString field of the result's
 // RESPMessage.
-func BulkString() gomme.Parser[RESPMessage] {
+func BulkString() comb.Parser[RESPMessage] {
 	mapFn := func(length int64, message string) (RESPMessage, error) {
 		if length < 0 {
 			if length < -1 {
@@ -246,10 +246,10 @@ func BulkString() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return pcb.Map2(
-		sizePrefix(pcb.String(string(BulkStringKind))),
-		pcb.Optional(
-			pcb.UntilString("\r\n"),
+	return cmb.Map2(
+		sizePrefix(cmb.String(string(BulkStringKind))),
+		cmb.Optional(
+			cmb.UntilString("\r\n"),
 		),
 		mapFn,
 	)
@@ -269,7 +269,7 @@ type ArrayMessage struct {
 //
 // The array's messages are available in the Array field of the result's
 // RESPMessage.
-func Array() gomme.Parser[RESPMessage] {
+func Array() comb.Parser[RESPMessage] {
 	mapFn := func(size int64, message []RESPMessage) (RESPMessage, error) {
 		if int(size) == -1 {
 			if len(message) != 0 {
@@ -296,9 +296,9 @@ func Array() gomme.Parser[RESPMessage] {
 		}, nil
 	}
 
-	return pcb.Map2(
-		sizePrefix(pcb.String(string(ArrayKind))),
-		pcb.Many0(
+	return cmb.Map2(
+		sizePrefix(cmb.String(string(ArrayKind))),
+		cmb.Many0(
 			FirstSuccessful(
 				SimpleString(),
 				Error(),
@@ -310,11 +310,11 @@ func Array() gomme.Parser[RESPMessage] {
 	)
 }
 
-func sizePrefix(prefix gomme.Parser[string]) gomme.Parser[int64] {
-	return pcb.Delimited(
+func sizePrefix(prefix comb.Parser[string]) comb.Parser[int64] {
+	return cmb.Delimited(
 		prefix,
-		pcb.Int64(true, 10),
-		pcb.CRLF(),
+		cmb.Int64(true, 10),
+		cmb.CRLF(),
 	)
 }
 

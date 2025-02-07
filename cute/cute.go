@@ -2,52 +2,52 @@ package cute
 
 import (
 	"github.com/flowdev/comb"
-	"github.com/flowdev/comb/pcb"
+	"github.com/flowdev/comb/cmb"
 )
 
-// C is a shortened version of `pcb.Char`.
+// C is a shortened version of `cmb.Char`.
 // It is meant to be used without the package name with an import like:
 //
 //	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
-func C(char rune) gomme.Parser[rune] {
-	return pcb.Char(char)
+func C(char rune) comb.Parser[rune] {
+	return cmb.Char(char)
 }
 
-// S is a shortened version of `pcb.Char`.
+// S is a shortened version of `cmb.Char`.
 // It is meant to be used without the package name with an import like:
 //
 //	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
-func S(token string) gomme.Parser[string] {
-	return pcb.String(token)
+func S(token string) comb.Parser[string] {
+	return cmb.String(token)
 }
 
-// OneOfRunes is a shortened version of `pcb.OneOfRunes`.
+// OneOfRunes is a shortened version of `cmb.OneOfRunes`.
 // It is meant to be used without the package name with an import like:
 //
 //	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
-func OneOfRunes(collection ...rune) gomme.Parser[rune] {
-	return pcb.OneOfRunes(collection...)
+func OneOfRunes(collection ...rune) comb.Parser[rune] {
+	return cmb.OneOfRunes(collection...)
 
 }
 
-// OneOf is a shortened version of `pcb.OneOf`.
+// OneOf is a shortened version of `cmb.OneOf`.
 // It is meant to be used without the package name with an import like:
 //
 //	import . "github.com/flowdev/comb/cute"
 //
 // This parser is a good candidate for SaveSpot and has an optimized recoverer.
-func OneOf(collection ...string) gomme.Parser[string] {
-	return pcb.OneOf(collection...)
+func OneOf(collection ...string) comb.Parser[string] {
+	return cmb.OneOf(collection...)
 
 }
 
-// SaveSpot is the shortened version of `pcb.SafeSpot`.
+// SaveSpot is the shortened version of `comb.SafeSpot`.
 // This should encourage its use because SaveSpot is the backbone of the
 // error handling mechanism.
 //
@@ -59,16 +59,16 @@ func OneOf(collection ...string) gomme.Parser[string] {
 // SaveSpot is meant to be used without the package name with an import like:
 //
 //	import . "github.com/flowdev/comb/cute"
-func SaveSpot[Output any](parse gomme.Parser[Output]) gomme.Parser[Output] {
-	return gomme.SafeSpot[Output](parse)
+func SaveSpot[Output any](parse comb.Parser[Output]) comb.Parser[Output] {
+	return comb.SafeSpot[Output](parse)
 }
 
 // FirstSuccessful is a shortened version of `gomme.FirstSuccessful`.
 // It is meant to be used without the package name with an import like:
 //
 //	import . "github.com/flowdev/comb/cute"
-func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[Output] {
-	return pcb.FirstSuccessful[Output](parsers...)
+func FirstSuccessful[Output any](parsers ...comb.Parser[Output]) comb.Parser[Output] {
+	return cmb.FirstSuccessful[Output](parsers...)
 }
 
 // ZeroOf returns the zero value of some type.
@@ -76,5 +76,5 @@ func FirstSuccessful[Output any](parsers ...gomme.Parser[Output]) gomme.Parser[O
 //
 //	import . "github.com/flowdev/comb/cute"
 func ZeroOf[T any]() T {
-	return gomme.ZeroOf[T]()
+	return comb.ZeroOf[T]()
 }

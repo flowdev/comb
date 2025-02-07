@@ -1,4 +1,4 @@
-package pcb
+package cmb
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ func TestFirstSuccessful(t *testing.T) {
 	testCases := []struct {
 		name          string
 		input         string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		wantErr       bool
 		wantOutput    string
 		wantRemaining string
@@ -55,7 +55,7 @@ func TestFirstSuccessful(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -69,7 +69,7 @@ func TestFirstSuccessful(t *testing.T) {
 
 func BenchmarkFirstSuccessful(b *testing.B) {
 	p := FirstSuccessful(Char('b'), Char('a'))
-	input := gomme.NewFromString("abc", false)
+	input := comb.NewFromString("abc", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

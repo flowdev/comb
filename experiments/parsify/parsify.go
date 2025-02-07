@@ -9,11 +9,11 @@ import (
 
 // Parser is a simple function here.
 // An interface wouldn't work at all.
-type Parser[Output any] func(gomme.State) (gomme.State, Output, *gomme.ParserError)
+type Parser[Output any] func(comb.State) (comb.State, Output, *comb.ParserError)
 
 // Parserish types are any type that can be turned into a Parser by Parsify
 type Parserish[Output any] interface {
-	~rune | ~func(gomme.State) (gomme.State, Output, *gomme.ParserError)
+	~rune | ~func(comb.State) (comb.State, Output, *comb.ParserError)
 }
 
 // Parsify turns p of type Parserish into a real Parser.
@@ -30,7 +30,7 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 			iruneErr := interface{}(utf8.RuneError)
 			oruneErr, _ := iruneErr.(Output)
 			expected := strconv.QuoteRune(ap)
-			return func(state gomme.State) (gomme.State, Output, *gomme.ParserError) {
+			return func(state comb.State) (comb.State, Output, *comb.ParserError) {
 				r, size := utf8.DecodeRuneInString(state.CurrentString())
 				if r == utf8.RuneError {
 					if size == 0 {

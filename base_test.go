@@ -1,4 +1,4 @@
-package gomme_test
+package comb_test
 
 import (
 	"github.com/flowdev/comb"
@@ -8,12 +8,12 @@ import (
 func TestErrorReporting(t *testing.T) {
 	input := "content\nline2\nline3\nand4\n"
 	input2 := "line1\nline2"
-	txtState := gomme.NewFromString(input, false)
-	binState := gomme.NewFromBytes([]byte(input), false)
+	txtState := comb.NewFromString(input, false)
+	binState := comb.NewFromBytes([]byte(input), false)
 
 	specs := []struct {
 		name          string
-		givenState    gomme.State
+		givenState    comb.State
 		givenPosition int
 		expectedError string
 	}{
@@ -39,12 +39,12 @@ func TestErrorReporting(t *testing.T) {
 			expectedError: "error [1:1] ▶content",
 		}, {
 			name:          "empty input",
-			givenState:    gomme.NewFromString("", false),
+			givenState:    comb.NewFromString("", false),
 			givenPosition: 0,
 			expectedError: "error [1:1] ▶",
 		}, {
 			name:          "at end of input without last NL",
-			givenState:    gomme.NewFromString(input2, false),
+			givenState:    comb.NewFromString(input2, false),
 			givenPosition: len(input2),
 			expectedError: "error [2:6] line2▶",
 		}, {
@@ -64,17 +64,17 @@ func TestErrorReporting(t *testing.T) {
 			expectedError: "error:\n 00000009  69 6e 65 32 0a 6c 69 6e  65 33 0a 61 6e 64 34 0a ▶ |ine2.line3.and4.▶|",
 		}, {
 			name:          "binary: at start of short input",
-			givenState:    gomme.NewFromBytes([]byte(input2), false),
+			givenState:    comb.NewFromBytes([]byte(input2), false),
 			givenPosition: 0,
 			expectedError: "error:\n 00000000  ▶6c 69 6e 65 31 0a 6c 69  6e 65 32                 |▶line1.line2|",
 		}, {
 			name:          "binary: in middle of short input",
-			givenState:    gomme.NewFromBytes([]byte(input2), false),
+			givenState:    comb.NewFromBytes([]byte(input2), false),
 			givenPosition: 8,
 			expectedError: "error:\n 00000000  6c 69 6e 65 31 0a 6c 69  ▶6e 65 32                 |line1.li▶ne2|",
 		}, {
 			name:          "binary: at end of short input",
-			givenState:    gomme.NewFromBytes([]byte(input2), false),
+			givenState:    comb.NewFromBytes([]byte(input2), false),
 			givenPosition: len(input2) - 1,
 			expectedError: "error:\n 00000000  6c 69 6e 65 31 0a 6c 69  6e 65 ▶32                 |line1.line▶2|",
 		},
@@ -95,12 +95,12 @@ func TestErrorReporting(t *testing.T) {
 
 func TestErrorReportingWithMoveBackTo(t *testing.T) {
 	input := "content\nline2\nline3\nand4\n"
-	txtState := gomme.NewFromString(input, false).MoveBy(len(input))
-	binState := gomme.NewFromBytes([]byte(input), false).MoveBy(len(input))
+	txtState := comb.NewFromString(input, false).MoveBy(len(input))
+	binState := comb.NewFromBytes([]byte(input), false).MoveBy(len(input))
 
 	specs := []struct {
 		name          string
-		givenState    gomme.State
+		givenState    comb.State
 		givenPosition int
 		expectedError string
 	}{
@@ -126,7 +126,7 @@ func TestErrorReportingWithMoveBackTo(t *testing.T) {
 			expectedError: "error [1:1] ▶content",
 		}, {
 			name:          "empty input",
-			givenState:    gomme.NewFromString("", false),
+			givenState:    comb.NewFromString("", false),
 			givenPosition: 0,
 			expectedError: "error [1:1] ▶",
 		}, {

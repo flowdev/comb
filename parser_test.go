@@ -1,8 +1,8 @@
-package gomme_test
+package comb_test
 
 import (
 	"github.com/flowdev/comb"
-	"github.com/flowdev/comb/pcb"
+	"github.com/flowdev/comb/cmb"
 	"strings"
 	"testing"
 )
@@ -12,7 +12,7 @@ func TestSaveSpot(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		parser        gomme.Parser[string]
+		parser        comb.Parser[string]
 		input         string
 		wantErr       bool
 		wantOutput    string
@@ -21,35 +21,35 @@ func TestSaveSpot(t *testing.T) {
 		{
 			name:          "head matching parser should succeed",
 			input:         "123",
-			parser:        pcb.FirstSuccessful(pcb.Digit1(), gomme.SafeSpot(pcb.Alpha1())),
+			parser:        cmb.FirstSuccessful(cmb.Digit1(), comb.SafeSpot(cmb.Alpha1())),
 			wantErr:       false,
 			wantOutput:    "123",
 			wantRemaining: "",
 		}, {
 			name:          "tail matching parser should succeed",
 			input:         "abc",
-			parser:        pcb.FirstSuccessful(gomme.SafeSpot(pcb.Digit1()), pcb.Alpha1()),
+			parser:        cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), cmb.Alpha1()),
 			wantErr:       false,
 			wantOutput:    "abc",
 			wantRemaining: "",
 		}, {
 			name:          "FirstSuccessful: tail matching parser after failing SafeSpot head parser should fail",
 			input:         "abc",
-			parser:        pcb.FirstSuccessful(pcb.Prefixed(gomme.SafeSpot(pcb.String("a")), pcb.Digit1()), pcb.Alpha1()),
+			parser:        cmb.FirstSuccessful(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1()), cmb.Alpha1()),
 			wantErr:       true,
 			wantOutput:    "",
 			wantRemaining: "abc",
 		}, {
 			name:          "Optional: tail matching parser after failing SafeSpot head parser should fail",
 			input:         "abc",
-			parser:        pcb.Optional(pcb.Prefixed(gomme.SafeSpot(pcb.String("a")), pcb.Digit1())),
+			parser:        cmb.Optional(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1())),
 			wantErr:       true,
 			wantOutput:    "",
 			wantRemaining: "bc",
 		}, {
 			name:  "Many0: tail matching parser after failing SafeSpot head parser should fail",
 			input: "abc",
-			parser: pcb.Map(pcb.Many0(pcb.Prefixed(gomme.SafeSpot(pcb.String("a")), pcb.Digit1())), func(tokens []string) (string, error) {
+			parser: cmb.Map(cmb.Many0(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1())), func(tokens []string) (string, error) {
 				return strings.Join(tokens, ""), nil
 			}),
 			wantErr:       true,
@@ -58,7 +58,7 @@ func TestSaveSpot(t *testing.T) {
 		}, {
 			name:  "Seperated1: matching main parser after failing SafeSpot head parser should fail",
 			input: "a,1",
-			parser: pcb.Map(pcb.Separated0(pcb.Prefixed(gomme.SafeSpot(pcb.String("a")), pcb.Digit1()), pcb.Char(','), false),
+			parser: cmb.Map(cmb.Separated0(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1()), cmb.Char(','), false),
 				func(tokens []string) (string, error) {
 					return strings.Join(tokens, ""), nil
 				},
@@ -69,14 +69,14 @@ func TestSaveSpot(t *testing.T) {
 		}, {
 			name:          "no matching parser should fail",
 			input:         "$%^*",
-			parser:        pcb.FirstSuccessful(gomme.SafeSpot(pcb.Digit1()), gomme.SafeSpot(pcb.Alpha1())),
+			parser:        cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), comb.SafeSpot(cmb.Alpha1())),
 			wantErr:       true,
 			wantOutput:    "",
 			wantRemaining: "$%^*",
 		}, {
 			name:          "empty input should fail",
 			input:         "",
-			parser:        pcb.FirstSuccessful(gomme.SafeSpot(pcb.Digit1()), gomme.SafeSpot(pcb.Alpha1())),
+			parser:        cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), comb.SafeSpot(cmb.Alpha1())),
 			wantErr:       true,
 			wantOutput:    "",
 			wantRemaining: "",
@@ -87,7 +87,7 @@ func TestSaveSpot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := gomme.RunOnString(tc.input, tc.parser)
+			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -100,8 +100,8 @@ func TestSaveSpot(t *testing.T) {
 }
 
 func BenchmarkSaveSpot(b *testing.B) {
-	p := gomme.SafeSpot(pcb.Char('1'))
-	input := gomme.NewFromString("123", false)
+	p := comb.SafeSpot(cmb.Char('1'))
+	input := comb.NewFromString("123", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

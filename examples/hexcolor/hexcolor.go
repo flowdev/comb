@@ -1,13 +1,13 @@
 // Package hexcolor implements a parser for hexadecimal color strings.
-// It demonstrates how to use gomme to build a parser for a simple string format.
+// It demonstrates how to use comb to build a parser for a simple string format.
 package hexcolor
 
 import (
 	"strconv"
 
 	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"github.com/flowdev/comb/pcb"
 )
 
 // RGBColor stores the three bytes describing a color in the RGB space.
@@ -20,7 +20,7 @@ type RGBColor struct {
 // ParseRGBColor creates a new RGBColor from a hexadecimal color string.
 // The string must be a six digit hexadecimal number, prefixed with a "#".
 func ParseRGBColor(input string) (RGBColor, error) {
-	parse := pcb.Map4(
+	parse := cmb.Map4(
 		SaveSpot(C('#')),
 		HexColorComponent("red hex color"),
 		HexColorComponent("green hex color"),
@@ -30,7 +30,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 		},
 	)
 
-	output, err := gomme.RunOnString(input, parse)
+	output, err := comb.RunOnString(input, parse)
 	if err != nil {
 		return RGBColor{}, err
 	}
@@ -40,8 +40,8 @@ func ParseRGBColor(input string) (RGBColor, error) {
 
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two digit hexadecimal number.
-func HexColorComponent(expected string) gomme.Parser[string] {
-	return SaveSpot(pcb.SatisfyMN(expected, 2, 2, pcb.IsHexDigit))
+func HexColorComponent(expected string) comb.Parser[string] {
+	return SaveSpot(cmb.SatisfyMN(expected, 2, 2, cmb.IsHexDigit))
 }
 
 // fromHex converts a two digits hexadecimal number to its decimal value.
