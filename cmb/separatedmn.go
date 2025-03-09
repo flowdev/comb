@@ -76,7 +76,7 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult c
 	}
 
 	if childResult.Error != nil {
-		if sd.atLeast > 0 || childResult.StartState.SaveSpotMoved(childResult.EndState) { // fail
+		if sd.atLeast > 0 || childResult.StartState.SafeSpotMoved(childResult.EndState) { // fail
 			return childResult.AddOutput(partRes)
 		}
 		childResult.Error = nil // ignore error: we have enough output
@@ -108,7 +108,7 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult c
 
 		endResult = comb.RunParser(sd.parser, childResult)
 		if endResult.Error != nil {
-			if sd.atLeast > count || childResult.EndState.SaveSpotMoved(endResult.EndState) { // fail
+			if sd.atLeast > count || childResult.EndState.SafeSpotMoved(endResult.EndState) { // fail
 				return endResult.AddOutput(partRes)
 			}
 			endResult.Error = nil // ignore error: we have enough output
@@ -123,7 +123,7 @@ func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult c
 		if sd.separator != nil {
 			sepResult = comb.RunParser(sd.separator, endResult)
 			if sepResult.Error != nil {
-				if sd.atLeast > count || endResult.EndState.SaveSpotMoved(sepResult.EndState) { // fail
+				if sd.atLeast > count || endResult.EndState.SafeSpotMoved(sepResult.EndState) { // fail
 					return sepResult.AddOutput(partRes)
 				}
 				endResult.Error = nil // ignore error: we have enough output

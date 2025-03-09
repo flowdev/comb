@@ -337,12 +337,12 @@ func OneOfRunes(collection ...rune) comb.Parser[rune] {
 	return parser
 }
 
-// OneOf parses a single character from the given set of characters.
+// OneOf parses a single string from the given set of strings.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func OneOf(collection ...string) comb.Parser[string] {
 	n := len(collection)
 	if n == 0 {
-		panic("OneOf has no characters to match")
+		panic("OneOf has no strings to match")
 	}
 	expected := fmt.Sprintf("one of %q", collection)
 

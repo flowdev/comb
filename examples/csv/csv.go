@@ -1,6 +1,6 @@
 // Package csv implements a parser for CSV files.
 //
-// It is a simple, incomplete, example of how to use the gomme
+// It is a simple, incomplete, example of how to use the comb
 // parser combinator library to build a parser targeting the
 // format described in [RFC4180].
 //
@@ -16,11 +16,11 @@ import (
 func ParseCSV(input string) ([][]string, error) {
 	parser := cmb.Separated1(
 		cmb.Separated1(
-			FirstSuccessful(
+			cmb.FirstSuccessful(
 				cmb.Alphanumeric1(),
-				cmb.Delimited(cmb.Char('"'), cmb.Alphanumeric1(), cmb.Char('"')),
+				cmb.Delimited(C('"'), cmb.Alphanumeric1(), C('"')),
 			),
-			cmb.Char(','),
+			C(','),
 			false,
 		),
 		cmb.CRLF(),

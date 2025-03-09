@@ -11,50 +11,44 @@ func TestSaveSpot(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[string]
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[string]
+		input      string
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "head matching parser should succeed",
-			input:         "123",
-			parser:        cmb.FirstSuccessful(cmb.Digit1(), comb.SafeSpot(cmb.Alpha1())),
-			wantErr:       false,
-			wantOutput:    "123",
-			wantRemaining: "",
+			name:       "head matching parser should succeed",
+			input:      "123",
+			parser:     cmb.FirstSuccessful(cmb.Digit1(), comb.SafeSpot(cmb.Alpha1())),
+			wantErr:    false,
+			wantOutput: "123",
 		}, {
-			name:          "tail matching parser should succeed",
-			input:         "abc",
-			parser:        cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), cmb.Alpha1()),
-			wantErr:       false,
-			wantOutput:    "abc",
-			wantRemaining: "",
+			name:       "tail matching parser should succeed",
+			input:      "abc",
+			parser:     cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), cmb.Alpha1()),
+			wantErr:    false,
+			wantOutput: "abc",
 		}, {
-			name:          "FirstSuccessful: tail matching parser after failing SafeSpot head parser should fail",
-			input:         "abc",
-			parser:        cmb.FirstSuccessful(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1()), cmb.Alpha1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "abc",
+			name:       "FirstSuccessful: tail matching parser after failing SafeSpot head parser should fail",
+			input:      "abc",
+			parser:     cmb.FirstSuccessful(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1()), cmb.Alpha1()),
+			wantErr:    true,
+			wantOutput: "",
 		}, {
-			name:          "Optional: tail matching parser after failing SafeSpot head parser should fail",
-			input:         "abc",
-			parser:        cmb.Optional(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1())),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "bc",
+			name:       "Optional: tail matching parser after failing SafeSpot head parser should fail",
+			input:      "abc",
+			parser:     cmb.Optional(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1())),
+			wantErr:    true,
+			wantOutput: "",
 		}, {
 			name:  "Many0: tail matching parser after failing SafeSpot head parser should fail",
 			input: "abc",
 			parser: cmb.Map(cmb.Many0(cmb.Prefixed(comb.SafeSpot(cmb.String("a")), cmb.Digit1())), func(tokens []string) (string, error) {
 				return strings.Join(tokens, ""), nil
 			}),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "abc",
+			wantErr:    true,
+			wantOutput: "",
 		}, {
 			name:  "Seperated1: matching main parser after failing SafeSpot head parser should fail",
 			input: "a,1",
@@ -63,23 +57,20 @@ func TestSaveSpot(t *testing.T) {
 					return strings.Join(tokens, ""), nil
 				},
 			),
-			wantErr:       true,
-			wantOutput:    "1",
-			wantRemaining: "a,1",
+			wantErr:    true,
+			wantOutput: "1",
 		}, {
-			name:          "no matching parser should fail",
-			input:         "$%^*",
-			parser:        cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), comb.SafeSpot(cmb.Alpha1())),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "$%^*",
+			name:       "no matching parser should fail",
+			input:      "$%^*",
+			parser:     cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), comb.SafeSpot(cmb.Alpha1())),
+			wantErr:    true,
+			wantOutput: "",
 		}, {
-			name:          "empty input should fail",
-			input:         "",
-			parser:        cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), comb.SafeSpot(cmb.Alpha1())),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     cmb.FirstSuccessful(comb.SafeSpot(cmb.Digit1()), comb.SafeSpot(cmb.Alpha1())),
+			wantErr:    true,
+			wantOutput: "",
 		},
 	}
 	for _, tc := range testCases {
@@ -101,7 +92,7 @@ func TestSaveSpot(t *testing.T) {
 
 func BenchmarkSaveSpot(b *testing.B) {
 	p := comb.SafeSpot(cmb.Char('1'))
-	input := comb.NewFromString("123", false)
+	input := comb.NewFromString("123", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

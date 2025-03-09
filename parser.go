@@ -1,16 +1,26 @@
 package comb
 
 import (
-	"math"
 	"sync"
 )
+
+// ParserID is the base of every comb parser.
+// It enables registering of all parsers and error recovery.
+type ParserID int32
+
+func (pid *ParserID) ID() int32 {
+	return int32(*pid)
+}
+func (pid *ParserID) setID(id int32) {
+	*pid = ParserID(id)
+}
 
 // ============================================================================
 // Leaf Parser
 //
 
 type prsr[Output any] struct {
-	id        int32
+	ParserID
 	expected  string
 	parser    func(State) (State, Output, *ParserError)
 	recoverer func(State) int
@@ -27,24 +37,21 @@ func NewParser[Output any](
 	recover Recoverer,
 ) Parser[Output] {
 	p := &prsr[Output]{
-		id:        -1,
 		expected:  expected,
 		parser:    parse,
 		recoverer: recover,
 	}
+	p.setID(-1)
 	return p
 }
 
-func (p *prsr[Output]) ID() int32 {
-	return p.id
-}
 func (p *prsr[Output]) Expected() string {
 	return p.expected
 }
 func (p *prsr[Output]) Parse(state State) (State, Output, *ParserError) {
 	nState, out, err := p.parser(state)
 	if err != nil && err.parserID < 0 {
-		err.parserID = p.id
+		err.parserID = p.ID()
 	}
 	return nState, out, err
 }
@@ -67,16 +74,13 @@ func (p *prsr[Output]) IsStepRecoverer() bool {
 func (p *prsr[Output]) SwapRecoverer(newRecoverer Recoverer) {
 	p.recoverer = newRecoverer // this isn't concurrency safe, but it only happens in the initialization phase
 }
-func (p *prsr[Output]) setID(id int32) {
-	p.id = id
-}
 
 // ============================================================================
 // Branch Parser
 //
 
 type brnchprsr[Output any] struct {
-	id            int32
+	ParserID
 	expected      string
 	childs        func() []AnyParser
 	prsAfterChild func(childID int32, childResult ParseResult) ParseResult
@@ -91,14 +95,11 @@ func NewBranchParser[Output any](
 	parseAfterChild func(childID int32, childResult ParseResult) ParseResult,
 ) Parser[Output] {
 	return &brnchprsr[Output]{
-		id:            -1,
+		ParserID:      ParserID(-1),
 		expected:      expected,
 		childs:        children,
 		prsAfterChild: parseAfterChild,
 	}
-}
-func (bp *brnchprsr[Output]) ID() int32 {
-	return bp.id
 }
 func (bp *brnchprsr[Output]) Expected() string {
 	return bp.expected
@@ -133,24 +134,21 @@ func (bp *brnchprsr[Output]) children() []AnyParser {
 }
 func (bp *brnchprsr[Output]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
 	bp.ensureIDs()
-	childResult = childResult.PrepareOutputFor(bp.id)
+	childResult = childResult.prepareOutputFor(bp.ID())
 	result := bp.prsAfterChild(childID, childResult)
-	result.SetID(bp.id)
+	result.setID(bp.ID())
 	if result.Error != nil && result.Error.parserID < 0 {
-		result.Error.parserID = bp.id
+		result.Error.parserID = bp.ID()
 	}
 	return result
 }
 func (bp *brnchprsr[Output]) ensureIDs() { // only needed if Parse was called directly
-	if bp.id < 0 { // ensure sane IDs
-		bp.id = 0
+	if bp.ID() < 0 { // ensure sane IDs
+		bp.setID(0)
 		for i, child := range bp.childs() {
 			child.setID(int32(i + 1))
 		}
 	}
-}
-func (bp *brnchprsr[Output]) setID(id int32) {
-	bp.id = id
 }
 
 // ============================================================================
@@ -251,7 +249,7 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
 	recoverer := p.Recover
-	if recoverer != nil && recoverer(NewFromBytes([]byte{}, true)) == math.MinInt {
+	if recoverer != nil && recoverer(NewFromBytes([]byte{}, true, 0)) == RecoverWasteNever {
 		panic("can't make parser with Forbidden recoverer a safe spot")
 	}
 
@@ -262,7 +260,7 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	nParse := func(state State) (State, Output, *ParserError) {
 		nState, output, err := p.Parse(state)
 		if err == nil {
-			nState.saveSpot = nState.input.pos // move the mark!
+			nState = nState.MoveSafeSpot() // move the mark!
 		}
 		return nState, output, ClaimError(err)
 	}

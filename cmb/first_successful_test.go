@@ -10,44 +10,39 @@ func TestFirstSuccessful(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		input         string
-		parser        comb.Parser[string]
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		input      string
+		parser     comb.Parser[string]
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "head matching parser should succeed",
-			input:         "123",
-			parser:        FirstSuccessful(Digit1(), Alpha0()),
-			wantErr:       false,
-			wantOutput:    "123",
-			wantRemaining: "",
+			name:       "head matching parser should succeed",
+			input:      "123",
+			parser:     FirstSuccessful(Digit1(), Alpha0()),
+			wantErr:    false,
+			wantOutput: "123",
 		},
 		{
-			name:          "tail matching parser should succeed",
-			input:         "abc",
-			parser:        FirstSuccessful(Digit1(), Alpha0()),
-			wantErr:       false,
-			wantOutput:    "abc",
-			wantRemaining: "",
+			name:       "tail matching parser should succeed",
+			input:      "abc",
+			parser:     FirstSuccessful(Digit1(), Alpha0()),
+			wantErr:    false,
+			wantOutput: "abc",
 		},
 		{
-			name:          "no matching parser should fail",
-			input:         "$%^*",
-			parser:        FirstSuccessful(Digit1(), Alpha1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "$%^*",
+			name:       "no matching parser should fail",
+			input:      "$%^*",
+			parser:     FirstSuccessful(Digit1(), Alpha1()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 		{
-			name:          "empty input should fail",
-			input:         "",
-			parser:        FirstSuccessful(Digit1(), Alpha1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     FirstSuccessful(Digit1(), Alpha1()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 	}
 	for _, tc := range testCases {
@@ -69,7 +64,7 @@ func TestFirstSuccessful(t *testing.T) {
 
 func BenchmarkFirstSuccessful(b *testing.B) {
 	p := FirstSuccessful(Char('b'), Char('a'))
-	input := comb.NewFromString("abc", false)
+	input := comb.NewFromString("abc", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

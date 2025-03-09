@@ -1,4 +1,4 @@
-// Package redis demonstrates the usage of the gomme package to parse Redis'
+// Package redis demonstrates the usage of the comb package to parse Redis'
 // [RESP protocol] messages.
 //
 // [RESP protocol]: https://redis.io/docs/reference/protocol-spec/
@@ -7,12 +7,12 @@ package redis
 import (
 	"errors"
 	"fmt"
-	"github.com/flowdev/comb/cmb"
-	. "github.com/flowdev/comb/cute"
 	"strconv"
 	"strings"
 
 	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/cmb"
+	. "github.com/flowdev/comb/cute"
 )
 
 // ParseRESPMessage parses a Redis' [RESP protocol] message.
@@ -31,7 +31,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 		return RESPMessage{}, fmt.Errorf("malformed message %s; reason: %w", input, ErrInvalidSuffix)
 	}
 
-	parser := FirstSuccessful(
+	parser := cmb.FirstSuccessful(
 		SimpleString(),
 		Error(),
 		Integer(),
@@ -44,7 +44,7 @@ func ParseRESPMessage(input string) (RESPMessage, error) {
 
 // ErrMessageTooShort is returned when a message is too short to be valid.
 // A [RESP protocol] message is at least 3 characters long: the message kind
-// prefix, the message content (which can be empty), and the gomme.CRLF suffix.
+// prefix, the message content (which can be empty), and the cmb.CRLF suffix.
 //
 // [RESP protocol]: https://redis.io/docs/reference/protocol-spec/
 var ErrMessageTooShort = errors.New("message too short")
@@ -56,7 +56,7 @@ var ErrMessageTooShort = errors.New("message too short")
 var ErrInvalidPrefix = errors.New("invalid message prefix")
 
 // ErrInvalidSuffix is returned when a message suffix is not recognized.
-// Every [RESP protocol] message ends with a gomme.CRLF.
+// Every [RESP protocol] message ends with a cmb.CRLF.
 //
 // [RESP protocol]: https://redis.io/docs/reference/protocol-spec/
 var ErrInvalidSuffix = errors.New("invalid message suffix")
@@ -103,7 +103,7 @@ type SimpleStringMessage struct {
 // SimpleString is a parser for Redis' RESP protocol simple strings.
 //
 // Simple strings are strings that are not expected to contain newlines.
-// Simple strings start with a "+" character, and end with a gomme.CRLF.
+// Simple strings start with a "+" character, and end with a cmb.CRLF.
 //
 // Once parsed, the content of the simple string is available in the
 // simpleString field of the result's RESPMessage.
@@ -122,7 +122,7 @@ func SimpleString() comb.Parser[RESPMessage] {
 	}
 
 	return cmb.Prefixed(
-		cmb.String(string(SimpleStringKind)),
+		S(string(SimpleStringKind)),
 		cmb.Map(cmb.UntilString("\r\n"), mapFn),
 	)
 }
@@ -138,7 +138,7 @@ type ErrorStringMessage struct {
 
 // Error is a parser for Redis' RESP protocol errors.
 //
-// Errors are strings that start with a "-" character, and end with a gomme.CRLF.
+// Errors are strings that start with a "-" character, and end with a cmb.CRLF.
 //
 // The error message is available in the Error field of the result's
 // RESPMessage.
@@ -158,7 +158,7 @@ func Error() comb.Parser[RESPMessage] {
 	}
 
 	return cmb.Prefixed(
-		cmb.String(string(ErrorKind)),
+		S(string(ErrorKind)),
 		cmb.Map(cmb.UntilString("\r\n"), mapFn),
 	)
 }
@@ -174,7 +174,7 @@ type IntegerMessage struct {
 // Integer is a parser for Redis' RESP protocol integers.
 //
 // Integers are signed numerical values represented as string messages
-// that start with a ":" character, and end with a gomme.CRLF.
+// that start with a ":" character, and end with a cmb.CRLF.
 //
 // The integer value is available in the IntegerMessage field of the result's
 // RESPMessage.
@@ -194,7 +194,7 @@ func Integer() comb.Parser[RESPMessage] {
 	}
 
 	return cmb.Prefixed(
-		cmb.String(string(IntegerKind)),
+		S(string(IntegerKind)),
 		cmb.Map(cmb.UntilString("\r\n"), mapFn),
 	)
 }
@@ -210,7 +210,7 @@ type BulkStringMessage struct {
 // BulkString is a parser for Redis' RESP protocol bulk strings.
 //
 // Bulk strings are binary-safe strings up to 512MB in size.
-// Bulk strings start with a "$" character, and end with a gomme.CRLF.
+// Bulk strings start with a "$" character, and end with a cmb.CRLF.
 //
 // The bulk string's data is available in the BulkString field of the result's
 // RESPMessage.
@@ -247,7 +247,7 @@ func BulkString() comb.Parser[RESPMessage] {
 	}
 
 	return cmb.Map2(
-		sizePrefix(cmb.String(string(BulkStringKind))),
+		sizePrefix(S(string(BulkStringKind))),
 		cmb.Optional(
 			cmb.UntilString("\r\n"),
 		),
@@ -265,7 +265,7 @@ type ArrayMessage struct {
 // Array is a parser for Redis' RESP protocol arrays.
 //
 // Arrays are sequences of RESP messages.
-// Arrays start with a "*" character, and end with a gomme.CRLF.
+// Arrays start with a "*" character, and end with a cmb.CRLF.
 //
 // The array's messages are available in the Array field of the result's
 // RESPMessage.
@@ -297,9 +297,9 @@ func Array() comb.Parser[RESPMessage] {
 	}
 
 	return cmb.Map2(
-		sizePrefix(cmb.String(string(ArrayKind))),
+		sizePrefix(S(string(ArrayKind))),
 		cmb.Many0(
-			FirstSuccessful(
+			cmb.FirstSuccessful(
 				SimpleString(),
 				Error(),
 				Integer(),

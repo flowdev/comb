@@ -32,7 +32,7 @@ func Optional[Output any](parser comb.Parser[Output]) comb.Parser[Output] {
 				endResult = comb.RunParser(parser, childResult)
 				childResult.StartState = childResult.EndState
 			}
-			if endResult.Error != nil && childResult.StartState.SaveSpotMoved(endResult.EndState) { // we can't ignore the error
+			if endResult.Error != nil && childResult.StartState.SafeSpotMoved(endResult.EndState) { // we can't ignore the error
 				return endResult.AddOutput(out)
 			}
 			if endResult.Error != nil { // successful result without input consumption

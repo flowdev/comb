@@ -17,7 +17,7 @@ const errorMarker = 0x25B6 // easy to spot marker (▶) for exact error position
 // It consists of the text itself and the position in the input where it happened.
 type ParserError struct {
 	text      string // the error message from the parser
-	pos       int    // pos is the byte index in the input (state.input.pos)
+	pos       int    // pos is the byte index in the input (state.pos)
 	line, col int    // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
 	srcLine   string // line of the source code containing the error or bytes around the error in binary case
 	binary    bool   // are we in binary or text mode?

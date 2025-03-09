@@ -50,7 +50,7 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 		bestRes, _ = o.(partialFSResult[Output])
 	}
 
-	if childID >= 0 && (childResult.Error == nil || childResult.StartState.SaveSpotMoved(childResult.EndState)) {
+	if childID >= 0 && (childResult.Error == nil || childResult.StartState.SafeSpotMoved(childResult.EndState)) {
 		return childResult.AddOutput(bestRes) // we can't avoid this error by going another path
 	}
 
@@ -74,7 +74,7 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResu
 	for i := idx; i < len(fsd.parsers); i++ {
 		p := fsd.parsers[i]
 		result := comb.RunParser(p, startResult)
-		if result.Error == nil || startResult.EndState.SaveSpotMoved(result.EndState) {
+		if result.Error == nil || startResult.EndState.SafeSpotMoved(result.EndState) {
 			return result.AddOutput(bestRes)
 		}
 

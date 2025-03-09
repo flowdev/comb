@@ -23,9 +23,6 @@ The error handling consists of error reporting and recovering from errors.
 Syntax errors are always reported in the form:
 > expected "token" [line:column] source line incl. marker ▶ at error position
 
-Programming errors (in one of Your parsers) are always reported in the form:
-> programming error: message [line:column] source line incl. marker ▶ at error position
-
 Semantic and miscellaneous errors are always reported in the form:
 > message [line:column] source line incl. marker ▶ at error position
 
@@ -33,7 +30,9 @@ Calculating the correct line and column of the error and setting the marker
 correctly are the hardest problems here.
 And they bring the most benefit to the user.
 
-For binary input the message including prefix (`expected` or `programming error:`)
+### Binary Input
+
+For binary input the message including prefix (`expected`)
 stay exactly the same but the source and position part changes to:
 > message:
 >  00000002  6e 74 65 6e 74 0a 6c 69  ▶6e 65 32 0a 6c 69 6e 65  |ntent.li▶ne2.line|
@@ -43,426 +42,327 @@ UNIX `hexdump` command (`hexdump -C` to be exact).
 The first number is the offset of the first byte displayed.
 And it is in **hex** format!
 
+### Panics
+
+All panics are documented at the individual parsers, and they will only happen
+during parser construction.
+They always signal a programming error on your side.
+No panic is ever done during the actual parsing.
+
 ## Recovering From Errors
 
 In general, we distinguish between simple **leaf** parsers that don't use
 any sub-parsers and **branch** parsers that do use one or more sub-parsers.
 
-For recovering from errors the parser uses `SaveSpot` parsers and their `Recoverer`s.
+Leaf parsers still can make use of other leaf parsers internally.
+But the whole parser (tree) will be considered as one leaf parser by
+the rest of the parsing system.
+So it is impossible to use one of those internal leaf parsers for error recovery.
+As long as that is no concern, you can build complex leaf parsers from simple ones.
 
+For recovering from errors the parser uses `SafeSpot` parsers and `Recoverer`s.
 
-The `SaveSpot` parser plays a key role in error recovery.
-It is the one to conclude that an error has indeed to be handled
-(if its position is before the error),
-and it also marks the next safe state to which we want to recover to
-(if its position is behind the error). \
-A `SaveSpot` parser at the exact error position isn't of help
-for that particular error. \
-Finally, the `SaveSpot` parser is used to prevent the `FirstSuccessful` parser
+### SafeSpot parser
+
+The `SafeSpot` parser plays a key role in error recovery.
+It can be used with any **leaf** parser that **consumes input** and
+turns it into a safe spot we might recover to.
+It marks the next safe state to which we might want to recover to. \
+And the `SafeSpot` parser is used to prevent the `FirstSuccessful` parser
 from trying other sub-parsers even in case of an error.
 This way we prevent unnecessary backtracking.
 
-So please use the `SaveSpot` parser as much as reasonable for your grammar!
-As it keeps the backtracking to a minimum, it also makes the parser perform better.
+The full set of criteria for a `SafeSpot` parser is:
+1. It's a leaf parser.
+2. It always consumes some input.
+3. It helps to find the correct context either for the
+   `FirstSuccessful` parser or for recovering from an error.
+ 
+So please use the `SafeSpot` parser as much as reasonable for your grammar!
+It keeps the backtracking to a minimum, enables error recovery,
+and it also makes the parser perform better.
 
-The `FirstSuccessful` and `SaveSpot` parsers are special **branch** parsers. \
-In general, it's true that **all** branch parsers have to deal a lot with
+### Recoverers
+
+
+### Predefined Branch Parsers
+
+The `FirstSuccessful` and `SafeSpot` parsers are special **branch** parsers. \
+In general, it's true that **all** branch parsers have to deal with
 error recovery. But we have you covered, because the base parsers
-`FirstSuccessful`, `Sequence`, `MapN` and `ManyMN` are all doing the hard work
+`FirstSuccessful`, `MapN`, `SeparatedMN` and  `Expression` are all doing the hard work
 for you. \
 As long as you are able to build your own branch parser on them
 (directly or indirectly), care is already taken. \
 `Map`, `Map2`, `Map3`, `Map4`, `Map5`, `Prefixed`, `Suffixed`, `Delimited`,
 `Recognize`, `Optional` and `Assign` all build on `MapN`. \
-`Count`, `Many0` and `Many1` are built on `ManyMN`. \
-`SeparatedMN`, `Separated0` and `Separated1` are based on `ManyMN` and `MapN`.
+`Count`, `Many0`, `Many1`, `ManyMN`, `Separated0` and `Separated1`  are based on `SeparatedMN`.
 
-All other parsers in the `pcb` package are leaf parsers that don't need to
+All other parsers in the `cmb` package are leaf parsers that don't need to
 care about error handling.
 
-The following sections define the modes and their relationships in detail.
+### Writing Own Branch Parsers
 
-### Parser Modes
-
-These are the modes:
-
-##### happy:
-Normal parsing discovering and reporting errors
-(with `State.NewError` or `State.ErrorAgain` for cached results). \
-The error will be witnessed by the immediate parent branch parser.
-
-If we happen to handle an error and hit a `SaveSpot` parser then
-we will be very happy to clean up. \
-This means we were able to handle the error by modifying the input
-and didn't have to use any `Resolverer`.
-
-##### error:
-An error was found but might be mitigated by backtracking and the
-`FirstSuccessful` parser.
-In this mode the parser goes back to find the last `SaveSpot` parser or
-trying later alternatives in the `FirstSuccessful` parser.
-
-The previous `SaveSpot` parser might be hidden deep in a sub-parser
-that is earlier in sequence but not on the Go call stack anymore.
-
-So in this mode all parsers that use sub-parsers in sequence have to use them
-in reverse order to find the right `SaveSpot` parser. \
-Funnily this also applies to parsers that use the *same* sub-parser
-multiple times. So if the second time the sub-parser was used, failed
-then it might very well be that the first (successful) time it applied
-a `SaveSpot` parser. And that would be the right one to find.
-
-Only the `FirstSuccessful` parser (not as parent parser but as sibling this time)
-is different. It has to find the first successful sub-parser and
-its `SaveSpot` parser again. \
-As parent parser (if the **error** mode is switched to while trying alternatives)
-it can just try another alternative (normal **happy** mode behaviour).
-
-##### handle:
-We now know that the error found has to be handled.
-We find the exact position and witness parser again by simply parsing
-one more time (forward) in the new mode (possibly omitting any semantics).
-
-The witness parser should
-1. modify the input (respecting `maxDel`),
-2. switch to **happy** mode and
-3. parse again (possibly omitting the failing parser).
-4. switch to **escape** mode if everything else fails.
-
-##### rewind:
-We failed again and have to try again with more deletion or
-without using the parser that failed originally.
-
-So we have to go backward similar to the **error** mode.
-But with the distinction that we aren't looking for a `SaveSpot` parser
-before the error position, but instead for the immediate parent branch parser of
-the failing leaf parser that witnessed the error.
-
-##### escape:
-All deletion of input and inserting of good input didn't help.
-Now we are out of options and can just escape this using a `Resolverer`.
-
-So we find the best (least waste) `Resolverer` and its `SaveSpot` parser
-executes it and finally cleans up and switches back to **happy** mode. \
-The best `Resolverer` to use can't be determined statically,
-because it depends on the input.
-
-### Parsing Directions Per Mode
-
-The direction of parsing changes with the mode.
-Normal parsing is forward of course but in some other modes we have to move backward.
-Here is the full table:
-
-|   Mode | Direction                                     |
-|-------:|:----------------------------------------------|
-|  happy | forward (until a failure is witnessed)        |
-|  error | **backward** (to the **previous** `SaveSpot`) |
-| handle | forward (to the `witness parser (1)`)         |
-| rewind | **backward** (to the `witness parser (1)`)    |
-| escape | forward (to the (best) **next** `SaveSpot`)   |
-
-So the parsers move only in the **error** and **rewind** modes backward,
-and forward in all other modes.
-
-### Relationships Between Modes
-
-The relationships between the modes are shown in the following
-state diagram.
-The diagram also shows where a mode change can happen and the condition
-(next to the mode) that has to be fulfilled for the change.
-
-The position of the error is shortened to `errPos`. \
-The first parent branch parser to witness the error to be handled
-is called `witness parser (1)`. \
-A possibly different parent branch parser to witness an error
-during handling of the first is called `witness parser (2)`.
-
-```mermaid
----
-title: Parser Modes And Their Changes
----
-stateDiagram-v2
-    [*] --> happy: start
-
-    happy --> error: State.NewError + witness parser (1) (no error yet)
-    error --> happy: FirstSuccessful (successful parser found)
-    error --> handle: SaveSpot (pos < errPos)
-    handle --> happy: witness parser (1)
-    happy --> rewind: State.NewError + witness parser (2) (error exists)
-    rewind --> happy: witness parser (1)
-    happy --> happy: SaveSpot (pos > errPos) clean up
-    rewind --> escape: witness parser (1)
-    escape --> happy: SaveSpot (pos > errPos) clean up
+For implementing a branch parser you have to call the following function
+from the `comb` package:
+```go
+func NewBranchParser[Output any](
+    expected string,
+    children func() []AnyParser,
+    parseAfterChild func(childID int32, childResult ParseResult) ParseResult,
+) Parser[Output]
 ```
+The `expected` string is usually just the name of the branch parser.
+It's only used for debugging and should never be seen by the user.
 
-Next we will look at the changes in modes that are possible within sub-parsers.
+The `children` function returns a slice of all child parsers (leaf or branch parsers).
+This is used by the error handling system to prepare all parsers by registering them
+in a central registry and giving each its own ID. \
+It is allowed to not return child parsers as long as they never fail
+(e.g. because they don't have to consume input)
+and they are no safe spot parsers.
+A child parser consuming optional space is a good example.
 
-### Possible Mode Changes
+The `parseAfterChild` function is the heart of a branch parser and
+performs the parsing itself.
+It will be called with a `childID < 0` if it should parse from the beginning.
+This way you have to implement _only one_ function for parsing. \
+The state to start own parsing with always is the `childResult.EndState`.
+During normal parsing the `childID` will always be `< 0`.
+A `childID >= 0` signals that error recovery is going on. \
+The `parseAfterChild` function has to use a few functions and methods from the main parser package:
+* Child parsers have to be called with:
+    ```go
+    func RunParser(ap AnyParser, inResult ParseResult) ParseResult
+    ```
+  This ensures the correct handling of branch parsers.
+* Partial output has to be saved by calling:
+    ```go
+    func (pr ParseResult) AddOutput(partialOutput interface{}) ParseResult
+    ```
+  This ensures that no parser output gets lost.
+  It's usually done when returning, e.g.: `return result.AddOutput(partial)`
+* If the `childID >= 0`, the partial output can be fetched with:
+    ```go
+    func (pr ParseResult) FetchOutput() (interface{}, ParseResult)
+    ```
+  This gives the partial output saved with `AddOutput` back.
+* If you want to create a **new** `ParseResult`, you have to transfer the
+  existing partial results to the new one with:
+    ```go
+    func (pr ParseResult) GetParentResults(source ParseResult) ParseResult
+    ```
+  Otherwise, all partial results from other parsers would be lost.
 
-The following table lists the mode changes that are possible in a leaf or
-branch sub-parser.
+So please follow these rules. They shouldn't restrict you in any way.
+If your branch parser doesn't have any partial results to be saved,
+you needn't use `AddOutput` and `FetchOutput` at all.
 
-The `SaveSpot` parser and the `witness parser`s can only have leaf parsers
-as sub-parser. Every other branch parser can also have branch parsers as
-sub-parsers.
+Of course, you are welcome to use
+`FirstSuccessful`, `MapN`, `SeparatedMN` or  `Expression` as a starting point.
+They are intentionally defined in an own package separated from the main parser package,
+just like yours.
 
-The first column shows the mode the parent parser is in,
-the second column the possible modes
+### General Error Recovery
 
-|    At Start | After Leaf Parser | After Any Branch Parser | After Searched Parser |
-|------------:|:------------------|:------------------------|:----------------------|
-|  happy (>>) | happy, error      | happy, error, escape    | not searching         |
-|  error (<<) | error             | error, handle           | handle                |
-| handle (>>) | handle            | handle, happy, escape   | happy, escape         |
-| rewind (<<) | rewind            | rewind, happy, escape   | happy, escape         |
-|  escape(>>) | escape            | escape, happy           | happy, escape         |
+The recovery from errors is following these steps:
 
-The last column is the most important for the implementation since we often know
-the exact parser we are searching from the cache.
-In those cases an entry of 'happy, escape' means:
-
-- `happy`: Error recovery has been successful.
-           Parse normally again starting with the next (sub-)parser.
-- `escape`: Use the (best of the) next `Resolverer`(s) to escape the mess.
-            Only `SaveSpot-Resolverer`s from later (sub-)parsers must be
-            considered. Sequential parsers might only consider one `Resolverer`.
-
-So all parsers working sequentially that really do error handling
-(`Sequence`, `MapN` and `MultiMN`) have to have a `startIdx` parameter
-for modes `happy` and `escape` to be able to use only later sub-parsers.
-
-The following sections detail some error recovery scenarios.
+1. The error is returned to the main parser / orchestrator.
+1. The orchestrator saves the error so it can return it later.
+1. The orchestrator looks for the next successful (`SaveSpot`) parser
+   (the parser with minimal waste using the `recoverer`s).
+1. The orchestrator calls the parser found in the previous step.
+1. The orchestrator calls its parent parser and all grandparent parsers
+   upwards including the root parser.
+1. If a new error is found in  the last two steps, the whole sequence starts again.
 
 ### Example Scenarios For Error Recovery
 
 Before we can dive into the scenarios themselves we have to define
 a few abbreviations (or the diagrams would go beyond the screen).
 
-- `Px`: any parser with no special role (`x` being a decimal number), e.g.: `P7`
-- `NWB`: a `SaveSpot` parser wrapping any leaf parser
-- `NWB3`: up to three `SaveSpot` parsers might be involved in a complex scenario
-- `WP1`: `witness parser (1)` witnessing any sub-parser; it's the error handling parser
-- `WP2`: `witness parser (2)` witnessing any sub-parser; it just witnesses a secondary error
-- `FS`: a `FirstSuccessful` parser
-- `FSx`: the `FirstSuccessful` parser number `x` (`x` being a decimal number), e.g.: `FS3`
-- `parser(mode)`: the parser is in a certain mode, e.g.: `WP1(handle)`
-- `parser(mode1, mode2)`: multiple possible modes are separated by a comma (','),
-  e.g.: `WP2(error, rewind)`
-- `NWB(parser)`: the `SaveSpot` parser wraps a parser, e.g: `NWB(other parser)`
+- `main`: the main parser orchestrating everything else.
+- `LPx`: leaf parser with ID `x` (`x` being a decimal number), e.g.: `LP1`
+- `LPx(2)`: leaf parser with ID `x`, second call, e.g.: `LP1(2)`
+- `BPx`: branch parser with ID `x`, e.g.: `BP0`
+- `BPx(2)`: branch parser with ID `x`, second call, e.g.: `BP0(2)`
+- `SSx`: a `SafeSpot` parser with ID `x` wrapping any leaf parser
+- `SSx(parser)`: the `SafeSpot` parser with ID `x` wraps a parser, e.g: `SS2(P3)`
 
-A complex example is: `NWB(WP1(happy, handle))` meaning a `SaveSpot` parser
-that also acts as `witness parser (1)` that is either in mode `happy` or
-in mode `handle`.
+We will use Git graph diagrams for the scenarios and "branches" will be the parsers
+calling each other.
+The first "commit" in each "branch" shows what a branch parser is called with
+(ID and former partial output) and the last shows what it returns
+(output; error; partial output (in case of a branch parser)).
+In the case of a leaf parser or the main orchestrating parser it's just the output and error.
 
-We will use flow diagrams for the scenarios and the links between the nodes
-show the order and potentially modes in parentheses.
-
-#### Simple Sequence
+#### Good Case
 
 The simple sequence scenario looks like this if nothing fails:
 
 ```mermaid
-flowchart LR
-  a([start])--->|"(happy)"|NWB1--->|"1 (happy)"|WP1--->|"2 (happy)"|NWB2--->|"3 (happy)"|b([end])
+sequenceDiagram
+    participant o as Orchestrator
+    note over o: start parsing
+    create participant bp0 as BP0
+    o->>+bp0: call with: ID=-1#59; nil
+    create participant lp1 as LP1
+    bp0->>+lp1: call
+    destroy lp1
+    lp1->>-bp0: output1#59; nil
+    create participant lp2 as LP2
+    bp0->>+lp2: call
+    destroy lp2
+    lp2->>-bp0: output2#59; nil
+    create participant lp3 as LP3
+    bp0->>+lp3: call
+    destroy lp3
+    lp3->>-bp0: output3#59; nil
+    destroy bp0
+    bp0->>-o: map(output1, output2, output3)#59; nil
+    note over o: return map(...)#59; nil
 ```
 
-If `WP1` fails it will look like this:
+All parsers except the orchestrator are marked as active when they run.
+This is necessary because they are called multiple times in error cases.
+They aren't running at all during the inactive times,
+as you can see in the next example.
+
+#### Simple Error Case 1
+
+If `LP2` fails because of an illegal additional character, it looks like this:
 
 ```mermaid
-flowchart LR
-  st(["start"])
-  p1["NWB1"]
-  p2["WP1"]
-  p3["NWB2"]
-  ed(["end"])
-  
-  st--->|"(happy)"| p1
-  p1--->|"1 (happy)"| p2
-  p2--->|"2 (error)"| p1
-  p1--->|"3 (handle)"| p2
-  p2--->|"4 (rewind)"| p2
-  p2--->|"5 (happy, escape)"| p3
-  p3--->|"6 (happy)"| ed
+sequenceDiagram
+    participant o as Orchestrator
+    note over o: start parsing
+    create participant bp0 as BP0
+    o->>+bp0: call with: ID=-1#59; nil
+    create participant lp1 as LP1
+    bp0->>+lp1: call
+    destroy lp1
+    lp1->>-bp0: output1#59; nil
+    create participant lp2 as LP2
+    bp0->>+lp2: call
+    break ERROR in LP2
+        lp2->>-bp0: nil#59; error1
+    end
+    break bubble up ERROR
+        bp0->>-o: nil#59; error1#59; {output1}
+    end
+    o->>o: find next successful parser: LP2
+    o->>+lp2: call directly
+    destroy lp2
+    lp2->>-o: output2#59; nil
+    o->>+bp0: call parent with: ID=2#59; {output1, output2}
+    create participant lp3 as LP3
+    bp0->>+lp3: call
+    destroy lp3
+    lp3->>-bp0: output3#59; nil
+    destroy bp0
+    bp0->>-o: map(output1, output2, output3)#59; nil
+    note over o: return map(...)#59; error1
 ```
-The last step can be in mode `happy` if the error could be resolved by deletion or insertion.
-It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
 
-#### Simple Sequence With Three `SaveSpot`s
+If an error happens, the main parser and orchestrator is looking for the next successful parser.
+It might be the failed parser or any `SaveSpot` parser.
+The orchestrator is only looking at `SaveSpot` parsers next to the failed parser because only
+those will bring the whole parsing process back on track.
 
-A slight complication of the sequence above is the following (without failure):
+So the output is the same as in the **Good Case**.
+The error is reported back, of course.
+
+#### Error Case 2
+
+If `LP2` fails because its input is missing, it looks different:
 
 ```mermaid
-flowchart LR
-  st(["start"])
-  p1["NWB1"]
-  p2["NWB2(WP1)"]
-  p3["WP2"]
-  p4["NWB3"]
-  ed(["end"])
-
-  st--->|"(happy)"|p1--->|"1 (happy)"|p2--->|"2 (happy)"|p3--->|"3 (happy)"|p4
-  p4--->|"4 (happy)"| ed
+sequenceDiagram
+    participant o as Orchestrator
+    note over o: start parsing
+    create participant bp0 as BP0
+    o->>+bp0: call with: ID=-1#59; nil
+    create participant lp1 as LP1
+    bp0->>+lp1: call
+    destroy lp1
+    lp1->>-bp0: output1#59; nil
+    create participant lp2 as LP2
+    bp0->>+lp2: call
+    break ERROR in LP2
+        destroy lp2
+        lp2->>-bp0: nil#59; error1
+    end
+    break bubble up ERROR
+        bp0->>-o: nil#59; error1#59; {output1}
+    end
+    o->>o: find next successful parser: SS3(LP4)
+    create participant lp3 as SS3(LP4)
+    o->>+lp3: call directly
+    destroy lp3
+    lp3->>-o: output3#59; nil
+    o->>+bp0: call parent with: ID=3#59; {output1, nil, output3}
+    destroy bp0
+    bp0->>-o: map(output1, nil, output3)#59; nil
+    note over o: return map(...)#59; error1
 ```
 
-If `WP1` fails it will look like this:
+If an error happens, the main parser and orchestrator is looking for the next successful parser.
+It might be the failed parser or any `SaveSpot` parser.
+The orchestrator is only looking at `SaveSpot` parsers next to the failed parser because only
+those will bring the whole parsing process back on track.
+
+Again, all output is kept. Only the `LP2` doesn't deliver any output because it's input is missing.
+The error is reported back, of course.
+
+#### Complex Error Case 3
+
+If `LP2` fails because of an illegal additional character and during error recovery `LP4`
+also fails for a similar reason, it looks like this:
 
 ```mermaid
-flowchart LR
-  st(["start"])
-  p1["NWB1"]
-  p2["NWB2(WP1)"]
-  p3["WP2"]
-  p4["NWB3"]
-  ed(["end"])
-  
-  st--->|"(happy)"|p1--->|"1 (happy)"|p2--->|"6 (happy, escape)"|p3--->|"7 (happy, escape)"|p4
-  p2--->|"2 (error)"|p1
-  p1--->|"3 (handle)"|p2
-  p2--->|"4 (happy)"|p3
-  p3--->|"5 (rewind)"|p2
-  p4--->|"4 (happy)"|ed
-```
-The last two steps can be in mode `happy` if the error could be resolved by deletion or insertion.
-It will be in mode `escape` if we have to use the `Resolverer` of `NWB2`.
-
-So this scenario is **really** the same as the most simple one above.
-It mainly illustrates that the `SaveSpot` parser 2 (`NWB2`) isn't of any help
-but only serves as `witness parser (1)` in this scenario.
-And the error recovery is (sometimes) failing at the witness parser (2) (`WP2`).
-
-#### Cascading Sequences
-
-In this scenario all parts involved are distributed over different
-sequence like parsers (parsers base on `Sequence`, `MapN` or `MultiMN`).
-
-```mermaid
-flowchart LR
-  st(["start"])
-  subgraph main["Main Sequence"]
-    direction LR
-    subgraph sub1["Subsequence 1"]
-      direction TB
-      p11["P4"]
-      p12["NWB1"]
-      p13["P5"]
-      p11--->p12--->p13
+sequenceDiagram
+    participant o as Orchestrator
+    note over o: start parsing
+    create participant bp0 as BP0
+    o->>+bp0: call with: ID=-1#59; nil
+    create participant lp1 as LP1
+    bp0->>+lp1: call
+    destroy lp1
+    lp1->>-bp0: output1#59; nil
+    create participant lp2 as LP2
+    bp0->>+lp2: call
+    break ERROR in LP2
+        lp2->>-bp0: nil#59; error1
     end
-    subgraph sub2["Subsequence 2"]
-      direction TB
-      p21["P6"]
-      p22["WP1"]
-      p23["P7"]
-      p21--->p22--->p23
+    break bubble up ERROR
+        bp0->>-o: nil#59; error1#59; {output1}
     end
-    sub1--->sub2
-    subgraph sub3["Subsequence 3"]
-      direction TB
-      p31["P8"]
-      p32["WP2"]
-      p33["P9"]
-      p31--->p32--->p33
+    o->>o: find next successful parser: LP2
+    o->>+lp2: call directly
+    destroy lp2
+    lp2->>-o: output2#59; nil
+    o->>+bp0: call parent with: ID=2#59; {output1, output2}
+    create participant lp3 as SS3(LP4)
+    bp0->>+lp3: call
+    break ERROR in LP4
+        lp3->>-bp0: nil#59; error2
     end
-    sub2--->sub3
-    subgraph sub4["Subsequence 4"]
-      direction TB
-      p41["P10"]
-      p42["NWB2"]
-      p43["P11"]
-      p41--->p42--->p43
+    break bubble up ERROR
+        bp0->>-o: nil#59; error2#59; {output1, output2}
     end
-    sub3--->sub4
-  end
-  ed(["end"])
-  st--->main
-  main--->ed
-```
-The important thing to note about this much more complex scenario is that all
-the `Px` parsers play no active role in the game.
-They don't change the mode or perform any kind of error handling.
-
-They only pass on the state in the right direction (according to the parsing mode)
-and possibly advance the position in the input.
-The position in the input is **the** crucial thing here.
-If that isn't handled perfectly, all caching will miss, and the parser
-is **broken**.
-
-#### Cascading Sequences With `FirstSuccessful` Parser
-
-In this scenario all parts involved are inside different `FirstSuccessful` parsers.
-The alternative sub-parsers of the `FirstSuccessful` parser are connected by
-dotted lines and the alternatives are numbered in parentheses in the order
-they are tried.
-
-```mermaid
-flowchart LR
-  st(["start"])
-  subgraph main["Main Sequence"]
-    direction LR
-    subgraph fs1["FirstSuccessful 1"]
-      direction BT
-      p1["(1) P1"]
-      subgraph sub1["(2) Subsequence 1"]
-        direction BT
-        p11["P2"]
-        p12["NWB1"]
-        p13["P3"]
-        p11--->p12--->p13
-      end
-      p2["(3) P4"]
-      p1-.-sub1-.-p2
-    end
-    subgraph fs2["FirstSuccessful 2"]
-      direction BT
-      p3["(1) P5"]
-      subgraph sub2["(2) Subsequence 2"]
-        direction BT
-        p21["P6"]
-        p22["WP1"]
-        p23["P7"]
-        p21--->p22--->p23
-      end
-      p4["(3) P8"]
-      p3-.-sub2-.-p4
-    end
-    fs1--->fs2
-    subgraph fs3["FirstSuccessful 3"]
-      direction BT
-      p5["(1) P9"]
-      subgraph sub3["(2) Subsequence 3"]
-        direction BT
-        p31["P10"]
-        p32["WP2"]
-        p33["P11"]
-        p31--->p32--->p33
-      end
-      p6["(3) P12"]
-      p5-.-sub3-.-p6
-    end
-    fs2--->fs3
-    subgraph fs4["FirstSuccessful 4"]
-      direction BT
-      p7["(1) P13"]
-      subgraph sub4["(2) Subsequence 4"]
-        direction BT
-        p41["P14"]
-        p42["NWB2"]
-        p43["P15"]
-        p41--->p42--->p43
-      end
-      p8["(3) P16"]
-      p7-.-sub4-.-p8
-    end
-    fs3--->fs4
-  end
-  ed(["end"])
-  st--->main
-  main--->ed
+    o->>o: find next successful parser: SS3(LP4)
+    o->>+lp3: call directly
+    destroy lp3
+    lp3->>-o: output3#59; nil
+    o->>+bp0: call with: ID=3#59; {output1, output2, output3}
+    destroy bp0
+    bp0->>-o: map(output1, output2, output3)#59; nil
+    note over o: return map(...)#59; error1, error2
 ```
 
-The important thing to note here is that the `FirstSuccessful` parser should
-evaluate and choose between alternatives only in **happy** mode.
+If an error happens during error recovery, it's returned to the orchestrator again.
+The orchestrator is looking for the next successful parser (again),
+and (again) calls parsers bottom up.
 
-In modes **error**, **handle** and **rewind** it has to use the exact same
-alternative as before. \
-And in **escape** mode it has to choose the best of potentially multiple
-`SaveSpot` parsers and their `Recoverer`s.
+So the output is the same as in the **Good Case**.
+All errors are reported back, of course.

@@ -42,7 +42,7 @@ func (pr ParseResult) FetchOutput() (interface{}, ParseResult) {
 	pr.parentResults = pr.parentResults[1:]
 	return result.output, pr
 }
-func (pr ParseResult) SetID(id int32) {
+func (pr ParseResult) setID(id int32) {
 	if len(pr.parentResults) == 0 {
 		return
 	}
@@ -50,7 +50,7 @@ func (pr ParseResult) SetID(id int32) {
 		pr.parentResults[len(pr.parentResults)-1].id = id
 	}
 }
-func (pr ParseResult) PrepareOutputFor(id int32) ParseResult {
+func (pr ParseResult) prepareOutputFor(id int32) ParseResult {
 	i := slices.IndexFunc(pr.parentResults, func(result parentResult) bool {
 		return result.id == id
 	})
@@ -87,6 +87,8 @@ type BranchParser interface {
 	parseAfterChild(childID int32, childResult ParseResult) ParseResult
 }
 
+// RunParser runs any parser and is able to handle branch parsers specially.
+// It is needed to run child parsers of branch parsers correctly.
 func RunParser(ap AnyParser, inResult ParseResult) ParseResult {
 	if bp, ok := ap.(BranchParser); ok {
 		return bp.parseAfterChild(-1, inResult)
@@ -108,21 +110,19 @@ type PreparedParser[Output any] struct {
 	parsers        []parserData
 	recoverers     []AnyParser
 	stepRecoverers []AnyParser
-	recoverCache   []int
 }
 
 // NewPreparedParser prepares a parser for error recovery.
 // Call this directly if you have a parser that you want to run on many inputs.
 // You can use this together with RunOnState.
 func NewPreparedParser[Output any](p Parser[Output]) *PreparedParser[Output] {
-	o := &PreparedParser[Output]{
+	pp := &PreparedParser[Output]{
 		parsers:        make([]parserData, 0, 64),
 		recoverers:     make([]AnyParser, 0, 64),
 		stepRecoverers: make([]AnyParser, 0, 64),
 	}
-	o.registerParsers(p, -1)
-	o.recoverCache = slices.Repeat([]int{RecoverWasteUnknown}, len(o.parsers))
-	return o
+	pp.registerParsers(p, -1)
+	return pp
 }
 
 func (pp *PreparedParser[Output]) registerParsers(ap AnyParser, parentID int32) {
@@ -150,20 +150,20 @@ func (pp *PreparedParser[Output]) registerParsers(ap AnyParser, parentID int32) 
 func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	var zero Output
 	var id int32 = 0 // this is always the root parser
-	recoverCache := slices.Clone(pp.recoverCache)
+	recoverCache := slices.Repeat([]int{RecoverWasteUnknown}, len(pp.parsers))
 	p := pp.parsers[id]
 
 	// TOP->DOWN: Normal parsing starts with the root parser (ID=0)
 	// and goes all the way down to the leaf parsers until an error is found.
 	// The childID is ALWAYS < 0.
-	// ParseResult.AddOutput and .SetID are used;
-	//   .FetchOutput and .PrepareOutputFor are NOT used.
+	// ParseResult.AddOutput and .setID are used;
+	//   .FetchOutput and .prepareOutputFor are NOT used.
 	result := p.parser.parse(state)
 	nextID, nState := id, result.EndState
 	for result.Error != nil {
 		Debugf("parseAll - got Error=%v", result.Error)
 		nState = result.EndState.SaveError(result.Error)
-		if nState.AtEnd() || !nState.recover { // give up
+		if nState.AtEnd() || !nState.constant.recover { // give up
 			Debugf("parseAll - at EOF or recovery is turned off")
 			return zero, nState.Errors()
 		}
@@ -179,8 +179,8 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 		// BOTTOM->UP: Recovery parsing starts with a leaf parser
 		// and goes all the way up to the root parser (with or without error).
 		// The childID is NEVER < 0.
-		// ParseResult.FetchOutput and .PrepareOutputFor are used;
-		//   .AddOutput and .SetID are NOT used (except for a new error).
+		// ParseResult.FetchOutput and .prepareOutputFor are used;
+		//   .AddOutput and .setID are NOT used (except for a new error).
 		result = RunParser(p.parser, result) // should always be successful (or the recoverer didn't do its job)
 		for p.parentID >= 0 {                // force the new result through all levels (error or not)
 			childID := nextID
@@ -252,8 +252,8 @@ func (pp *PreparedParser[Output]) recover(state State, rec AnyParser, recoverCac
 	}
 	waste = rec.Recover(state)
 	recoverCache[rec.ID()] = waste
-	if waste == RecoverWasteNever {
-		pp.recoverCache[rec.ID()] = waste
+	if waste >= 0 {
+		recoverCache[rec.ID()] = pos + waste
 	}
 	return waste
 }

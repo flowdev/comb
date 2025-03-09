@@ -63,14 +63,6 @@ func SaveSpot[Output any](parse comb.Parser[Output]) comb.Parser[Output] {
 	return comb.SafeSpot[Output](parse)
 }
 
-// FirstSuccessful is a shortened version of `gomme.FirstSuccessful`.
-// It is meant to be used without the package name with an import like:
-//
-//	import . "github.com/flowdev/comb/cute"
-func FirstSuccessful[Output any](parsers ...comb.Parser[Output]) comb.Parser[Output] {
-	return cmb.FirstSuccessful[Output](parsers...)
-}
-
 // ZeroOf returns the zero value of some type.
 // It is meant to be used without the package name with an import like:
 //

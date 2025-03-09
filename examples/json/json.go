@@ -61,7 +61,7 @@ type (
 // parseValue is a parser that attempts to parse different types of
 // JSON values (object, array, string, etc.).
 func parseValue() comb.Parser[JSONValue] {
-	return FirstSuccessful(
+	return cmb.FirstSuccessful(
 		objectp,
 		arrayp,
 		stringp,
@@ -105,7 +105,7 @@ func parseArray() comb.Parser[JSONValue] {
 	return cmb.Map(
 		cmb.Delimited[rune, []JSONValue, rune](
 			cmb.Char('['),
-			FirstSuccessful(
+			cmb.FirstSuccessful(
 				elements,
 				cmb.Map(ws, func(s string) ([]JSONValue, error) { return []JSONValue{}, nil }),
 			),
@@ -285,7 +285,7 @@ var pstring = stringParser()
 //
 // It handles negative and positive integers including zero.
 func integerParser() comb.Parser[string] {
-	return FirstSuccessful(
+	return cmb.FirstSuccessful(
 		// "-" onenine digits
 		cmb.Prefixed(
 			cmb.Char('-'),
@@ -343,7 +343,7 @@ var digits = digitsParser()
 //
 // It distinguishes between '0' and non-zero digits.
 func digitParser() comb.Parser[rune] {
-	return FirstSuccessful(
+	return cmb.FirstSuccessful(
 		cmb.Char('0'),
 		onenine,
 	)
@@ -418,7 +418,7 @@ var characters = charactersParser()
 //
 // It distinguishes between regular characters and escape sequences.
 func characterParser() comb.Parser[rune] {
-	return FirstSuccessful(
+	return cmb.FirstSuccessful(
 		cmb.Satisfy("normal character", func(c rune) bool {
 			return c != '"' && c != '\\' && c >= 0x20 && c <= 0x10FFFF
 		}),
@@ -454,7 +454,7 @@ func escapeParser() comb.Parser[rune] {
 
 	return cmb.Map2(
 		cmb.Char('\\'),
-		FirstSuccessful(
+		cmb.FirstSuccessful(
 			cmb.OneOfRunes('"', '\\', '/', 'b', 'f', 'n', 'r', 't'),
 			unicodeEscape,
 		),

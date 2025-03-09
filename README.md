@@ -4,13 +4,14 @@
 Comb is a library that simplifies building parsers in Go.
 
 For me, it has got the optimal feature set:
-* Simple maintainability of a normal library thanks to being a parser combinator library.
-* Report errors with exact (line and column) position.
-* Report **multiple** errors.
-* UNICODE support.
-* Support for binary input (including byte position and hex dump for errors).
-* Type safety (including filling arbitrary typed data) using generics.
-* Idiomatic Go code (no generated code, ...).
+1. Simple maintainability of a normal library thanks to being a parser combinator library.
+1. Report errors with exact (line and column) position and code snippet.
+1. Report **multiple** errors.
+1. UNICODE support.
+1. Support for binary input (including byte position and hex dump for errors).
+1. Type safety (including filling arbitrary typed data) using generics.
+1. Idiomatic Go code (no generated code, ...).
+1. Good performance (for the feature set).
 
 It's based on [Gomme](https://github.com/oleiade/gomme) that showed how to get the
 general developer experience and type safety right.
@@ -72,7 +73,7 @@ func ParseRGBColor(input string) (RGBColor, error) {
 
 // HexColorComponent produces a parser that parses a single hex color component,
 // which is a two-digit hexadecimal number.
-func HexColorComponent() gomme.Parser[string] {
+func HexColorComponent() comb.Parser[string] {
     return SaveSpot(cmb.SatisfyMN(expected, 2, 2, cmb.IsHexDigit))
 }
 
@@ -194,7 +195,7 @@ Let's explore!
 
 **A**: **Comb** first of all got its name from being a parser COMBinatior library.
 But it is also very good at "combing" through input, finding errors.
-Since the error handling system is the by far hardest part of the project the name feels right.
+Since the error handling system is by far the hardest part of the project, the name feels right.
 
 ### Q: What are parser combinators?
 

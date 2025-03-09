@@ -18,7 +18,7 @@ func Forbidden() comb.Recoverer {
 
 // IndexOf searches until it finds the stop token in the input.
 // If found the Recoverer returns the number of bytes up to the stop.
-// If the token could not be found, the recoverer returns gomme.RecoverWasteTooMuch.
+// If the token could not be found, the recoverer returns comb.RecoverWasteTooMuch.
 // This function panics during the construction phase if `stop` is empty.
 func IndexOf[S comb.Separator](stop S) comb.Recoverer {
 	// This IS type safe because of the `Separator` constraint!
@@ -74,7 +74,7 @@ func IndexOf[S comb.Separator](stop S) comb.Recoverer {
 
 // IndexOfAny searches until it finds a stop token in the input.
 // If found the recoverer returns the number of bytes up to the stop.
-// If no stop token could be found, the recoverer returns gomme.RecoverWasteTooMuch.
+// If no stop token could be found, the recoverer returns comb.RecoverWasteTooMuch.
 //
 // NOTE:
 //   - If any of the `stops` is empty it returns 0.

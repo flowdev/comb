@@ -1,4 +1,4 @@
-// Package gomme implements a parser combinator library.
+// Package comb implements a parser combinator library.
 // It provides a toolkit for developers to build reliable, fast, flexible, and easy-to-develop and maintain parsers
 // for both textual and binary formats. It extensively uses the recent introduction of Generics in the Go programming
 // language to offer flexibility in how combinators can be mixed and matched to produce the desired output while
@@ -39,11 +39,11 @@ const RecoverWasteNever = -3   // used by recoverers to convey that they can't r
 // A few rules should be followed to prevent unexpected behaviour:
 //   - A parser that errors must return the error
 //   - A parser that errors should not change position of the states input
-//   - A parser that consumed some input must advance with state.MoveBy()
+//   - A parser that consumes some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	ID() int32
 	Expected() string
-	Parse(state State) (State, Output, *ParserError) // used by branch parsers and compiler (type inference)
+	Parse(state State) (State, Output, *ParserError) // used by compiler (for type inference) and tests
 	parse(state State) ParseResult                   // used by PreparedParser
 	IsSaveSpot() bool
 	setSaveSpot() // used by SafeSpot parser
@@ -62,7 +62,7 @@ type Parser[Output any] interface {
 // the number of recoverers to try and the deleter to use.
 // It also uses the default value for the number of recursions to support.
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromString(input, true), NewPreparedParser(parse))
+	return RunOnState[Output](NewFromString(input, true, 0), NewPreparedParser(parse))
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
@@ -71,7 +71,7 @@ func RunOnString[Output any](input string, parse Parser[Output]) (Output, error)
 // It also uses the default value for the number of recursions to support.
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromBytes(input, true), NewPreparedParser(parse))
+	return RunOnState[Output](NewFromBytes(input, true, 0), NewPreparedParser(parse))
 }
 
 func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output, error) {
@@ -79,50 +79,49 @@ func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output
 }
 
 // ============================================================================
-// Input And Creating a State With It
+// ConstState And Creating a State With It
 //
 
-// Input is the input data for all the parsers.
-// It can be either UTF-8 encoded text (a.k.a. string) or raw bytes.
+// ConstState is the constant data for all the parsers, e.g. the input and data derived from it.
+// The input can be either UTF-8 encoded text (a.k.a. string) or raw bytes.
 // The parsers store and advance the position within the data but never change the data itself.
 // This allows good error reporting including the full line of text containing the error.
-type Input struct {
-	binary bool   // type of input (general)
-	bytes  []byte // for binary input and parsers
-	text   string // for string input and text parsers
-	n      int    // length of the bytes or text
-	pos    int    // current position in the input a.k.a. the *byte* index
-	prevNl int    // position of newline preceding 'pos' (-1 for line==1)
-	line   int    // current line number
+type ConstState struct {
+	binary    bool   // type of input (general)
+	bytes     []byte // for binary input and parsers
+	text      string // for string input and text parsers
+	n         int    // length of the bytes or text
+	recover   bool   // recover from errors
+	maxErrors int    // maximal number of errors to recover from
 }
 
-func newInput(binary bool, bytes []byte, text string) Input {
+func newConstState(binary bool, bytes []byte, text string, recover bool, maxErrors int) *ConstState {
 	n := len(text)
 	if binary {
 		n = len(bytes)
 	}
-	return Input{
+	return &ConstState{
 		binary: binary, bytes: bytes, text: text, n: n,
-		pos: 0, prevNl: -1, line: 1,
+		recover: recover, maxErrors: maxErrors,
 	}
 }
 
 // NewFromString creates a new parser state from the input data.
-func NewFromString(input string, recover bool) State {
-	return newState(false, nil, input, recover)
+func NewFromString(input string, recover bool, maxErrors int) State {
+	return newState(false, nil, input, recover, maxErrors)
 }
 
 // NewFromBytes creates a new parser state from the input data.
-func NewFromBytes(input []byte, recover bool) State {
-	return newState(true, input, "", recover)
+func NewFromBytes(input []byte, recover bool, maxErrors int) State {
+	return newState(true, input, "", recover, maxErrors)
 }
 
 // newState creates a new parser state from the input data.
-func newState(binary bool, bytes []byte, text string, recover bool) State {
+func newState(binary bool, bytes []byte, text string, recover bool, maxErrors int) State {
 	return State{
-		input:    newInput(binary, bytes, text),
-		saveSpot: -1,
-		recover:  recover,
+		constant: newConstState(binary, bytes, text, recover, maxErrors),
+		safeSpot: -1,
+		pos:      0, prevNl: -1, line: 1,
 	}
 }
 
@@ -135,7 +134,7 @@ func newState(binary bool, bytes []byte, text string, recover bool) State {
 // This should be used for parsers that are alternatives.
 // So the best error is handled.
 func BetterOf(state, other State) (State, bool) {
-	if state.input.pos < other.input.pos {
+	if state.pos < other.pos {
 		return other, true
 	}
 	return state, false

@@ -11,52 +11,46 @@ func TestCount(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[[]string]
-		input         string
-		wantErr       bool
-		wantOutput    []string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[[]string]
+		input      string
+		wantErr    bool
+		wantOutput []string
 	}{
 		{
-			name:          "parsing exact count should succeed",
-			parser:        Count(String("abc"), 2),
-			input:         "abcabc",
-			wantErr:       false,
-			wantOutput:    []string{"abc", "abc"},
-			wantRemaining: "",
+			name:       "parsing exact count should succeed",
+			parser:     Count(String("abc"), 2),
+			input:      "abcabc",
+			wantErr:    false,
+			wantOutput: []string{"abc", "abc"},
 		},
 		{
-			name:          "parsing more than count should succeed",
-			parser:        Count(String("abc"), 2),
-			input:         "abcabcabc",
-			wantErr:       false,
-			wantOutput:    []string{"abc", "abc"},
-			wantRemaining: "abc",
+			name:       "parsing more than count should succeed",
+			parser:     Count(String("abc"), 2),
+			input:      "abcabcabc",
+			wantErr:    false,
+			wantOutput: []string{"abc", "abc"},
 		},
 		{
-			name:          "parsing less than count should fail",
-			parser:        Count(String("abc"), 2),
-			input:         "abc123",
-			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "abc123",
+			name:       "parsing less than count should fail",
+			parser:     Count(String("abc"), 2),
+			input:      "abc123",
+			wantErr:    true,
+			wantOutput: nil,
 		},
 		{
-			name:          "parsing no count should fail",
-			parser:        Count(String("abc"), 2),
-			input:         "123123",
-			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "123123",
+			name:       "parsing no count should fail",
+			parser:     Count(String("abc"), 2),
+			input:      "123123",
+			wantErr:    true,
+			wantOutput: nil,
 		},
 		{
-			name:          "parsing empty input should fail",
-			parser:        Count(String("abc"), 2),
-			input:         "",
-			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "",
+			name:       "parsing empty input should fail",
+			parser:     Count(String("abc"), 2),
+			input:      "",
+			wantErr:    true,
+			wantOutput: nil,
 		},
 	}
 
@@ -82,7 +76,7 @@ func TestCount(t *testing.T) {
 
 func BenchmarkCount(b *testing.B) {
 	parser := Count(Char('#'), 3)
-	state := comb.NewFromString("###", false)
+	state := comb.NewFromString("###", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -94,36 +88,32 @@ func TestMany0(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[[]rune]
-		input         string
-		wantErr       bool
-		wantOutput    []rune
-		wantRemaining string
+		name       string
+		parser     comb.Parser[[]rune]
+		input      string
+		wantErr    bool
+		wantOutput []rune
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "###",
-			parser:        Many0(Char('#')),
-			wantErr:       false,
-			wantOutput:    []rune{'#', '#', '#'},
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "###",
+			parser:     Many0(Char('#')),
+			wantErr:    false,
+			wantOutput: []rune{'#', '#', '#'},
 		},
 		{
-			name:          "no match should succeed",
-			input:         "abc",
-			parser:        Many0(Char('#')),
-			wantErr:       false,
-			wantOutput:    []rune{},
-			wantRemaining: "abc",
+			name:       "no match should succeed",
+			input:      "abc",
+			parser:     Many0(Char('#')),
+			wantErr:    false,
+			wantOutput: []rune{},
 		},
 		{
-			name:          "empty input should succeed",
-			input:         "",
-			parser:        Many0(Char('#')),
-			wantErr:       false,
-			wantOutput:    []rune{},
-			wantRemaining: "",
+			name:       "empty input should succeed",
+			input:      "",
+			parser:     Many0(Char('#')),
+			wantErr:    false,
+			wantOutput: []rune{},
 		},
 	}
 	for _, tc := range testCases {
@@ -149,7 +139,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := comb.NewFromString("abcdef", true)
+	state := comb.NewFromString("abcdef", true, 0)
 	parser := Many0(Digit0())
 
 	newState, output, err := parser.Parse(state)
@@ -161,7 +151,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany0(b *testing.B) {
 	parser := Many0(Char('#'))
-	state := comb.NewFromString("###", false)
+	state := comb.NewFromString("###", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -173,52 +163,46 @@ func TestMany1(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[[]rune]
-		input         string
-		wantErr       bool
-		wantOutput    []rune
-		wantRemaining string
+		name       string
+		parser     comb.Parser[[]rune]
+		input      string
+		wantErr    bool
+		wantOutput []rune
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "###",
-			parser:        Many1(Char('#')),
-			wantErr:       false,
-			wantOutput:    []rune{'#', '#', '#'},
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "###",
+			parser:     Many1(Char('#')),
+			wantErr:    false,
+			wantOutput: []rune{'#', '#', '#'},
 		},
 		{
-			name:          "matching at least once should succeed",
-			input:         "#abc",
-			parser:        Many1(Char('#')),
-			wantErr:       false,
-			wantOutput:    []rune{'#'},
-			wantRemaining: "abc",
+			name:       "matching at least once should succeed",
+			input:      "#abc",
+			parser:     Many1(Char('#')),
+			wantErr:    false,
+			wantOutput: []rune{'#'},
 		},
 		{
-			name:          "not matching at least once should fail",
-			input:         "a##",
-			parser:        Many1(Char('#')),
-			wantErr:       true,
-			wantOutput:    []rune{'#', '#'},
-			wantRemaining: "a##",
+			name:       "not matching at least once should fail",
+			input:      "a##",
+			parser:     Many1(Char('#')),
+			wantErr:    true,
+			wantOutput: []rune{'#', '#'},
 		},
 		{
-			name:          "no match should fail",
-			input:         "abc",
-			parser:        Many1(Char('#')),
-			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "abc",
+			name:       "no match should fail",
+			input:      "abc",
+			parser:     Many1(Char('#')),
+			wantErr:    true,
+			wantOutput: nil,
 		},
 		{
-			name:          "empty input should fail",
-			input:         "",
-			parser:        Many1(Char('#')),
-			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     Many1(Char('#')),
+			wantErr:    true,
+			wantOutput: nil,
 		},
 	}
 	for _, tc := range testCases {
@@ -244,7 +228,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
 	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := comb.NewFromString("abcdef", true)
+	state := comb.NewFromString("abcdef", true, 0)
 	parser := Many1(Digit0())
 
 	newState, output, err := parser.Parse(state)
@@ -256,7 +240,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany1(b *testing.B) {
 	parser := Many1(Char('#'))
-	state := comb.NewFromString("###", false)
+	state := comb.NewFromString("###", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -268,62 +252,54 @@ func TestSeparated0(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[[]string]
-		input         string
-		wantErr       bool
-		wantOutput    []string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[[]string]
+		input      string
+		wantErr    bool
+		wantOutput []string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "abc,abc,abc",
-			parser:        Separated0(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{"abc", "abc", "abc"},
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "abc,abc,abc",
+			parser:     Separated0(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{"abc", "abc", "abc"},
 		}, {
-			name:          "matching parser and missing separator should succeed",
-			input:         "abc123abc",
-			parser:        Separated0(String("abc"), Char(','), true),
-			wantErr:       false,
-			wantOutput:    []string{"abc"},
-			wantRemaining: "123abc",
+			name:       "matching parser and missing separator should succeed",
+			input:      "abc123abc",
+			parser:     Separated0(String("abc"), Char(','), true),
+			wantErr:    false,
+			wantOutput: []string{"abc"},
 		}, {
-			name:          "parser with separator but non-matching right side should succeed",
-			input:         "abc,def",
-			parser:        Separated0(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{"abc"},
-			wantRemaining: ",def",
+			name:       "parser with separator but non-matching right side should succeed",
+			input:      "abc,def",
+			parser:     Separated0(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{"abc"},
 		}, {
-			name:          "parser matching on the right of the separator should succeed",
-			input:         "def,abc",
-			parser:        Separated0(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{},
-			wantRemaining: "def,abc",
+			name:       "parser matching on the right of the separator should succeed",
+			input:      "def,abc",
+			parser:     Separated0(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{},
 		}, {
-			name:          "empty input should succeed",
-			input:         "",
-			parser:        Separated0(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{},
-			wantRemaining: "",
+			name:       "empty input should succeed",
+			input:      "",
+			parser:     Separated0(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{},
 		}, {
-			name:          "parsing input without separator should succeed",
-			input:         "123",
-			parser:        Separated0(Digit0(), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{"123"},
-			wantRemaining: "",
+			name:       "parsing input without separator should succeed",
+			input:      "123",
+			parser:     Separated0(Digit0(), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{"123"},
 		}, {
-			name:          "parsing empty input with *0 parser should succeed",
-			input:         "",
-			parser:        Separated0(Digit1(), Char(','), true),
-			wantErr:       false,
-			wantOutput:    []string{},
-			wantRemaining: "",
+			name:       "parsing empty input with *0 parser should succeed",
+			input:      "",
+			parser:     Separated0(Digit1(), Char(','), true),
+			wantErr:    false,
+			wantOutput: []string{},
 		},
 	}
 	for _, tc := range testCases {
@@ -347,7 +323,7 @@ func TestSeparated0(t *testing.T) {
 
 func BenchmarkSeparated0(t *testing.B) {
 	parser := Separated0(Char('#'), Char(','), false)
-	state := comb.NewFromString("#,#,#", false)
+	state := comb.NewFromString("#,#,#", false, 0)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
@@ -359,48 +335,42 @@ func TestSeparated1(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[[]string]
-		input         string
-		wantErr       bool
-		wantOutput    []string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[[]string]
+		input      string
+		wantErr    bool
+		wantOutput []string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "abc,abc,abc",
-			parser:        Separated1(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{"abc", "abc", "abc"},
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "abc,abc,abc",
+			parser:     Separated1(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{"abc", "abc", "abc"},
 		}, {
-			name:          "matching parser and missing separator should succeed",
-			input:         "abc123abc",
-			parser:        Separated1(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{"abc"},
-			wantRemaining: "123abc",
+			name:       "matching parser and missing separator should succeed",
+			input:      "abc123abc",
+			parser:     Separated1(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{"abc"},
 		}, {
-			name:          "parser with separator but non-matching right side should succeed",
-			input:         "abc,def",
-			parser:        Separated1(String("abc"), Char(','), false),
-			wantErr:       false,
-			wantOutput:    []string{"abc"},
-			wantRemaining: ",def",
+			name:       "parser with separator but non-matching right side should succeed",
+			input:      "abc,def",
+			parser:     Separated1(String("abc"), Char(','), false),
+			wantErr:    false,
+			wantOutput: []string{"abc"},
 		}, {
-			name:          "parser matching on the right of the separator should fail",
-			input:         "def,abc",
-			parser:        Separated1(String("abc"), Char(','), false),
-			wantErr:       true,
-			wantOutput:    []string{"abc"}, // one value after deleting 2 tokens
-			wantRemaining: "",
+			name:       "parser matching on the right of the separator should fail",
+			input:      "def,abc",
+			parser:     Separated1(String("abc"), Char(','), false),
+			wantErr:    true,
+			wantOutput: []string{"abc"}, // one value after deleting 2 tokens
 		}, {
-			name:          "empty input should fail",
-			input:         "",
-			parser:        Separated1(String("abc"), Char(','), false),
-			wantErr:       true,
-			wantOutput:    nil,
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     Separated1(String("abc"), Char(','), false),
+			wantErr:    true,
+			wantOutput: nil,
 		},
 	}
 	for _, tc := range testCases {
@@ -424,7 +394,7 @@ func TestSeparated1(t *testing.T) {
 
 func BenchmarkSeparated1(t *testing.B) {
 	parser := Separated1(Char('#'), Char(','), false)
-	state := comb.NewFromString("#,#,#,#", false)
+	state := comb.NewFromString("#,#,#,#", false, 0)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {

@@ -244,7 +244,7 @@ func TestPreparedParserParseAll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prepp := NewPreparedParser[string](tt.givenParser) // this calls ParserToAnyParser
-			output, err := prepp.parseAll(NewFromString(tt.givenInput, true))
+			output, err := prepp.parseAll(NewFromString(tt.givenInput, true, 0))
 			t.Logf("err=%v", err)
 			if got, want := len(UnwrapErrors(err)), tt.expectedErrors; got != want {
 				t.Errorf("err=%v, want=%d", err, want)
@@ -310,7 +310,7 @@ func TestBranchParserToAnyParser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			prepp := NewPreparedParser[string](tt.givenParser) // this calls ParserToAnyParser
 			aParse := prepp.parsers[0].parser
-			result := aParse.parse(NewFromString(tt.givenInput, true))
+			result := aParse.parse(NewFromString(tt.givenInput, true, 0))
 			if got, want := aParse.IsSaveSpot(), false; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
@@ -412,7 +412,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			prepp := NewPreparedParser[rune](tt.givenParser) // this calls ParserToAnyParser
 			aParse := prepp.parsers[0].parser
-			result := aParse.parse(NewFromString(tt.givenInput, true))
+			result := aParse.parse(NewFromString(tt.givenInput, true, 0))
 			if got, want := tt.givenParser.IsSaveSpot(), tt.expectedSaveSpot; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
@@ -437,7 +437,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			if !tt.givenParser.IsStepRecoverer() {
-				waste := tt.givenParser.Recover(NewFromString(tt.givenInput, true))
+				waste := tt.givenParser.Recover(NewFromString(tt.givenInput, true, 0))
 				if got, want := waste, tt.expectedWaste; got != want {
 					t.Errorf("save spot parser=%d, want=%d", got, want)
 				}

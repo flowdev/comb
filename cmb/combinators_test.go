@@ -11,36 +11,32 @@ func TestOptional(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[string]
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[string]
+		input      string
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "\r\n123",
-			parser:        Optional(CRLF()),
-			wantErr:       false,
-			wantOutput:    "\r\n",
-			wantRemaining: "123",
+			name:       "matching parser should succeed",
+			input:      "\r\n123",
+			parser:     Optional(CRLF()),
+			wantErr:    false,
+			wantOutput: "\r\n",
 		},
 		{
-			name:          "no match should succeed",
-			input:         "123",
-			parser:        Optional(CRLF()),
-			wantErr:       false,
-			wantOutput:    "",
-			wantRemaining: "123",
+			name:       "no match should succeed",
+			input:      "123",
+			parser:     Optional(CRLF()),
+			wantErr:    false,
+			wantOutput: "",
 		},
 		{
-			name:          "empty input should succeed",
-			input:         "",
-			parser:        Optional(CRLF()),
-			wantErr:       false,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "empty input should succeed",
+			input:      "",
+			parser:     Optional(CRLF()),
+			wantErr:    false,
+			wantOutput: "",
 		},
 	}
 	for _, tc := range testCases {
@@ -62,7 +58,7 @@ func TestOptional(t *testing.T) {
 
 func BenchmarkOptional(b *testing.B) {
 	parser := Optional(CR())
-	input := comb.NewFromString("\r123", false)
+	input := comb.NewFromString("\r123", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -74,28 +70,25 @@ func TestPeek(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[string]
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[string]
+		input      string
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "abcd;",
-			parser:        Peek(Alpha1()),
-			wantErr:       false,
-			wantOutput:    "abcd",
-			wantRemaining: "abcd;",
+			name:       "matching parser should succeed",
+			input:      "abcd;",
+			parser:     Peek(Alpha1()),
+			wantErr:    false,
+			wantOutput: "abcd",
 		},
 		{
-			name:          "non matching parser should fail",
-			input:         "123;",
-			parser:        Peek(Alpha1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "123;",
+			name:       "non matching parser should fail",
+			input:      "123;",
+			parser:     Peek(Alpha1()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 	}
 	for _, tc := range testCases {
@@ -117,7 +110,7 @@ func TestPeek(t *testing.T) {
 
 func BenchmarkPeek(b *testing.B) {
 	parser := Peek(Alpha1())
-	input := comb.NewFromString("abcd;", false)
+	input := comb.NewFromString("abcd;", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -129,28 +122,25 @@ func TestAssign(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[int]
-		input         string
-		wantErr       bool
-		wantOutput    int
-		wantRemaining string
+		name       string
+		parser     comb.Parser[int]
+		input      string
+		wantErr    bool
+		wantOutput int
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "abcd",
-			parser:        Assign(1234, Alpha1()),
-			wantErr:       false,
-			wantOutput:    1234,
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "abcd",
+			parser:     Assign(1234, Alpha1()),
+			wantErr:    false,
+			wantOutput: 1234,
 		},
 		{
-			name:          "non matching parser should fail",
-			input:         "123abcd;",
-			parser:        Assign(1234, Alpha1()),
-			wantErr:       true,
-			wantOutput:    1234,
-			wantRemaining: "123abcd;",
+			name:       "non matching parser should fail",
+			input:      "123abcd;",
+			parser:     Assign(1234, Alpha1()),
+			wantErr:    true,
+			wantOutput: 1234,
 		},
 	}
 	for _, tc := range testCases {
@@ -172,7 +162,7 @@ func TestAssign(t *testing.T) {
 
 func BenchmarkAssign(b *testing.B) {
 	parser := Assign(1234, Alpha1())
-	input := comb.NewFromString("abcd", false)
+	input := comb.NewFromString("abcd", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -184,48 +174,42 @@ func TestDelimited(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[string]
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[string]
+		input      string
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "+1\r\n",
-			parser:        Delimited(Char('+'), Digit1(), CRLF()),
-			wantErr:       false,
-			wantOutput:    "1",
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "+1\r\n",
+			parser:     Delimited(Char('+'), Digit1(), CRLF()),
+			wantErr:    false,
+			wantOutput: "1",
 		}, {
-			name:          "no prefix match should fail",
-			input:         "1\r\n",
-			parser:        Delimited(Char('+'), comb.SafeSpot(Digit1()), CRLF()),
-			wantErr:       true,
-			wantOutput:    "1",
-			wantRemaining: "",
+			name:       "no prefix match should fail",
+			input:      "1\r\n",
+			parser:     Delimited(Char('+'), comb.SafeSpot(Digit1()), CRLF()),
+			wantErr:    true,
+			wantOutput: "1",
 		}, {
-			name:          "no parser match should fail",
-			input:         "+\r\n",
-			parser:        Delimited(Char('+'), Digit1(), CRLF()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "no parser match should fail",
+			input:      "+\r\n",
+			parser:     Delimited(Char('+'), Digit1(), CRLF()),
+			wantErr:    true,
+			wantOutput: "",
 		}, {
-			name:          "no suffix match should fail",
-			input:         "+1",
-			parser:        Delimited(Char('+'), Digit1(), CRLF()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "no suffix match should fail",
+			input:      "+1",
+			parser:     Delimited(Char('+'), Digit1(), CRLF()),
+			wantErr:    true,
+			wantOutput: "",
 		}, {
-			name:          "empty input should fail",
-			input:         "",
-			parser:        Delimited(Char('+'), Digit1(), CRLF()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     Delimited(Char('+'), Digit1(), CRLF()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 	}
 	comb.SetDebug(true)
@@ -248,7 +232,7 @@ func TestDelimited(t *testing.T) {
 
 func BenchmarkDelimited(b *testing.B) {
 	parser := Delimited(Char('+'), Digit1(), CRLF())
-	input := comb.NewFromString("+1\r\n", false)
+	input := comb.NewFromString("+1\r\n", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -260,44 +244,39 @@ func TestPrefixed(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[string]
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[string]
+		input      string
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "+123",
-			parser:        Prefixed(Char('+'), Digit1()),
-			wantErr:       false,
-			wantOutput:    "123",
-			wantRemaining: "",
+			name:       "matching parser should succeed",
+			input:      "+123",
+			parser:     Prefixed(Char('+'), Digit1()),
+			wantErr:    false,
+			wantOutput: "123",
 		},
 		{
-			name:          "no prefix match should fail",
-			input:         "+123",
-			parser:        Prefixed(Char('-'), Digit1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "123",
+			name:       "no prefix match should fail",
+			input:      "+123",
+			parser:     Prefixed(Char('-'), Digit1()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 		{
-			name:          "no parser match should fail",
-			input:         "+",
-			parser:        Prefixed(Char('+'), Digit1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "no parser match should fail",
+			input:      "+",
+			parser:     Prefixed(Char('+'), Digit1()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 		{
-			name:          "empty input should fail",
-			input:         "",
-			parser:        Prefixed(Char('+'), Digit1()),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     Prefixed(Char('+'), Digit1()),
+			wantErr:    true,
+			wantOutput: "",
 		},
 	}
 	for _, tc := range testCases {
@@ -319,7 +298,7 @@ func TestPrefixed(t *testing.T) {
 
 func BenchmarkPrefixed(b *testing.B) {
 	parser := Prefixed(Char('+'), Digit1())
-	input := comb.NewFromString("+123", false)
+	input := comb.NewFromString("+123", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -331,44 +310,39 @@ func TestSuffixed(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		parser        comb.Parser[string]
-		input         string
-		wantErr       bool
-		wantOutput    string
-		wantRemaining string
+		name       string
+		parser     comb.Parser[string]
+		input      string
+		wantErr    bool
+		wantOutput string
 	}{
 		{
-			name:          "matching parser should succeed",
-			input:         "1+23",
-			parser:        Suffixed(Digit1(), Char('+')),
-			wantErr:       false,
-			wantOutput:    "1",
-			wantRemaining: "23",
+			name:       "matching parser should succeed",
+			input:      "1+23",
+			parser:     Suffixed(Digit1(), Char('+')),
+			wantErr:    false,
+			wantOutput: "1",
 		},
 		{
-			name:          "no suffix match should fail",
-			input:         "1-23",
-			parser:        Suffixed(Digit1(), Char('+')),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "-23",
+			name:       "no suffix match should fail",
+			input:      "1-23",
+			parser:     Suffixed(Digit1(), Char('+')),
+			wantErr:    true,
+			wantOutput: "",
 		},
 		{
-			name:          "no parser match should fail",
-			input:         "+",
-			parser:        Suffixed(Digit1(), Char('+')),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "no parser match should fail",
+			input:      "+",
+			parser:     Suffixed(Digit1(), Char('+')),
+			wantErr:    true,
+			wantOutput: "",
 		},
 		{
-			name:          "empty input should fail",
-			input:         "",
-			parser:        Suffixed(Digit1(), Char('+')),
-			wantErr:       true,
-			wantOutput:    "",
-			wantRemaining: "",
+			name:       "empty input should fail",
+			input:      "",
+			parser:     Suffixed(Digit1(), Char('+')),
+			wantErr:    true,
+			wantOutput: "",
 		},
 	}
 	for _, tc := range testCases {
@@ -390,7 +364,7 @@ func TestSuffixed(t *testing.T) {
 
 func BenchmarkTerminated(b *testing.B) {
 	parser := Suffixed(Digit1(), Char('+'))
-	input := comb.NewFromString("123+", false)
+	input := comb.NewFromString("123+", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -402,12 +376,11 @@ func TestMap(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name          string
-		input         string
-		parser        comb.Parser[int]
-		wantErr       bool
-		wantOutput    int
-		wantRemaining string
+		name       string
+		input      string
+		parser     comb.Parser[int]
+		wantErr    bool
+		wantOutput int
 	}{
 		{
 			name:  "matching parser should succeed",
@@ -416,9 +389,8 @@ func TestMap(t *testing.T) {
 				i, _ := strconv.Atoi(digit)
 				return i, nil
 			}),
-			wantErr:       false,
-			wantOutput:    1,
-			wantRemaining: "abc\r\n",
+			wantErr:    false,
+			wantOutput: 1,
 		},
 		{
 			name:  "failing parser should fail",
@@ -427,9 +399,8 @@ func TestMap(t *testing.T) {
 				i, _ := strconv.Atoi(digit)
 				return i, nil
 			}),
-			wantErr:       true,
-			wantOutput:    0,
-			wantRemaining: "abc\r\n",
+			wantErr:    true,
+			wantOutput: 0,
 		},
 		{
 			name:  "failing mapper should fail",
@@ -437,9 +408,8 @@ func TestMap(t *testing.T) {
 			parser: Map(Digit1(), func(digit string) (int, error) {
 				return 0, errors.New("unexpected error")
 			}),
-			wantErr:       true,
-			wantOutput:    0,
-			wantRemaining: "abc\r\n",
+			wantErr:    true,
+			wantOutput: 0,
 		},
 		{
 			name:  "empty input should fail",
@@ -448,9 +418,8 @@ func TestMap(t *testing.T) {
 				i, _ := strconv.Atoi(digit)
 				return i, nil
 			}),
-			wantErr:       true,
-			wantOutput:    0,
-			wantRemaining: "",
+			wantErr:    true,
+			wantOutput: 0,
 		},
 	}
 
@@ -475,7 +444,7 @@ func BenchmarkMap(b *testing.B) {
 		i, _ := strconv.Atoi(digit)
 		return i, nil
 	})
-	input := comb.NewFromString("123abc\r\n", false)
+	input := comb.NewFromString("123abc\r\n", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -492,12 +461,11 @@ func TestMap2(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name          string
-		input         string
-		parser        comb.Parser[TestStruct]
-		wantErr       bool
-		wantOutput    TestStruct
-		wantRemaining string
+		name       string
+		input      string
+		parser     comb.Parser[TestStruct]
+		wantErr    bool
+		wantOutput TestStruct
 	}{
 		{
 			name:  "matching parser should succeed",
@@ -506,9 +474,8 @@ func TestMap2(t *testing.T) {
 				left, _ := strconv.Atoi(digit)
 				return TestStruct{Foo: left, Bar: alpha}, nil
 			}),
-			wantErr:       false,
-			wantOutput:    TestStruct{Foo: 1, Bar: "abc"},
-			wantRemaining: "\r\n",
+			wantErr:    false,
+			wantOutput: TestStruct{Foo: 1, Bar: "abc"},
 		}, {
 			name:  "failing parser should fail",
 			input: "abc\r\n",
@@ -516,18 +483,16 @@ func TestMap2(t *testing.T) {
 				left, _ := strconv.Atoi(digit)
 				return TestStruct{Foo: left, Bar: alpha}, nil
 			}),
-			wantErr:       true,
-			wantOutput:    TestStruct{Bar: "abc"},
-			wantRemaining: "\r\n",
+			wantErr:    true,
+			wantOutput: TestStruct{Bar: "abc"},
 		}, {
 			name:  "failing mapper should fail",
 			input: "1abc\r\n",
 			parser: Map2(Digit1(), Alpha1(), func(digit string, alpha string) (TestStruct, error) {
 				return TestStruct{}, errors.New("unexpected error")
 			}),
-			wantErr:       true,
-			wantOutput:    TestStruct{},
-			wantRemaining: "\r\n",
+			wantErr:    true,
+			wantOutput: TestStruct{},
 		}, {
 			name:  "empty input should fail",
 			input: "",
@@ -535,9 +500,8 @@ func TestMap2(t *testing.T) {
 				left, _ := strconv.Atoi(digit)
 				return TestStruct{Foo: left, Bar: alpha}, nil
 			}),
-			wantErr:       true,
-			wantOutput:    TestStruct{},
-			wantRemaining: "",
+			wantErr:    true,
+			wantOutput: TestStruct{},
 		},
 	}
 
@@ -567,7 +531,7 @@ func BenchmarkMap2(b *testing.B) {
 		first, _ := strconv.Atoi(digit)
 		return TestStruct{Foo: first, Bar: alpha}, nil
 	})
-	input := comb.NewFromString("1abc\r\n", false)
+	input := comb.NewFromString("1abc\r\n", false, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
