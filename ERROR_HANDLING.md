@@ -83,7 +83,46 @@ It keeps the backtracking to a minimum, enables error recovery,
 and it also makes the parser perform better.
 
 ### Recoverers
+Recoverers help to find the next safe spot after an error occurred.
+All parsers marked as `SafeSpot` parsers are asked for their recoverers.
+The recoverer of the failed parser is added to the list
+(to catch cases of added illegal input).
+All recoverers are tried, and the one producing the least waste (unused input) is chosen.
 
+The parser moves forward in the input according to the chosen recoverer and
+calls the leaf parser belonging to the chosen recoverer.
+This call should never fail (or the recoverer would have been wrong).
+
+After that the parser tree is moved upward.
+The parent parser of the now successful leaf parser is looked up and `parseAfterChild` is called.
+This is done up the parser tree until the root parser has been successfully called or
+another error is found.
+
+#### Predefined Recoverers
+
+The following recoverers are predefined.
+
+##### cmb.Forbidden
+Forbidden is the Recoverer for parsers that **must not** be used to recover at all.
+These are all parsers that are happy to consume the empty input and
+all look ahead parsers.
+
+##### cmb.IndexOf
+IndexOf searches until it finds a stop token in the input.
+If found, the Recoverer returns the number of bytes up to the token.
+If the token could not be found, the recoverer returns `comb.RecoverWasteTooMuch`.
+
+This function panics during the construction phase if the stop token is empty.
+
+##### cmb.IndexOfAny
+IndexOfAny searches until it finds a stop token in the input.
+If found, the recoverer returns the number of bytes up to the token.
+If no stop token could be found, the recoverer returns `comb.RecoverWasteTooMuch`.
+
+**Note:**
+  - If any of the stop tokens is empty, it returns 0.
+  - If no stops are provided, then this function panics during
+    the construction phase.
 
 ### Predefined Branch Parsers
 

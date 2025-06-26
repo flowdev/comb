@@ -22,12 +22,12 @@ type Separator interface {
 
 // Recoverer is a simplified parser that only returns the number of bytes
 // to reach a SafeSpot.
-// If it can't recover from the given state it should return RecoverWasteTooMuch.
-// If it can't recover AT ALL it should return RecoverWasteNever.
+// If it can't recover from the given state, it should return RecoverWasteTooMuch.
+// If it can't recover AT ALL, it should return RecoverWasteNever.
 //
 // A Recoverer is used for recovering from an error in the input.
 // It helps to move forward to the next SafeSpot.
-// If no special recoverer is given we will try the parser until it succeeds moving
+// If no special recoverer is given, we will try the parser until it succeeds moving
 // forward 1 rune/byte at a time. :(
 type Recoverer func(state State) int
 
@@ -35,10 +35,12 @@ const RecoverWasteUnknown = -1 // default value; 0 can't be used because it's a 
 const RecoverWasteTooMuch = -2 // used by recoverers to convey that they can't recover from the current state
 const RecoverWasteNever = -3   // used by recoverers to convey that they can't recover ever at all
 
+const RecoverDefaultMaxErrors = 10 // the maximum number of errors to recover from (same as for the Go compiler)
+
 // Parser defines the type of a generic Parser.
 // A few rules should be followed to prevent unexpected behaviour:
 //   - A parser that errors must return the error
-//   - A parser that errors should not change position of the states input
+//   - A parser that errors should not change the position of the states input
 //   - A parser that consumes some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	ID() int32
@@ -49,7 +51,7 @@ type Parser[Output any] interface {
 	setSaveSpot() // used by SafeSpot parser
 	Recover(State) int
 	IsStepRecoverer() bool
-	SwapRecoverer(Recoverer) // called during construction phase
+	SwapRecoverer(Recoverer) // called during the construction phase
 	setID(int32)             // used by PreparedParser; only sets own ID
 }
 
@@ -58,20 +60,14 @@ type Parser[Output any] interface {
 //
 
 // RunOnString runs a parser on text input and returns the output and error(s).
-// It uses default values for maximum number of "tokens" to delete for error handling,
-// the number of recoverers to try and the deleter to use.
-// It also uses the default value for the number of recursions to support.
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromString(input, true, 0), NewPreparedParser(parse))
+	return RunOnState[Output](NewFromString(input, RecoverDefaultMaxErrors), NewPreparedParser(parse))
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
-// It uses default values for maximum number of "tokens" to delete for error handling,
-// the number of recoverers to try and the deleter to use.
-// It also uses the default value for the number of recursions to support.
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromBytes(input, true, 0), NewPreparedParser(parse))
+	return RunOnState[Output](NewFromBytes(input, RecoverDefaultMaxErrors), NewPreparedParser(parse))
 }
 
 func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output, error) {
@@ -82,44 +78,42 @@ func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output
 // ConstState And Creating a State With It
 //
 
-// ConstState is the constant data for all the parsers, e.g. the input and data derived from it.
+// ConstState is the constant data for all the parsers. E.g., the input and data derived from it.
 // The input can be either UTF-8 encoded text (a.k.a. string) or raw bytes.
 // The parsers store and advance the position within the data but never change the data itself.
-// This allows good error reporting including the full line of text containing the error.
+// This allows good error reporting, including the full line of text containing the error.
 type ConstState struct {
 	binary    bool   // type of input (general)
 	bytes     []byte // for binary input and parsers
 	text      string // for string input and text parsers
 	n         int    // length of the bytes or text
-	recover   bool   // recover from errors
 	maxErrors int    // maximal number of errors to recover from
 }
 
-func newConstState(binary bool, bytes []byte, text string, recover bool, maxErrors int) *ConstState {
+func newConstState(binary bool, bytes []byte, text string, maxErrors int) *ConstState {
 	n := len(text)
 	if binary {
 		n = len(bytes)
 	}
 	return &ConstState{
-		binary: binary, bytes: bytes, text: text, n: n,
-		recover: recover, maxErrors: maxErrors,
+		binary: binary, bytes: bytes, text: text, n: n, maxErrors: maxErrors,
 	}
 }
 
 // NewFromString creates a new parser state from the input data.
-func NewFromString(input string, recover bool, maxErrors int) State {
-	return newState(false, nil, input, recover, maxErrors)
+func NewFromString(input string, maxErrors int) State {
+	return newState(false, nil, input, maxErrors)
 }
 
 // NewFromBytes creates a new parser state from the input data.
-func NewFromBytes(input []byte, recover bool, maxErrors int) State {
-	return newState(true, input, "", recover, maxErrors)
+func NewFromBytes(input []byte, maxErrors int) State {
+	return newState(true, input, "", maxErrors)
 }
 
 // newState creates a new parser state from the input data.
-func newState(binary bool, bytes []byte, text string, recover bool, maxErrors int) State {
+func newState(binary bool, bytes []byte, text string, maxErrors int) State {
 	return State{
-		constant: newConstState(binary, bytes, text, recover, maxErrors),
+		constant: newConstState(binary, bytes, text, maxErrors),
 		safeSpot: -1,
 		pos:      0, prevNl: -1, line: 1,
 	}

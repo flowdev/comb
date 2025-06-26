@@ -58,7 +58,7 @@ func TestOptional(t *testing.T) {
 
 func BenchmarkOptional(b *testing.B) {
 	parser := Optional(CR())
-	input := comb.NewFromString("\r123", false, 0)
+	input := comb.NewFromString("\r123", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -110,7 +110,7 @@ func TestPeek(t *testing.T) {
 
 func BenchmarkPeek(b *testing.B) {
 	parser := Peek(Alpha1())
-	input := comb.NewFromString("abcd;", false, 0)
+	input := comb.NewFromString("abcd;", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -162,7 +162,7 @@ func TestAssign(t *testing.T) {
 
 func BenchmarkAssign(b *testing.B) {
 	parser := Assign(1234, Alpha1())
-	input := comb.NewFromString("abcd", false, 0)
+	input := comb.NewFromString("abcd", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -232,7 +232,7 @@ func TestDelimited(t *testing.T) {
 
 func BenchmarkDelimited(b *testing.B) {
 	parser := Delimited(Char('+'), Digit1(), CRLF())
-	input := comb.NewFromString("+1\r\n", false, 0)
+	input := comb.NewFromString("+1\r\n", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -298,7 +298,7 @@ func TestPrefixed(t *testing.T) {
 
 func BenchmarkPrefixed(b *testing.B) {
 	parser := Prefixed(Char('+'), Digit1())
-	input := comb.NewFromString("+123", false, 0)
+	input := comb.NewFromString("+123", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -364,7 +364,7 @@ func TestSuffixed(t *testing.T) {
 
 func BenchmarkTerminated(b *testing.B) {
 	parser := Suffixed(Digit1(), Char('+'))
-	input := comb.NewFromString("123+", false, 0)
+	input := comb.NewFromString("123+", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -444,7 +444,7 @@ func BenchmarkMap(b *testing.B) {
 		i, _ := strconv.Atoi(digit)
 		return i, nil
 	})
-	input := comb.NewFromString("123abc\r\n", false, 0)
+	input := comb.NewFromString("123abc\r\n", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -531,7 +531,7 @@ func BenchmarkMap2(b *testing.B) {
 		first, _ := strconv.Atoi(digit)
 		return TestStruct{Foo: first, Bar: alpha}, nil
 	})
-	input := comb.NewFromString("1abc\r\n", false, 0)
+	input := comb.NewFromString("1abc\r\n", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

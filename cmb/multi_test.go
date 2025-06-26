@@ -76,7 +76,7 @@ func TestCount(t *testing.T) {
 
 func BenchmarkCount(b *testing.B) {
 	parser := Count(Char('#'), 3)
-	state := comb.NewFromString("###", false, 0)
+	state := comb.NewFromString("###", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -138,8 +138,8 @@ func TestMany0(t *testing.T) {
 func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
-	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := comb.NewFromString("abcdef", true, 0)
+	// Digit0 accepts the empty state and would cause an infinite loop if not detected
+	state := comb.NewFromString("abcdef", 1)
 	parser := Many0(Digit0())
 
 	newState, output, err := parser.Parse(state)
@@ -151,7 +151,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany0(b *testing.B) {
 	parser := Many0(Char('#'))
-	state := comb.NewFromString("###", false, 0)
+	state := comb.NewFromString("###", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -227,8 +227,8 @@ func TestMany1(t *testing.T) {
 func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	t.Parallel()
 
-	// Digit0 accepts empty state, and would cause an infinite loop if not detected
-	state := comb.NewFromString("abcdef", true, 0)
+	// Digit0 accepts the empty state and would cause an infinite loop if not detected
+	state := comb.NewFromString("abcdef", 1)
 	parser := Many1(Digit0())
 
 	newState, output, err := parser.Parse(state)
@@ -240,7 +240,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 
 func BenchmarkMany1(b *testing.B) {
 	parser := Many1(Char('#'))
-	state := comb.NewFromString("###", false, 0)
+	state := comb.NewFromString("###", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -323,7 +323,7 @@ func TestSeparated0(t *testing.T) {
 
 func BenchmarkSeparated0(t *testing.B) {
 	parser := Separated0(Char('#'), Char(','), false)
-	state := comb.NewFromString("#,#,#", false, 0)
+	state := comb.NewFromString("#,#,#", 0)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
@@ -394,7 +394,7 @@ func TestSeparated1(t *testing.T) {
 
 func BenchmarkSeparated1(t *testing.B) {
 	parser := Separated1(Char('#'), Char(','), false)
-	state := comb.NewFromString("#,#,#,#", false, 0)
+	state := comb.NewFromString("#,#,#,#", 0)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {

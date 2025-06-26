@@ -64,7 +64,7 @@ func TestFirstSuccessful(t *testing.T) {
 
 func BenchmarkFirstSuccessful(b *testing.B) {
 	p := FirstSuccessful(Char('b'), Char('a'))
-	input := comb.NewFromString("abc", false, 0)
+	input := comb.NewFromString("abc", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

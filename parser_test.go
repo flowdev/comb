@@ -92,7 +92,7 @@ func TestSaveSpot(t *testing.T) {
 
 func BenchmarkSaveSpot(b *testing.B) {
 	p := comb.SafeSpot(cmb.Char('1'))
-	input := comb.NewFromString("123", false, 0)
+	input := comb.NewFromString("123", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

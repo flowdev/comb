@@ -58,7 +58,7 @@ func (pr ParseResult) prepareOutputFor(id int32) ParseResult {
 		return pr
 	}
 	pr.parentResults = pr.parentResults[i:]
-	pr.parentResults[0].id = -1 // prepare result for fetch
+	pr.parentResults[0].id = -1 // prepare the result for fetch
 	return pr
 }
 
@@ -88,7 +88,7 @@ type BranchParser interface {
 }
 
 // RunParser runs any parser and is able to handle branch parsers specially.
-// It is needed to run child parsers of branch parsers correctly.
+// That is necessary to run child parsers of branch parsers correctly.
 func RunParser(ap AnyParser, inResult ParseResult) ParseResult {
 	if bp, ok := ap.(BranchParser); ok {
 		return bp.parseAfterChild(-1, inResult)
@@ -163,7 +163,7 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	for result.Error != nil {
 		Debugf("parseAll - got Error=%v", result.Error)
 		nState = result.EndState.SaveError(result.Error)
-		if nState.AtEnd() || !nState.constant.recover { // give up
+		if nState.AtEnd() || nState.constant.maxErrors <= 0 { // give up
 			Debugf("parseAll - at EOF or recovery is turned off")
 			return zero, nState.Errors()
 		}
@@ -210,7 +210,7 @@ func (pp *PreparedParser[Output]) handleError(r ParseResult, recoverCache []int)
 func (pp *PreparedParser[Output]) findMinWaste(state State, id int32, recoverCache []int,
 ) (minWaste int, minRec AnyParser) {
 	failed := false
-	minRec = pp.parsers[id].parser // try failed parser first
+	minRec = pp.parsers[id].parser // try the failed parser first
 	minWaste = math.MaxInt
 	if !minRec.IsStepRecoverer() {
 		minWaste = pp.recover(state, minRec, recoverCache)

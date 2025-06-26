@@ -45,9 +45,9 @@ func TestDelimitedByChar(t *testing.T) {
 			var firstError *comb.ParserError
 
 			if tc.basicParser2 != nil {
-				state, firstOutput, firstError = tc.basicParser2(comb.NewFromString(input[:1], true, 0))
+				state, firstOutput, firstError = tc.basicParser2(comb.NewFromString(input[:1], 10))
 			} else {
-				state, firstOutput, firstError = tc.basicParser1.Parse(comb.NewFromString(input[:1], true, 0))
+				state, firstOutput, firstError = tc.basicParser1.Parse(comb.NewFromString(input[:1], 10))
 			}
 			t.Log("Error1? :", firstError)
 
@@ -67,9 +67,9 @@ func TestDelimitedByChar(t *testing.T) {
 			var gotError *comb.ParserError
 
 			if tc.basicParser2 != nil {
-				newState, gotOutput, gotError = tc.complexParser2(comb.NewFromString(input, true, 0))
+				newState, gotOutput, gotError = tc.complexParser2(comb.NewFromString(input, 10))
 			} else {
-				newState, gotOutput, gotError = tc.complexParser1.Parse(comb.NewFromString(input, true, 0))
+				newState, gotOutput, gotError = tc.complexParser1.Parse(comb.NewFromString(input, 10))
 			}
 			t.Log("Error2? :", gotError)
 

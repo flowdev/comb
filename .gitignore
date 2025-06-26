@@ -16,10 +16,4 @@
 
 examples/redis/testdata
 
-/.golangci.yml
-/.idea/.gitignore
-/.idea/markdown.xml
-/.idea/modules.xml
-/.idea/comb.iml
-/.idea/vcs.xml
-/.idea/workspace.xml
+/.idea/

@@ -163,7 +163,7 @@ type lazyprsr[Output any] struct {
 }
 
 // LazyBranchParser just stores a function that creates the parser and evaluates the function later.
-// This allows to defer the call to NewParser() and thus to define recursive grammars.
+// This allows deferring the call to NewParser() and thus to define recursive grammars.
 // Only branch parsers need this ability. A leaf parser can't be recursive by definition.
 func LazyBranchParser[Output any](makeParser func() Parser[Output]) Parser[Output] {
 	return &lazyprsr[Output]{makePrsr: makeParser}
@@ -249,7 +249,7 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
 	recoverer := p.Recover
-	if recoverer != nil && recoverer(NewFromBytes([]byte{}, true, 0)) == RecoverWasteNever {
+	if recoverer != nil && recoverer(NewFromBytes([]byte{}, 0)) == RecoverWasteNever {
 		panic("can't make parser with Forbidden recoverer a safe spot")
 	}
 
