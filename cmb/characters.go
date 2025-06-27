@@ -83,7 +83,7 @@ func Satisfy(expected string, predicate func(rune) bool) comb.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	recoverer := func(state comb.State) int {
+	recoverer := func(_ *comb.ParserError, state comb.State) int {
 		return strings.IndexFunc(state.CurrentString(), predicate)
 	}
 
@@ -161,7 +161,7 @@ func UntilString(stop string) comb.Parser[string] {
 	return comb.NewParser[string](
 		expected,
 		parse,
-		func(state comb.State) int {
+		func(_ *comb.ParserError, state comb.State) int {
 			if strings.Contains(state.CurrentString(), stop) {
 				return 0 // this is probably not what the user wants but the only correct value :(
 			}
@@ -224,7 +224,7 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 }
 
 func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) comb.Recoverer {
-	return func(state comb.State) int {
+	return func(_ *comb.ParserError, state comb.State) int {
 		count := 0
 		start := 0
 		for i, r := range state.CurrentString() {
@@ -331,7 +331,7 @@ func OneOfRunes(collection ...rune) comb.Parser[rune] {
 	parser := Satisfy(expected, func(r rune) bool {
 		return slices.Contains(collection, r)
 	})
-	parser.SwapRecoverer(func(state comb.State) int {
+	parser.SwapRecoverer(func(_ *comb.ParserError, state comb.State) int {
 		return strings.IndexAny(state.CurrentString(), string(collection))
 	})
 	return parser

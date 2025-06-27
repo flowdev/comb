@@ -71,9 +71,9 @@ func (pr ParseResult) prepareOutputFor(id int32) ParseResult {
 // (slices, maps, ...).
 type AnyParser interface {
 	ID() int32
-	parse(state State) ParseResult
+	parse(State) ParseResult
 	IsSaveSpot() bool
-	Recover(state State) int
+	Recover(*ParserError, State) int
 	IsStepRecoverer() bool
 	setID(int32) // only sets own ID
 }
@@ -197,7 +197,7 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 func (pp *PreparedParser[Output]) handleError(r ParseResult, recoverCache []int) (state State, nextID int32) {
 	Debugf("handleError - parserID=%d, pos=%d, Error=%v", r.Error.parserID, r.EndState.CurrentPos(), r.Error)
 
-	minWaste, minRec := pp.findMinWaste(r.EndState, r.Error.parserID, recoverCache)
+	minWaste, minRec := pp.findMinWaste(r.Error, r.EndState, recoverCache)
 
 	if minWaste < 0 {
 		Debugf("handleError - no recoverer found")
@@ -207,21 +207,21 @@ func (pp *PreparedParser[Output]) handleError(r ParseResult, recoverCache []int)
 	return r.EndState.MoveBy(minWaste), minRec.ID()
 }
 
-func (pp *PreparedParser[Output]) findMinWaste(state State, id int32, recoverCache []int,
+func (pp *PreparedParser[Output]) findMinWaste(pe *ParserError, state State, recoverCache []int,
 ) (minWaste int, minRec AnyParser) {
 	failed := false
-	minRec = pp.parsers[id].parser // try the failed parser first
+	minRec = pp.parsers[pe.parserID].parser // try the failed parser first
 	minWaste = math.MaxInt
 	if !minRec.IsStepRecoverer() {
-		minWaste = pp.recover(state, minRec, recoverCache)
-		Debugf("findMinWaste - failed parser has fast recoverer: ID=%d, waste=%d", id, minWaste)
+		minWaste = pp.recover(pe, state, minRec, recoverCache)
+		Debugf("findMinWaste - failed parser has fast recoverer: ID=%d, waste=%d", pe.parserID, minWaste)
 		if minWaste < 0 { // recoverer is either forbidden or unsuccessful
 			minWaste = math.MaxInt
 		}
 		failed = true
 	}
 	for _, rec := range pp.recoverers { // try all fast recoverers
-		if waste := rec.Recover(state); waste >= 0 && waste < minWaste {
+		if waste := rec.Recover(pe, state); waste >= 0 && waste < minWaste {
 			if waste == 0 { // it can't get better than this
 				Debugf("findMinWaste - optimal fast recoverer: ID=%d, waste=%d", rec.ID(), waste)
 				return waste, rec
@@ -235,13 +235,13 @@ func (pp *PreparedParser[Output]) findMinWaste(state State, id int32, recoverCac
 	if !failed {
 		stepRecs = make([]AnyParser, len(pp.stepRecoverers)+1)
 		copy(stepRecs, pp.stepRecoverers)
-		stepRecs[len(pp.stepRecoverers)] = pp.parsers[id].parser
-		Debugf("findMinWaste - failed parser has slow recoverer: ID=%d", id)
+		stepRecs[len(pp.stepRecoverers)] = pp.parsers[pe.parserID].parser
+		Debugf("findMinWaste - failed parser has slow recoverer: ID=%d", pe.parserID)
 	}
 	return pp.findMinStepWaste(stepRecs, state, minWaste, minRec)
 }
 
-func (pp *PreparedParser[Output]) recover(state State, rec AnyParser, recoverCache []int) int {
+func (pp *PreparedParser[Output]) recover(pe *ParserError, state State, rec AnyParser, recoverCache []int) int {
 	waste := recoverCache[rec.ID()]
 	if waste < RecoverWasteUnknown {
 		return waste
@@ -250,7 +250,7 @@ func (pp *PreparedParser[Output]) recover(state State, rec AnyParser, recoverCac
 	if waste >= 0 && waste >= pos {
 		return waste - pos
 	}
-	waste = rec.Recover(state)
+	waste = rec.Recover(pe, state)
 	recoverCache[rec.ID()] = waste
 	if waste >= 0 {
 		recoverCache[rec.ID()] = pos + waste

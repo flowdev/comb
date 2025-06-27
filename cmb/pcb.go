@@ -23,7 +23,7 @@ func EOF() comb.Parser[interface{}] {
 	}
 
 	return comb.SafeSpot(
-		comb.NewParser[interface{}](expected, parse, func(state comb.State) int {
+		comb.NewParser[interface{}](expected, parse, func(_ *comb.ParserError, state comb.State) int {
 			return state.BytesRemaining()
 		}),
 	)

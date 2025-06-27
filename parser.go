@@ -23,13 +23,13 @@ type prsr[Output any] struct {
 	ParserID
 	expected  string
 	parser    func(State) (State, Output, *ParserError)
-	recoverer func(State) int
+	recoverer Recoverer
 	saveSpot  bool
 }
 
 // NewParser is THE way to create leaf parsers.
 // recover can be nil to signal that there is no optimized recoverer available.
-// In case of an error the parser will be called again and again moving forward
+// In case of an error, the parser will be called again and again moving forward
 // one byte/rune at a time instead.
 func NewParser[Output any](
 	expected string,
@@ -65,8 +65,8 @@ func (p *prsr[Output]) IsSaveSpot() bool {
 func (p *prsr[Output]) setSaveSpot() {
 	p.saveSpot = true
 }
-func (p *prsr[Output]) Recover(state State) int {
-	return p.recoverer(state)
+func (p *prsr[Output]) Recover(pe *ParserError, state State) int {
+	return p.recoverer(pe, state)
 }
 func (p *prsr[Output]) IsStepRecoverer() bool {
 	return p.recoverer == nil
@@ -120,8 +120,8 @@ func (bp *brnchprsr[Output]) IsSaveSpot() bool {
 func (bp *brnchprsr[Output]) setSaveSpot() {
 	panic("a branch parser can never be a save spot")
 }
-func (bp *brnchprsr[Output]) Recover(_ State) int {
-	return RecoverWasteNever // never recover with a branch parser
+func (bp *brnchprsr[Output]) Recover(_ *ParserError, _ State) int {
+	return RecoverNever // never recover with a branch parser
 }
 func (bp *brnchprsr[Output]) IsStepRecoverer() bool {
 	return false
@@ -200,9 +200,9 @@ func (lp *lazyprsr[Output]) setSaveSpot() {
 	lp.once.Do(lp.ensurePrsr)
 	lp.cachedPrsr.setSaveSpot()
 }
-func (lp *lazyprsr[Output]) Recover(state State) int {
+func (lp *lazyprsr[Output]) Recover(pe *ParserError, state State) int {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.Recover(state)
+	return lp.cachedPrsr.Recover(pe, state)
 }
 func (lp *lazyprsr[Output]) IsStepRecoverer() bool {
 	lp.once.Do(lp.ensurePrsr)
@@ -249,7 +249,8 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
 	recoverer := p.Recover
-	if recoverer != nil && recoverer(NewFromBytes([]byte{}, 0)) == RecoverWasteNever {
+	tstState := NewFromBytes([]byte{}, 0)
+	if recoverer != nil && recoverer(tstState.NewSyntaxError("just a test"), tstState) == RecoverNever {
 		panic("can't make parser with Forbidden recoverer a safe spot")
 	}
 

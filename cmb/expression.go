@@ -270,7 +270,7 @@ func (e expr[Output]) subParse(state comb.State) (comb.State, levelIdx, *comb.Pa
 }
 
 // recover finds the operator with minimal waste that has the highest priority.
-func (e expr[Output]) recover(state comb.State) int {
+func (e expr[Output]) recover(pe *comb.ParserError, state comb.State) int {
 	return comb.RecoverWasteTooMuch
 }
 

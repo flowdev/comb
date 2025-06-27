@@ -11,8 +11,8 @@ import (
 // These are all parsers that are happy to consume the empty input and
 // all look ahead parsers.
 func Forbidden() comb.Recoverer {
-	return func(_ comb.State) int {
-		return comb.RecoverWasteNever // don't recover at all with this parser
+	return func(_ *comb.ParserError, _ comb.State) int {
+		return comb.RecoverNever // don't recover at all with this parser
 	}
 }
 
@@ -27,7 +27,7 @@ func IndexOf[S comb.Separator](stop S) comb.Recoverer {
 	switch v := reflect.ValueOf(stop); v.Kind() {
 	case reflect.Uint8:
 		xstop := interface{}(stop).(byte)
-		return func(state comb.State) int {
+		return func(_ *comb.ParserError, state comb.State) int {
 			waste := bytes.IndexByte(state.CurrentBytes(), xstop)
 			if waste < 0 {
 				return comb.RecoverWasteTooMuch
@@ -36,7 +36,7 @@ func IndexOf[S comb.Separator](stop S) comb.Recoverer {
 		}
 	case reflect.Int32:
 		rstop := interface{}(stop).(rune)
-		return func(state comb.State) int {
+		return func(_ *comb.ParserError, state comb.State) int {
 			waste := strings.IndexRune(state.CurrentString(), rstop)
 			if waste < 0 {
 				return comb.RecoverWasteTooMuch
@@ -48,7 +48,7 @@ func IndexOf[S comb.Separator](stop S) comb.Recoverer {
 		if len(sstop) == 0 {
 			panic("stop is empty")
 		}
-		return func(state comb.State) int {
+		return func(_ *comb.ParserError, state comb.State) int {
 			waste := strings.Index(state.CurrentString(), sstop)
 			if waste < 0 {
 				return comb.RecoverWasteTooMuch
@@ -60,7 +60,7 @@ func IndexOf[S comb.Separator](stop S) comb.Recoverer {
 		if len(bstop) == 0 {
 			panic("stop is empty")
 		}
-		return func(state comb.State) int {
+		return func(_ *comb.ParserError, state comb.State) int {
 			waste := bytes.Index(state.CurrentBytes(), bstop)
 			if waste < 0 {
 				return comb.RecoverWasteTooMuch
@@ -110,7 +110,7 @@ func IndexOfAny[S comb.Separator](stops ...S) comb.Recoverer {
 		// can never happen because of the `Separator` constraint!
 	}
 
-	indexOfOneOfByte := func(state comb.State) int {
+	indexOfOneOfByte := func(_ *comb.ParserError, state comb.State) int {
 		input := state.CurrentBytes()
 		xstops := interface{}(stops).([]byte)
 		pos := comb.RecoverWasteTooMuch
@@ -127,10 +127,10 @@ func IndexOfAny[S comb.Separator](stops ...S) comb.Recoverer {
 		}
 		return pos
 	}
-	indexOfOneOfRune := func(state comb.State) int {
+	indexOfOneOfRune := func(_ *comb.ParserError, state comb.State) int {
 		return strings.IndexAny(state.CurrentString(), string(interface{}(stops).([]rune)))
 	}
-	indexOfOneOfBytes := func(state comb.State) int {
+	indexOfOneOfBytes := func(_ *comb.ParserError, state comb.State) int {
 		input := state.CurrentBytes()
 		bstops := interface{}(stops).([][]byte)
 		pos := comb.RecoverWasteTooMuch
@@ -147,7 +147,7 @@ func IndexOfAny[S comb.Separator](stops ...S) comb.Recoverer {
 		}
 		return pos
 	}
-	indexOfOneOfString := func(state comb.State) int {
+	indexOfOneOfString := func(_ *comb.ParserError, state comb.State) int {
 		input := state.CurrentString()
 		sstops := interface{}(stops).([]string)
 		pos := comb.RecoverWasteTooMuch

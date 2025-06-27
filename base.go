@@ -23,19 +23,19 @@ type Separator interface {
 // Recoverer is a simplified parser that only returns the number of bytes
 // to reach a SafeSpot.
 // If it can't recover from the given state, it should return RecoverWasteTooMuch.
-// If it can't recover AT ALL, it should return RecoverWasteNever.
+// If it can't recover AT ALL, it should return RecoverNever.
 //
 // A Recoverer is used for recovering from an error in the input.
 // It helps to move forward to the next SafeSpot.
 // If no special recoverer is given, we will try the parser until it succeeds moving
 // forward 1 rune/byte at a time. :(
-type Recoverer func(state State) int
+type Recoverer func(pe *ParserError, state State) int
 
 const RecoverWasteUnknown = -1 // default value; 0 can't be used because it's a valid normal value
 const RecoverWasteTooMuch = -2 // used by recoverers to convey that they can't recover from the current state
-const RecoverWasteNever = -3   // used by recoverers to convey that they can't recover ever at all
+const RecoverNever = -3        // used by recoverers to convey that they can't recover ever at all
 
-const RecoverDefaultMaxErrors = 10 // the maximum number of errors to recover from (same as for the Go compiler)
+const DefaultMaxErrors = 10 // the maximum number of errors to recover from (same as for the Go compiler)
 
 // Parser defines the type of a generic Parser.
 // A few rules should be followed to prevent unexpected behaviour:
@@ -45,11 +45,11 @@ const RecoverDefaultMaxErrors = 10 // the maximum number of errors to recover fr
 type Parser[Output any] interface {
 	ID() int32
 	Expected() string
-	Parse(state State) (State, Output, *ParserError) // used by compiler (for type inference) and tests
-	parse(state State) ParseResult                   // used by PreparedParser
+	Parse(State) (State, Output, *ParserError) // used by compiler (for type inference) and tests
+	parse(State) ParseResult                   // used by PreparedParser
 	IsSaveSpot() bool
 	setSaveSpot() // used by SafeSpot parser
-	Recover(State) int
+	Recover(*ParserError, State) int
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during the construction phase
 	setID(int32)             // used by PreparedParser; only sets own ID
@@ -61,13 +61,13 @@ type Parser[Output any] interface {
 
 // RunOnString runs a parser on text input and returns the output and error(s).
 func RunOnString[Output any](input string, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromString(input, RecoverDefaultMaxErrors), NewPreparedParser(parse))
+	return RunOnState[Output](NewFromString(input, DefaultMaxErrors), NewPreparedParser(parse))
 }
 
 // RunOnBytes runs a parser on binary input and returns the output and error(s).
 // This is useful for binary or mixed binary/text parsers.
 func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) {
-	return RunOnState[Output](NewFromBytes(input, RecoverDefaultMaxErrors), NewPreparedParser(parse))
+	return RunOnState[Output](NewFromBytes(input, DefaultMaxErrors), NewPreparedParser(parse))
 }
 
 func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output, error) {

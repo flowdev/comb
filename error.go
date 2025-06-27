@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
@@ -11,11 +12,14 @@ import (
 // Parser Error
 //
 
-const errorMarker = 0x25B6 // easy to spot marker (▶) for exact error position
+const errorMarker = 0x25B6 // easy to spot marker (▶) for the exact error position
+
+var currentErrorID = new(atomic.Uint64)
 
 // ParserError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
 type ParserError struct {
+	id        uint64 // ID of the error (unique during error handling, possibly the runtime of the program)
 	text      string // the error message from the parser
 	pos       int    // pos is the byte index in the input (state.pos)
 	line, col int    // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
@@ -28,7 +32,7 @@ func (e *ParserError) Error() string {
 	return singleErrorMsg(*e)
 }
 
-// ClaimError is used by a parser to take over an error from a sub-parser.
+// ClaimError takes over an error from a sub-parser.
 func ClaimError(err *ParserError) *ParserError {
 	if err != nil {
 		err.parserID = -1

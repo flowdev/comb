@@ -170,7 +170,7 @@ func (st State) SaveError(err *ParserError) State {
 
 // NewSyntaxError creates a syntax error with the message and arguments at
 // the current state position.
-// For syntax errors `expected ` is prepended to the message and the usual
+// For syntax errors `expected ` is prepended to the message, and the usual
 // position and source line including marker are appended.
 func (st State) NewSyntaxError(msg string, args ...interface{}) *ParserError {
 	return st.NewSemanticError(`expected `+msg, args...)
@@ -180,7 +180,13 @@ func (st State) NewSyntaxError(msg string, args ...interface{}) *ParserError {
 // the current state position.
 // The usual position and source line including marker are appended to the message.
 func (st State) NewSemanticError(msg string, args ...interface{}) *ParserError {
-	newErr := &ParserError{text: fmt.Sprintf(msg, args...), pos: st.pos, binary: st.constant.binary, parserID: -1}
+	newErr := &ParserError{
+		id:       currentErrorID.Add(1), // only 0 after overflow
+		text:     fmt.Sprintf(msg, args...),
+		pos:      st.pos,
+		binary:   st.constant.binary,
+		parserID: -1,
+	}
 	if st.constant.binary { // the rare binary case is misusing the text case data a bit...
 		newErr.line, newErr.col, newErr.srcLine = st.bytesAround(st.pos)
 	} else {

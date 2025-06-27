@@ -437,7 +437,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			if !tt.givenParser.IsStepRecoverer() {
-				waste := tt.givenParser.Recover(NewFromString(tt.givenInput, 10))
+				waste := tt.givenParser.Recover(result.Error, NewFromString(tt.givenInput, 10))
 				if got, want := waste, tt.expectedWaste; got != want {
 					t.Errorf("save spot parser=%d, want=%d", got, want)
 				}
@@ -568,7 +568,7 @@ func IndexOf[S Separator](stop S) Recoverer {
 	switch v := reflect.ValueOf(stop); v.Kind() {
 	case reflect.Uint8:
 		xstop := interface{}(stop).(byte)
-		return func(state State) int {
+		return func(_ *ParserError, state State) int {
 			waste := bytes.IndexByte(state.CurrentBytes(), xstop)
 			if waste < 0 {
 				return RecoverWasteTooMuch
@@ -577,7 +577,7 @@ func IndexOf[S Separator](stop S) Recoverer {
 		}
 	case reflect.Int32:
 		rstop := interface{}(stop).(rune)
-		return func(state State) int {
+		return func(_ *ParserError, state State) int {
 			waste := strings.IndexRune(state.CurrentString(), rstop)
 			if waste < 0 {
 				return RecoverWasteTooMuch
@@ -589,7 +589,7 @@ func IndexOf[S Separator](stop S) Recoverer {
 		if len(sstop) == 0 {
 			panic("stop is empty")
 		}
-		return func(state State) int {
+		return func(_ *ParserError, state State) int {
 			waste := strings.Index(state.CurrentString(), sstop)
 			if waste < 0 {
 				return RecoverWasteTooMuch
@@ -601,7 +601,7 @@ func IndexOf[S Separator](stop S) Recoverer {
 		if len(bstop) == 0 {
 			panic("stop is empty")
 		}
-		return func(state State) int {
+		return func(_ *ParserError, state State) int {
 			waste := bytes.Index(state.CurrentBytes(), bstop)
 			if waste < 0 {
 				return RecoverWasteTooMuch
