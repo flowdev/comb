@@ -12,7 +12,7 @@ func Optional[Output any](parser comb.Parser[Output]) comb.Parser[Output] {
 		"Optional",
 		func() []comb.AnyParser {
 			return []comb.AnyParser{parser}
-		}, func(childID int32, childResult comb.ParseResult) comb.ParseResult {
+		}, func(_ *comb.ParserError, childID int32, childResult comb.ParseResult) comb.ParseResult {
 			var out Output
 			comb.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 			if childID >= 0 { // on the way up: Fetch

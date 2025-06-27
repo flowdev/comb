@@ -83,36 +83,36 @@ type brnchprsr[Output any] struct {
 	ParserID
 	expected      string
 	childs        func() []AnyParser
-	prsAfterChild func(childID int32, childResult ParseResult) ParseResult
+	prsAfterError func(pe *ParserError, childID int32, childResult ParseResult) ParseResult
 }
 
 // NewBranchParser is THE way to create branch parsers.
-// parseAfterChild will be called with a childID < 0 if it should parse from
-// the beginning.
+// parseAfterError will be called with a nil error and childID < 0
+// if it should parse from the beginning.
 func NewBranchParser[Output any](
 	expected string,
 	children func() []AnyParser,
-	parseAfterChild func(childID int32, childResult ParseResult) ParseResult,
+	parseAfterError func(pe *ParserError, childID int32, childResult ParseResult) ParseResult,
 ) Parser[Output] {
 	return &brnchprsr[Output]{
 		ParserID:      ParserID(-1),
 		expected:      expected,
 		childs:        children,
-		prsAfterChild: parseAfterChild,
+		prsAfterError: parseAfterError,
 	}
 }
 func (bp *brnchprsr[Output]) Expected() string {
 	return bp.expected
 }
 func (bp *brnchprsr[Output]) Parse(state State) (State, Output, *ParserError) {
-	result := bp.parseAfterChild(-1, ParseResult{EndState: state})
+	result := bp.parseAfterError(nil, -1, ParseResult{EndState: state})
 	if out, ok := result.Output.(Output); ok {
 		return result.EndState, out, result.Error
 	}
 	return result.EndState, ZeroOf[Output](), result.Error
 }
 func (bp *brnchprsr[Output]) parse(state State) ParseResult {
-	return bp.parseAfterChild(-1, ParseResult{EndState: state})
+	return bp.parseAfterError(nil, -1, ParseResult{EndState: state})
 }
 func (bp *brnchprsr[Output]) IsSaveSpot() bool {
 	return false
@@ -132,10 +132,10 @@ func (bp *brnchprsr[Output]) SwapRecoverer(_ Recoverer) {
 func (bp *brnchprsr[Output]) children() []AnyParser {
 	return bp.childs()
 }
-func (bp *brnchprsr[Output]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
+func (bp *brnchprsr[Output]) parseAfterError(pe *ParserError, childID int32, childResult ParseResult) ParseResult {
 	bp.ensureIDs()
 	childResult = childResult.prepareOutputFor(bp.ID())
-	result := bp.prsAfterChild(childID, childResult)
+	result := bp.prsAfterError(pe, childID, childResult)
 	result.setID(bp.ID())
 	if result.Error != nil && result.Error.parserID < 0 {
 		result.Error.parserID = bp.ID()

@@ -84,14 +84,14 @@ type AnyParser interface {
 // BranchParser just adds 2 methods to the Parser and AnyParser interfaces.
 type BranchParser interface {
 	children() []AnyParser
-	parseAfterChild(childID int32, childResult ParseResult) ParseResult
+	parseAfterError(pe *ParserError, childID int32, childResult ParseResult) ParseResult
 }
 
 // RunParser runs any parser and is able to handle branch parsers specially.
 // That is necessary to run child parsers of branch parsers correctly.
 func RunParser(ap AnyParser, inResult ParseResult) ParseResult {
 	if bp, ok := ap.(BranchParser); ok {
-		return bp.parseAfterChild(-1, inResult)
+		return bp.parseAfterError(nil, -1, inResult)
 	}
 	outResult := ap.parse(inResult.EndState)
 	outResult.parentResults = inResult.parentResults
@@ -161,8 +161,9 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	result := p.parser.parse(state)
 	nextID, nState := id, result.EndState
 	for result.Error != nil {
-		Debugf("parseAll - got Error=%v", result.Error)
-		nState = result.EndState.SaveError(result.Error)
+		pe := result.Error
+		Debugf("parseAll - got Error=%v", pe)
+		nState = result.EndState.SaveError(pe)
 		if nState.AtEnd() || nState.constant.maxErrors <= 0 { // give up
 			Debugf("parseAll - at EOF or recovery is turned off")
 			return zero, nState.Errors()
@@ -183,11 +184,14 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 		//   .AddOutput and .setID are NOT used (except for a new error).
 		result = RunParser(p.parser, result) // should always be successful (or the recoverer didn't do its job)
 		for p.parentID >= 0 {                // force the new result through all levels (error or not)
+			if result.Error != nil {
+				pe = result.Error
+			}
 			childID := nextID
 			nextID = p.parentID
 			p = pp.parsers[nextID]
-			result = (p.parser.(BranchParser)).parseAfterChild(childID, result)
-			Debugf("parseAll - parent (ID=%d) Error?=%v", nextID, result.Error)
+			result = (p.parser.(BranchParser)).parseAfterError(pe, childID, result)
+			Debugf("parseAll - parent (ID=%d) new Error?=%v", nextID, result.Error)
 		}
 	}
 	out, _ := result.Output.(Output)

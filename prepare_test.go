@@ -459,7 +459,7 @@ type map2data[PO1, PO2 any, MO any] struct {
 func (md *map2data[PO1, PO2, MO]) children() []AnyParser {
 	return []AnyParser{md.p1, md.p2}
 }
-func (md *map2data[PO1, PO2, MO]) parseAfterChild(childID int32, childResult ParseResult) ParseResult {
+func (md *map2data[PO1, PO2, MO]) parseAfterError(_ *ParserError, childID int32, childResult ParseResult) ParseResult {
 	var zero MO
 	var out1 PO1
 
@@ -533,7 +533,7 @@ func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2
 		p2: p2,
 		fn: fn,
 	}
-	return NewBranchParser[MO]("Map2", m2d.children, m2d.parseAfterChild)
+	return NewBranchParser[MO]("Map2", m2d.children, m2d.parseAfterError)
 }
 
 // ============================================================================

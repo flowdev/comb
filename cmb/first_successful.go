@@ -37,7 +37,8 @@ func (fsd *firstSuccessfulData[Output]) children() []comb.AnyParser {
 	return children
 }
 
-func (fsd *firstSuccessfulData[Output]) parseAfterChild(childID int32, childResult comb.ParseResult,
+func (fsd *firstSuccessfulData[Output]) parseAfterChild(
+	_ *comb.ParserError, childID int32, childResult comb.ParseResult,
 ) comb.ParseResult {
 	var bestRes partialFSResult[Output]
 	var bestResult comb.ParseResult

@@ -274,8 +274,8 @@ func (e expr[Output]) recover(pe *comb.ParserError, state comb.State) int {
 	return comb.RecoverWasteTooMuch
 }
 
-func (e expr[Output]) parseAfterChild(id int32, result comb.ParseResult) comb.ParseResult {
-	if id >= 0 {
+func (e expr[Output]) parseAfterChild(pe *comb.ParserError, childID int32, result comb.ParseResult) comb.ParseResult {
+	if childID >= 0 {
 		// TODO: implement partial parsing
 		return result
 	}

@@ -62,7 +62,9 @@ func (sd *separatedData[Output, S]) children() []comb.AnyParser {
 	return []comb.AnyParser{sd.parser, sd.separator}
 }
 
-func (sd *separatedData[Output, S]) parseAfterChild(childID int32, childResult comb.ParseResult) comb.ParseResult {
+func (sd *separatedData[Output, S]) parseAfterChild(
+	_ *comb.ParserError, childID int32, childResult comb.ParseResult,
+) comb.ParseResult {
 	var partRes partialSepResult[Output]
 
 	comb.Debugf("SeparatedMN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())

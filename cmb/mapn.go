@@ -115,7 +115,8 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []comb.AnyParser {
 	return children
 }
 
-func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(childID int32, childResult comb.ParseResult,
+func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(
+	_ *comb.ParserError, childID int32, childResult comb.ParseResult,
 ) comb.ParseResult {
 	var zero MO
 	var partRes partialMapResult[PO1, PO2, PO3, PO4]
