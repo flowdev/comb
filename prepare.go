@@ -23,6 +23,38 @@ type ParseResult struct {
 	parentResults []parentResult
 }
 
+type parents struct {
+	parentResults []parentResult
+	parentIDs     []int32
+	parentIdx     int
+}
+
+func (ps *parents) fillParentsOf(id int32) {
+	found := false
+	for i := len(ps.parentResults) - 1; i >= 0; i-- {
+		if found {
+			ps.parentIDs[i] = ps.parentResults[i].id
+		} else if ps.parentResults[i].id == id {
+			ps.parentIDs = make([]int32, i)
+			ps.parentIdx = i - 1
+			found = true
+		}
+	}
+}
+func (ps *parents) realParentID(p parserData) int32 {
+	if ps.parentIDs == nil {
+		ps.fillParentsOf(p.parser.ID())
+	}
+	if ps.parentIdx >= 0 {
+		ps.parentIdx--
+		return ps.parentIDs[ps.parentIdx+1]
+	}
+	if ps.parentIDs != nil {
+		return -1
+	}
+	return p.parentID
+}
+
 func (pr ParseResult) GetParentResults(src ParseResult) ParseResult {
 	pr.parentResults = src.parentResults
 	return pr
@@ -60,6 +92,9 @@ func (pr ParseResult) prepareOutputFor(id int32) ParseResult {
 	pr.parentResults = pr.parentResults[i:]
 	pr.parentResults[0].id = -1 // prepare the result for fetch
 	return pr
+}
+func (pr ParseResult) parents() *parents {
+	return &parents{parentResults: pr.parentResults, parentIdx: -1}
 }
 
 // ============================================================================
@@ -182,16 +217,19 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 		// The childID is NEVER < 0.
 		// ParseResult.FetchOutput and .prepareOutputFor are used;
 		//   .AddOutput and .setID are NOT used (except for a new error).
+		realParents := result.parents()
 		result = RunParser(p.parser, result) // should always be successful (or the recoverer didn't do its job)
-		for p.parentID >= 0 {                // force the new result through all levels (error or not)
+		parentID := realParents.realParentID(p)
+		for parentID >= 0 { // force the new result through all levels (error or not)
 			if result.Error != nil {
 				pe = result.Error
 			}
 			childID := nextID
-			nextID = p.parentID
+			nextID = parentID
 			p = pp.parsers[nextID]
 			result = (p.parser.(BranchParser)).parseAfterError(pe, childID, result)
 			Debugf("parseAll - parent (ID=%d) new Error?=%v", nextID, result.Error)
+			parentID = realParents.realParentID(p)
 		}
 	}
 	out, _ := result.Output.(Output)
