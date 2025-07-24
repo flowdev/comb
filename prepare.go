@@ -5,58 +5,12 @@ import (
 	"slices"
 )
 
-// ============================================================================
-// ParseResult - result of (branch) parsers
-//
-
-type parentResult struct {
-	id     int32
-	output interface{}
-}
-
 // ParseResult is the result of a parser.
 type ParseResult struct {
 	StartState State // state before parsing
 	EndState   State // state after parsing
 	Output     interface{}
 	Error      *ParserError
-	//parentResults []parentResult
-}
-
-type parents struct {
-	parentResults []parentResult
-	parentIDs     []int32
-	parentIdx     int
-}
-
-func (ps *parents) fillParentsOf(id int32) {
-	found := false
-	for i := len(ps.parentResults) - 1; i >= 0; i-- {
-		if found {
-			ps.parentIDs[i] = ps.parentResults[i].id
-		} else if ps.parentResults[i].id == id {
-			ps.parentIDs = make([]int32, i)
-			ps.parentIdx = i - 1
-			found = true
-		}
-	}
-}
-func (ps *parents) realParentID(p parserData) int32 {
-	if ps.parentIDs == nil {
-		ps.fillParentsOf(p.parser.ID())
-	}
-	if ps.parentIdx >= 0 {
-		ps.parentIdx--
-		return ps.parentIDs[ps.parentIdx+1]
-	}
-	if ps.parentIDs != nil {
-		return -1
-	}
-	return p.parentID
-}
-
-func (pr ParseResult) parents() *parents {
-	return &parents{parentResults: nil, parentIdx: -1}
 }
 
 // ============================================================================

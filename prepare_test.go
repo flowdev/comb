@@ -518,7 +518,6 @@ func (md *map2data[PO1, PO2, MO]) parseAfterError(pe *ParserError, childID int32
 	return ParseResult{
 		StartState: state, EndState: result2.EndState,
 		Output: out, Error: pErr,
-		// parentResults: result2.parentResults,
 	}
 }
 func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2) (MO, error)) Parser[MO] {

@@ -15,7 +15,7 @@ import (
 type State struct {
 	constant *ConstState
 	pos      int           // current position in the input a.k.a. the *byte* index
-	prevNl   int           // position of newline preceding 'pos' (-1 for line==1)
+	prevNl   int           // position of the newline preceding 'pos' (-1 for line==1)
 	line     int           // current line number
 	safeSpot int           // mark set by the SafeSpot parser
 	errors   []ParserError // errors that have been handled
