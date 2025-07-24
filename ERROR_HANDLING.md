@@ -162,40 +162,33 @@ It is allowed to not return child parsers as long as they never fail
 and they are no safe spot parsers.
 A child parser consuming optional space is a good example.
 
-The `parseAfterChild` function is the heart of a branch parser and
+The `parseAfterError` function is the heart of a branch parser and
 performs the parsing itself.
-It will be called with a `childID < 0` if it should parse from the beginning.
+It will be called with `err == nil` and a `childID < 0` if it should parse from the beginning.
 This way you have to implement _only one_ function for parsing. \
 The state to start own parsing with always is the `childResult.EndState`.
-During normal parsing the `childID` will always be `< 0`.
-A `childID >= 0` signals that error recovery is going on. \
+During normal parsing `err` will always be `nil` and the `childID` will always be `< 0`.
+An `err != nil` or `childID >= 0` signals that error recovery is going on. \
 The `parseAfterChild` function has to use a few functions and methods from the main parser package:
 * Child parsers have to be called with:
     ```go
-    func RunParser(ap AnyParser, inResult ParseResult) ParseResult
+    func RunParser(ap AnyParser, parent int32, inResult ParseResult) ParseResult
     ```
   This ensures the correct handling of branch parsers.
 * Partial output has to be saved by calling:
     ```go
-    func (pr ParseResult) AddOutput(partialOutput interface{}) ParseResult
+    func (e *ParserError) StoreParserData(parserID int32, data interface{})
     ```
   This ensures that no parser output gets lost.
-  It's usually done when returning, e.g.: `return result.AddOutput(partial)`
-* If the `childID >= 0`, the partial output can be fetched with:
+* If the `err != nil`, the partial output can be fetched with:
     ```go
-    func (pr ParseResult) FetchOutput() (interface{}, ParseResult)
+    func (e *ParserError) ParserData(parserID int32) interface{}
     ```
-  This gives the partial output saved with `AddOutput` back.
-* If you want to create a **new** `ParseResult`, you have to transfer the
-  existing partial results to the new one with:
-    ```go
-    func (pr ParseResult) GetParentResults(source ParseResult) ParseResult
-    ```
-  Otherwise, all partial results from other parsers would be lost.
+  This gives the partial output saved with `StoreParserData` back.
 
 So please follow these rules. They shouldn't restrict you in any way.
 If your branch parser doesn't have any partial results to be saved,
-you needn't use `AddOutput` and `FetchOutput` at all.
+you needn't use `StoreParserData` and `ParserData` at all.
 
 Of course, you are welcome to use
 `FirstSuccessful`, `MapN`, `SeparatedMN` or  `Expression` as a starting point.

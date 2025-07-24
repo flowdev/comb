@@ -58,7 +58,7 @@ func TestChar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotOutput, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -81,7 +81,7 @@ func BenchmarkChar(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestAlpha0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -166,7 +166,7 @@ func BenchmarkAlpha0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -236,7 +236,7 @@ func TestAlpha1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -259,7 +259,7 @@ func BenchmarkAlpha1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -321,7 +321,7 @@ func TestDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -344,7 +344,7 @@ func BenchmarkDigit0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -414,7 +414,7 @@ func TestDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -437,7 +437,7 @@ func BenchmarkDigit1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -499,7 +499,7 @@ func TestHexDigit0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -522,7 +522,7 @@ func BenchmarkHexDigit0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -592,7 +592,7 @@ func TestHexDigit1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -615,7 +615,7 @@ func BenchmarkHexDigit1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -717,7 +717,7 @@ func TestWhitespace0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -741,7 +741,7 @@ func BenchmarkWhitespace0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -843,7 +843,7 @@ func TestWhitespace1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -867,7 +867,7 @@ func BenchmarkWhitespace1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -969,7 +969,7 @@ func TestAlphanumeric0(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -992,7 +992,7 @@ func BenchmarkAlphanumeric0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1102,7 +1102,7 @@ func TestAlphanumeric1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1125,7 +1125,7 @@ func BenchmarkAlphanumeric1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1187,7 +1187,7 @@ func TestLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1210,7 +1210,7 @@ func BenchmarkLF(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1272,7 +1272,7 @@ func TestCR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1295,7 +1295,7 @@ func BenchmarkCR(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1365,7 +1365,7 @@ func TestCRLF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1388,7 +1388,7 @@ func BenchmarkCRLF(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1434,7 +1434,7 @@ func TestOneOf(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1457,7 +1457,7 @@ func BenchmarkOneOf(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1511,7 +1511,7 @@ func TestSatisfy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1534,7 +1534,7 @@ func BenchmarkSatisfy(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1596,7 +1596,7 @@ func TestSpace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1619,7 +1619,7 @@ func BenchmarkSpace(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1681,7 +1681,7 @@ func TestTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1704,7 +1704,7 @@ func BenchmarkTab(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1750,7 +1750,7 @@ func TestToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1772,7 +1772,7 @@ func BenchmarkToken(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -1856,7 +1856,7 @@ func TestSatisfyMN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.args.p.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.args.p.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -1879,6 +1879,6 @@ func BenchmarkSatisfyMN(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = p.Parse(input)
+		_, _, _ = p.Parse(-1, input)
 	}
 }

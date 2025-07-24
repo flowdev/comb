@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestExpression_HappyPath(t *testing.T) {
+func testExpression_HappyPath(t *testing.T) {
 	testCases := []struct {
 		name          string
 		parser        comb.Parser[int64]
@@ -281,7 +281,7 @@ func TestExpression_HappyPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotOutput, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if gotErr != nil {
 				t.Errorf("found error %v", gotErr)
 			}

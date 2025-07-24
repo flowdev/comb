@@ -68,6 +68,6 @@ func BenchmarkFirstSuccessful(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = p.Parse(input)
+		_, _, _ = p.Parse(-1, input)
 	}
 }

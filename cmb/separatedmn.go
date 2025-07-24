@@ -14,7 +14,7 @@ import (
 // If the separator parser is nil, SeparatedMN acts as ManyMN.
 //
 // The parser will fail if both parsers together accepted an empty input
-// in order to prevent infinite loops.
+// to prevent infinite loops.
 func SeparatedMN[Output any, S comb.Separator](
 	parser comb.Parser[Output], separator comb.Parser[S],
 	atLeast, atMost int,
@@ -38,11 +38,13 @@ func SeparatedMN[Output any, S comb.Separator](
 		atMost:              atMost,
 		parseSeparatorAtEnd: parseSeparatorAtEnd,
 	}
-	return comb.NewBranchParser[[]Output](expected, sd.children, sd.parseAfterChild)
+	p := comb.NewBranchParser[[]Output](expected, sd.children, sd.parseAfterChild)
+	sd.id = p.ID
+	return p
 }
 
 type separatedData[Output any, S comb.Separator] struct {
-	id                  uint64
+	id                  func() int32
 	parser              comb.Parser[Output]
 	separator           comb.Parser[S]
 	atLeast             int
@@ -63,15 +65,14 @@ func (sd *separatedData[Output, S]) children() []comb.AnyParser {
 }
 
 func (sd *separatedData[Output, S]) parseAfterChild(
-	_ *comb.ParserError, childID int32, childResult comb.ParseResult,
+	err *comb.ParserError, childID int32, childResult comb.ParseResult,
 ) comb.ParseResult {
 	var partRes partialSepResult[Output]
 
 	comb.Debugf("SeparatedMN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
 
 	if childID >= 0 { // on the way up: Fetch
-		var o interface{}
-		o, childResult = childResult.FetchOutput()
+		o := err.ParserData(sd.id())
 		partRes, _ = o.(partialSepResult[Output])
 	} else {
 		partRes.outs = make([]Output, 0, min(32, sd.atMost))
@@ -79,17 +80,19 @@ func (sd *separatedData[Output, S]) parseAfterChild(
 
 	if childResult.Error != nil {
 		if sd.atLeast > 0 || childResult.StartState.SafeSpotMoved(childResult.EndState) { // fail
-			return childResult.AddOutput(partRes)
+			childResult.Error.StoreParserData(sd.id(), partRes)
+			return childResult
 		}
 		childResult.Error = nil // ignore error: we have enough output
 		childResult.Output = partRes.outs
-		return childResult.AddOutput(partRes)
+		return childResult
 	}
 
 	if childID >= 0 && childID != sd.parser.ID() && childID != sd.separator.ID() {
-		childResult.Error = childResult.EndState.NewSemanticError(
+		childResult.Error = childResult.EndState.NewSemanticError(sd.id(),
 			"unable to parser after child with unknown ID %d", childID)
-		return childResult.AddOutput(partRes)
+		childResult.Error.StoreParserData(sd.id(), partRes)
+		return childResult
 	}
 
 	endResult := childResult
@@ -105,17 +108,18 @@ func (sd *separatedData[Output, S]) parseAfterChild(
 	for {
 		if count >= sd.atMost {
 			endResult.Output = partRes.outs
-			return endResult.AddOutput(partRes)
+			return endResult
 		}
 
-		endResult = comb.RunParser(sd.parser, childResult)
+		endResult = comb.RunParser(sd.parser, sd.id(), childResult)
 		if endResult.Error != nil {
 			if sd.atLeast > count || childResult.EndState.SafeSpotMoved(endResult.EndState) { // fail
-				return endResult.AddOutput(partRes)
+				endResult.Error.StoreParserData(sd.id(), partRes)
+				return endResult
 			}
 			endResult.Error = nil // ignore error: we have enough output
 			endResult.Output = partRes.outs
-			return endResult.AddOutput(partRes)
+			return endResult
 		}
 		out, _ := endResult.Output.(Output)
 		partRes.outs = append(partRes.outs, out)
@@ -123,14 +127,15 @@ func (sd *separatedData[Output, S]) parseAfterChild(
 
 		sepResult := endResult
 		if sd.separator != nil {
-			sepResult = comb.RunParser(sd.separator, endResult)
+			sepResult = comb.RunParser(sd.separator, sd.id(), endResult)
 			if sepResult.Error != nil {
 				if sd.atLeast > count || endResult.EndState.SafeSpotMoved(sepResult.EndState) { // fail
-					return sepResult.AddOutput(partRes)
+					sepResult.Error.StoreParserData(sd.id(), partRes)
+					return sepResult
 				}
 				endResult.Error = nil // ignore error: we have enough output
 				endResult.Output = partRes.outs
-				return endResult.AddOutput(partRes)
+				return endResult
 			}
 			if sd.parseSeparatorAtEnd {
 				endResult = sepResult
@@ -140,10 +145,11 @@ func (sd *separatedData[Output, S]) parseAfterChild(
 		// Checking for infinite loops, if nothing was consumed,
 		// the provided parser would make us go around in circles.
 		if !childResult.EndState.Moved(sepResult.EndState) {
-			sepResult.Error = sepResult.EndState.NewSyntaxError(
-				"many %s (empty element incl. separator => endless loop)", sd.parser.Expected())
+			sepResult.Error = sepResult.EndState.NewSyntaxError(sd.id(),
+				"many %s (endless loop because of empty result AND empty separator)", sd.parser.Expected())
 			sepResult.Output = partRes.outs
-			return sepResult.AddOutput(partRes)
+			sepResult.Error.StoreParserData(sd.id(), partRes)
+			return sepResult
 		}
 		childResult = sepResult
 	}

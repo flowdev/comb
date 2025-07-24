@@ -1,18 +1,29 @@
 package comb
 
 import (
+	"math"
 	"sync"
 )
 
-// ParserID is the base of every comb parser.
-// It enables registering of all parsers and error recovery.
-type ParserID int32
+const ParentUnknown = math.MinInt32
 
-func (pid *ParserID) ID() int32 {
-	return int32(*pid)
+// ParserIDs is the base of every comb parser.
+// It enables registering of all parsers and error recovery.
+type ParserIDs struct {
+	id, parent int32
 }
-func (pid *ParserID) setID(id int32) {
-	*pid = ParserID(id)
+
+func (pids *ParserIDs) ID() int32 {
+	return pids.id
+}
+func (pids *ParserIDs) setID(id int32) {
+	pids.id = id
+}
+func (pids *ParserIDs) LastParent() int32 {
+	return pids.parent
+}
+func (pids *ParserIDs) setParent(id int32) {
+	pids.parent = id
 }
 
 // ============================================================================
@@ -20,14 +31,14 @@ func (pid *ParserID) setID(id int32) {
 //
 
 type prsr[Output any] struct {
-	ParserID
+	ParserIDs
 	expected  string
 	parser    func(State) (State, Output, *ParserError)
 	recoverer Recoverer
 	saveSpot  bool
 }
 
-// NewParser is THE way to create leaf parsers.
+// NewParser is THE way to create simple leaf parsers.
 // recover can be nil to signal that there is no optimized recoverer available.
 // In case of an error, the parser will be called again and again moving forward
 // one byte/rune at a time instead.
@@ -37,26 +48,29 @@ func NewParser[Output any](
 	recover Recoverer,
 ) Parser[Output] {
 	p := &prsr[Output]{
+		ParserIDs: ParserIDs{id: -1, parent: ParentUnknown},
 		expected:  expected,
 		parser:    parse,
 		recoverer: recover,
 	}
-	p.setID(-1)
 	return p
 }
 
 func (p *prsr[Output]) Expected() string {
 	return p.expected
 }
-func (p *prsr[Output]) Parse(state State) (State, Output, *ParserError) {
+func (p *prsr[Output]) Parse(parent int32, state State) (State, Output, *ParserError) {
+	if parent != ParentUnknown {
+		p.setParent(parent)
+	}
 	nState, out, err := p.parser(state)
 	if err != nil && err.parserID < 0 {
 		err.parserID = p.ID()
 	}
 	return nState, out, err
 }
-func (p *prsr[Output]) parse(state State) ParseResult {
-	nState, output, err := p.Parse(state)
+func (p *prsr[Output]) parse(parent int32, state State) ParseResult {
+	nState, output, err := p.Parse(parent, state)
 	return ParseResult{StartState: state, EndState: nState, Output: output, Error: err}
 }
 func (p *prsr[Output]) IsSaveSpot() bool {
@@ -80,7 +94,7 @@ func (p *prsr[Output]) SwapRecoverer(newRecoverer Recoverer) {
 //
 
 type brnchprsr[Output any] struct {
-	ParserID
+	ParserIDs
 	expected      string
 	childs        func() []AnyParser
 	prsAfterError func(pe *ParserError, childID int32, childResult ParseResult) ParseResult
@@ -95,7 +109,7 @@ func NewBranchParser[Output any](
 	parseAfterError func(pe *ParserError, childID int32, childResult ParseResult) ParseResult,
 ) Parser[Output] {
 	return &brnchprsr[Output]{
-		ParserID:      ParserID(-1),
+		ParserIDs:     ParserIDs{id: -1, parent: -1},
 		expected:      expected,
 		childs:        children,
 		prsAfterError: parseAfterError,
@@ -104,15 +118,15 @@ func NewBranchParser[Output any](
 func (bp *brnchprsr[Output]) Expected() string {
 	return bp.expected
 }
-func (bp *brnchprsr[Output]) Parse(state State) (State, Output, *ParserError) {
-	result := bp.parseAfterError(nil, -1, ParseResult{EndState: state})
+func (bp *brnchprsr[Output]) Parse(parent int32, state State) (State, Output, *ParserError) {
+	result := bp.parseAfterError(nil, -1, parent, ParseResult{EndState: state})
 	if out, ok := result.Output.(Output); ok {
 		return result.EndState, out, result.Error
 	}
 	return result.EndState, ZeroOf[Output](), result.Error
 }
-func (bp *brnchprsr[Output]) parse(state State) ParseResult {
-	return bp.parseAfterError(nil, -1, ParseResult{EndState: state})
+func (bp *brnchprsr[Output]) parse(parent int32, state State) ParseResult {
+	return bp.parseAfterError(nil, -1, parent, ParseResult{EndState: state})
 }
 func (bp *brnchprsr[Output]) IsSaveSpot() bool {
 	return false
@@ -132,19 +146,16 @@ func (bp *brnchprsr[Output]) SwapRecoverer(_ Recoverer) {
 func (bp *brnchprsr[Output]) children() []AnyParser {
 	return bp.childs()
 }
-func (bp *brnchprsr[Output]) parseAfterError(pe *ParserError, childID int32, childResult ParseResult) ParseResult {
+func (bp *brnchprsr[Output]) parseAfterError(pe *ParserError, childID, parentID int32, childResult ParseResult) ParseResult {
 	bp.ensureIDs()
-	childResult = childResult.prepareOutputFor(bp.ID())
-	result := bp.prsAfterError(pe, childID, childResult)
-	result.setID(bp.ID())
-	if result.Error != nil && result.Error.parserID < 0 {
-		result.Error.parserID = bp.ID()
+	if parentID != ParentUnknown {
+		bp.setParent(parentID)
 	}
-	return result
+	return bp.prsAfterError(pe, childID, childResult)
 }
 func (bp *brnchprsr[Output]) ensureIDs() { // only needed if Parse was called directly
 	if bp.ID() < 0 { // ensure sane IDs
-		bp.setID(0)
+		bp.id = 0
 		for i, child := range bp.childs() {
 			child.setID(int32(i + 1))
 		}
@@ -180,17 +191,21 @@ func (lp *lazyprsr[Output]) ID() int32 {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.ID()
 }
+func (lp *lazyprsr[Output]) LastParent() int32 {
+	lp.once.Do(lp.ensurePrsr)
+	return lp.cachedPrsr.LastParent()
+}
 func (lp *lazyprsr[Output]) Expected() string {
 	lp.once.Do(lp.ensurePrsr)
 	return lp.cachedPrsr.Expected()
 }
-func (lp *lazyprsr[Output]) Parse(state State) (State, Output, *ParserError) {
+func (lp *lazyprsr[Output]) Parse(parent int32, state State) (State, Output, *ParserError) {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.Parse(state)
+	return lp.cachedPrsr.Parse(parent, state)
 }
-func (lp *lazyprsr[Output]) parse(state State) ParseResult {
+func (lp *lazyprsr[Output]) parse(parent int32, state State) ParseResult {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.parse(state)
+	return lp.cachedPrsr.parse(parent, state)
 }
 func (lp *lazyprsr[Output]) IsSaveSpot() bool {
 	lp.once.Do(lp.ensurePrsr)
@@ -218,6 +233,96 @@ func (lp *lazyprsr[Output]) SwapRecoverer(newRecoverer Recoverer) {
 func (lp *lazyprsr[Output]) setID(id int32) {
 	lp.once.Do(lp.ensurePrsr)
 	lp.cachedPrsr.setID(id)
+}
+func (lp *lazyprsr[Output]) setParent(id int32) {
+	lp.once.Do(lp.ensurePrsr)
+	lp.cachedPrsr.setParent(id)
+}
+
+// ============================================================================
+// Dynamic Parser
+//
+
+type DynamicParser[Output any] interface {
+	ID() int32
+	LastParent() int32
+	Expected() string
+	Parse(parent int32, state State) (State, Output, *ParserError)
+	ParseAfterError(err *ParserError, childID, parentID int32, state State) (State, Output, *ParserError)
+	IsSaveSpot() bool
+	Recover(*ParserError, State) int
+	IsStepRecoverer() bool
+	SwapRecoverer(Recoverer)
+	SetID(int32)     // sets own ID
+	SetParent(int32) // sets ID of current parent
+}
+
+type dynprsr[Output any] struct {
+	parser DynamicParser[Output]
+}
+
+// NewDynamicParser just stores a DynamicParser and delegates every call to it.
+// This allows the implementation of very flexible parsers.
+func NewDynamicParser[Output any](parser DynamicParser[Output]) Parser[Output] {
+	return &dynprsr[Output]{parser: parser}
+}
+
+func (dp *dynprsr[Output]) ID() int32 {
+	return dp.parser.ID()
+}
+func (dp *dynprsr[Output]) LastParent() int32 {
+	return dp.parser.LastParent()
+}
+func (dp *dynprsr[Output]) Expected() string {
+	return dp.parser.Expected()
+}
+func (dp *dynprsr[Output]) Parse(parent int32, state State) (State, Output, *ParserError) {
+	return dp.parser.Parse(parent, state)
+}
+func (dp *dynprsr[Output]) parse(parent int32, state State) ParseResult {
+	nState, output, err := dp.parser.Parse(parent, state)
+	result := ParseResult{
+		StartState: state,
+		EndState:   nState,
+		Output:     output,
+		Error:      err,
+	}
+	if err != nil {
+		result.EndState = state
+	}
+	return result
+}
+func (dp *dynprsr[Output]) IsSaveSpot() bool {
+	return dp.parser.IsSaveSpot()
+}
+func (dp *dynprsr[Output]) setSaveSpot() {
+	panic("a dynamic parser handles save spots itself")
+}
+func (dp *dynprsr[Output]) parseAfterError(pe *ParserError, childID, parentID int32, childResult ParseResult) ParseResult {
+	nState, output, err := dp.parser.ParseAfterError(pe, childID, parentID, childResult.EndState)
+	childResult.StartState = childResult.EndState
+	childResult.Output = output
+	childResult.Error = err
+	if err == nil {
+		childResult.EndState = nState
+	}
+	return childResult
+}
+
+func (dp *dynprsr[Output]) Recover(pe *ParserError, state State) int {
+	return dp.parser.Recover(pe, state)
+}
+func (dp *dynprsr[Output]) IsStepRecoverer() bool {
+	return dp.parser.IsStepRecoverer()
+}
+func (dp *dynprsr[Output]) SwapRecoverer(newRecoverer Recoverer) {
+	dp.parser.SwapRecoverer(newRecoverer)
+}
+func (dp *dynprsr[Output]) setID(id int32) {
+	dp.parser.SetID(id)
+}
+func (dp *dynprsr[Output]) setParent(id int32) {
+	dp.parser.SetParent(id)
 }
 
 // ============================================================================
@@ -247,10 +352,12 @@ func (lp *lazyprsr[Output]) setID(id int32) {
 //     SafeSpot will treat the sub-parser as a leaf parser.
 //     Any error will look as if coming from SafeSpot itself.
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
+	var sp Parser[Output]
+
 	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
 	recoverer := p.Recover
 	tstState := NewFromBytes([]byte{}, 0)
-	if recoverer != nil && recoverer(tstState.NewSyntaxError("just a test"), tstState) == RecoverNever {
+	if recoverer != nil && recoverer(tstState.NewSyntaxError(1, "just a test"), tstState) == RecoverNever {
 		panic("can't make parser with Forbidden recoverer a safe spot")
 	}
 
@@ -259,13 +366,13 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	}
 
 	nParse := func(state State) (State, Output, *ParserError) {
-		nState, output, err := p.Parse(state)
+		nState, output, err := p.Parse(sp.ID(), state)
 		if err == nil {
 			nState = nState.MoveSafeSpot() // move the mark!
 		}
-		return nState, output, ClaimError(err)
+		return nState, output, ClaimError(err, sp.ID())
 	}
-	sp := NewParser[Output](p.Expected(), nParse, p.Recover)
+	sp = NewParser[Output](p.Expected(), nParse, p.Recover)
 	sp.setSaveSpot()
 	return sp
 }

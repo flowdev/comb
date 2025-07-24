@@ -47,7 +47,7 @@ func Map3[PO1, PO2, PO3, MO any, ParserPO1 Parserish[PO1], ParserPO2 Parserish[P
 
 		mapped, err := fn(output1, output2, output3)
 		if err != nil {
-			return state, zero, state.NewSemanticError(err.Error())
+			return state, zero, state.NewSemanticError(2, err.Error()) // we don't have a real parser ID
 		}
 
 		return newState3, mapped, nil
@@ -63,12 +63,12 @@ func Char(char rune) Parser[rune] {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state, utf8.RuneError, state.NewSyntaxError("%q (at EOF)", expected)
+				return state, utf8.RuneError, state.NewSyntaxError(3, "%q (at EOF)", expected)
 			}
-			return state, utf8.RuneError, state.NewSyntaxError("%q (got UTF-8 error)", expected)
+			return state, utf8.RuneError, state.NewSyntaxError(3, "%q (got UTF-8 error)", expected)
 		}
 		if r != char {
-			return state, utf8.RuneError, state.NewSyntaxError("%q (got %q)", expected, r)
+			return state, utf8.RuneError, state.NewSyntaxError(3, "%q (got %q)", expected, r)
 		}
 
 		return state.MoveBy(size), r, nil
@@ -84,28 +84,28 @@ func Char2[Output rune](char rune) Parser[Output] {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state, utf8.RuneError, state.NewSyntaxError("%q (at EOF)", expected)
+				return state, utf8.RuneError, state.NewSyntaxError(4, "%q (at EOF)", expected)
 			}
-			return state, utf8.RuneError, state.NewSyntaxError("%q (got UTF-8 error)", expected)
+			return state, utf8.RuneError, state.NewSyntaxError(4, "%q (got UTF-8 error)", expected)
 		}
 		if r != char {
-			return state, utf8.RuneError, state.NewSyntaxError("%q (got %q)", expected, r)
+			return state, utf8.RuneError, state.NewSyntaxError(4, "%q (got %q)", expected, r)
 		}
 
 		return state.MoveBy(size), Output(r), nil
 	}
 }
 
-// UntilString parses until it finds a token in the input, and returns
+// UntilString parses until it finds a token in the input and returns
 // the part of the input that preceded the token.
-// If found the parser moves beyond the stop string.
+// If found, the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
 func UntilString(stop string) Parser[string] {
 	return func(state comb.State) (comb.State, string, *comb.ParserError) {
 		input := state.CurrentString()
 		i := strings.Index(input, stop)
 		if i == -1 {
-			return state, "", state.NewSyntaxError("... %q", stop)
+			return state, "", state.NewSyntaxError(5, "... %q", stop)
 		}
 
 		newState := state.MoveBy(i + len(stop))

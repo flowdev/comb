@@ -62,7 +62,7 @@ func BenchmarkOptional(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -114,7 +114,7 @@ func BenchmarkPeek(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -166,7 +166,7 @@ func BenchmarkAssign(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -236,7 +236,7 @@ func BenchmarkDelimited(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -302,7 +302,7 @@ func BenchmarkPrefixed(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -368,7 +368,7 @@ func BenchmarkTerminated(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -448,7 +448,7 @@ func BenchmarkMap(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -535,6 +535,6 @@ func BenchmarkMap2(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }

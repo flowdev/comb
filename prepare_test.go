@@ -310,7 +310,7 @@ func TestBranchParserToAnyParser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			prepp := NewPreparedParser[string](tt.givenParser) // this calls ParserToAnyParser
 			aParse := prepp.parsers[0].parser
-			result := aParse.parse(NewFromString(tt.givenInput, 10))
+			result := aParse.parse(-1, NewFromString(tt.givenInput, 10))
 			if got, want := aParse.IsSaveSpot(), false; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
@@ -412,7 +412,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			prepp := NewPreparedParser[rune](tt.givenParser) // this calls ParserToAnyParser
 			aParse := prepp.parsers[0].parser
-			result := aParse.parse(NewFromString(tt.givenInput, 10))
+			result := aParse.parse(-1, NewFromString(tt.givenInput, 10))
 			if got, want := tt.givenParser.IsSaveSpot(), tt.expectedSaveSpot; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
@@ -454,12 +454,13 @@ type map2data[PO1, PO2 any, MO any] struct {
 	p1 Parser[PO1]
 	p2 Parser[PO2]
 	fn func(PO1, PO2) (MO, error)
+	id func() int32
 }
 
 func (md *map2data[PO1, PO2, MO]) children() []AnyParser {
 	return []AnyParser{md.p1, md.p2}
 }
-func (md *map2data[PO1, PO2, MO]) parseAfterError(_ *ParserError, childID int32, childResult ParseResult) ParseResult {
+func (md *map2data[PO1, PO2, MO]) parseAfterError(pe *ParserError, childID int32, childResult ParseResult) ParseResult {
 	var zero MO
 	var out1 PO1
 
@@ -467,26 +468,28 @@ func (md *map2data[PO1, PO2, MO]) parseAfterError(_ *ParserError, childID int32,
 	Debugf("Map2 - pos=%d; parse after ID %d", state.CurrentPos(), childID)
 
 	if childID >= 0 { // on the way up: Fetch
-		var o interface{}
-		o, childResult = childResult.FetchOutput()
+		o := pe.ParserData(md.id())
 		out1, _ = o.(PO1)
 	}
 
 	if childResult.Error != nil {
-		return childResult.AddOutput(out1) // we can't avoid any errors by going another path
+		childResult.Error.StoreParserData(md.id(), out1)
+		return childResult
 	}
 
 	if childID >= 0 && childID != md.p1.ID() && childID != md.p2.ID() {
-		childResult.Error = state.NewSemanticError("unable to parse after child with unknown ID %d", childID)
+		childResult.Error = state.NewSemanticError(md.id(), "unable to parse after child with unknown ID %d", childID)
 		childResult.Output = zero
+		childResult.Error.StoreParserData(md.id(), out1)
 		return childResult
 	}
 
 	result1 := childResult
 	if childID < 0 {
-		result1 = RunParser(md.p1, childResult)
+		result1 = RunParser(md.p1, md.id(), childResult)
 		if result1.Error != nil {
-			return result1.AddOutput(result1.Output)
+			result1.Error.StoreParserData(md.id(), result1.Output)
+			return result1
 		}
 		out1, _ = result1.Output.(PO1)
 	} else if childID == md.p1.ID() {
@@ -495,12 +498,13 @@ func (md *map2data[PO1, PO2, MO]) parseAfterError(_ *ParserError, childID int32,
 
 	result2 := childResult
 	if childID < 0 || childID == md.p1.ID() {
-		result2 = RunParser(md.p2, result1)
+		result2 = RunParser(md.p2, md.id(), result1)
 		if result2.Error != nil {
 			out2, _ := result2.Output.(PO2)
 			out, _ := md.fn(out1, out2)
 			result2.Output = out
-			return result2.AddOutput(out1)
+			result2.Error.StoreParserData(md.id(), out1)
+			return result2
 		}
 	}
 	out2, _ := result2.Output.(PO2)
@@ -508,14 +512,14 @@ func (md *map2data[PO1, PO2, MO]) parseAfterError(_ *ParserError, childID int32,
 	out, err := md.fn(out1, out2)
 	var pErr *ParserError
 	if err != nil {
-		pErr = result2.EndState.NewSemanticError(err.Error())
+		pErr = result2.EndState.NewSemanticError(md.id(), err.Error())
 	}
 
 	return ParseResult{
 		StartState: state, EndState: result2.EndState,
 		Output: out, Error: pErr,
-		parentResults: result2.parentResults,
-	}.AddOutput(out)
+		// parentResults: result2.parentResults,
+	}
 }
 func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2) (MO, error)) Parser[MO] {
 	if p1 == nil {
@@ -533,7 +537,9 @@ func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2
 		p2: p2,
 		fn: fn,
 	}
-	return NewBranchParser[MO]("Map2", m2d.children, m2d.parseAfterError)
+	p := NewBranchParser[MO]("Map2", m2d.children, m2d.parseAfterError)
+	m2d.id = p.ID
+	return p
 }
 
 // ============================================================================
@@ -541,24 +547,27 @@ func Map2[PO1, PO2 any, MO any](p1 Parser[PO1], p2 Parser[PO2], fn func(PO1, PO2
 //
 
 func Char(char rune) Parser[rune] {
+	var p Parser[rune]
+
 	expected := strconv.QuoteRune(char)
 
 	parse := func(state State) (State, rune, *ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
 			if size == 0 {
-				return state, utf8.RuneError, state.NewSyntaxError("%s (at EOF)", expected)
+				return state, utf8.RuneError, state.NewSyntaxError(p.ID(), "%s (at EOF)", expected)
 			}
-			return state, utf8.RuneError, state.NewSyntaxError("%s (got UTF-8 error)", expected)
+			return state, utf8.RuneError, state.NewSyntaxError(p.ID(), "%s (got UTF-8 error)", expected)
 		}
 		if r != char {
-			return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
+			return state, utf8.RuneError, state.NewSyntaxError(p.ID(), "%s (got %q)", expected, r)
 		}
 
 		return state.MoveBy(size), r, nil
 	}
 
-	return NewParser[rune](expected, parse, IndexOf(char))
+	p = NewParser[rune](expected, parse, IndexOf(char))
+	return p
 }
 
 func IndexOf[S Separator](stop S) Recoverer {

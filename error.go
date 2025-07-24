@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"unicode/utf8"
 )
 
@@ -14,28 +13,33 @@ import (
 
 const errorMarker = 0x25B6 // easy to spot marker (▶) for the exact error position
 
-var currentErrorID = new(atomic.Uint64)
-
 // ParserError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
 type ParserError struct {
-	id        uint64 // ID of the error (unique during error handling, possibly the runtime of the program)
-	text      string // the error message from the parser
-	pos       int    // pos is the byte index in the input (state.pos)
-	line, col int    // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
-	srcLine   string // line of the source code containing the error or bytes around the error in binary case
-	binary    bool   // are we in binary or text mode?
-	parserID  int32  // ID of the parser reporting the error (only set for syntax errors)
+	text       string                // the error message from the parser
+	pos        int                   // pos is the byte index in the input (state.pos)
+	line, col  int                   // col is the 0-based byte index within srcLine; convert to 1-based rune index for user
+	srcLine    string                // line of the source code containing the error or bytes around the error in binary case
+	binary     bool                  // are we in binary or text mode?
+	parserID   int32                 // ID of the parser reporting the error
+	parserData map[int32]interface{} // temporary (partial) data from parsers
 }
 
 func (e *ParserError) Error() string {
 	return singleErrorMsg(*e)
 }
 
+func (e *ParserError) ParserData(parserID int32) interface{} {
+	return e.parserData[parserID]
+}
+func (e *ParserError) StoreParserData(parserID int32, data interface{}) {
+	e.parserData[parserID] = data
+}
+
 // ClaimError takes over an error from a sub-parser.
-func ClaimError(err *ParserError) *ParserError {
+func ClaimError(err *ParserError, parserID int32) *ParserError {
 	if err != nil {
-		err.parserID = -1
+		err.parserID = parserID
 	}
 	return err
 }

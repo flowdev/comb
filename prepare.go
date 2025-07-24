@@ -16,11 +16,11 @@ type parentResult struct {
 
 // ParseResult is the result of a parser.
 type ParseResult struct {
-	StartState    State // state before parsing
-	EndState      State // state after parsing
-	Output        interface{}
-	Error         *ParserError
-	parentResults []parentResult
+	StartState State // state before parsing
+	EndState   State // state after parsing
+	Output     interface{}
+	Error      *ParserError
+	//parentResults []parentResult
 }
 
 type parents struct {
@@ -55,46 +55,8 @@ func (ps *parents) realParentID(p parserData) int32 {
 	return p.parentID
 }
 
-func (pr ParseResult) GetParentResults(src ParseResult) ParseResult {
-	pr.parentResults = src.parentResults
-	return pr
-}
-func (pr ParseResult) AddOutput(out interface{}) ParseResult {
-	pr.parentResults = append(pr.parentResults, parentResult{id: -1, output: out})
-	return pr
-}
-func (pr ParseResult) FetchOutput() (interface{}, ParseResult) {
-	if len(pr.parentResults) == 0 {
-		return nil, pr
-	}
-	result := pr.parentResults[0]
-	if result.id >= 0 { // it isn't our result
-		return nil, pr
-	}
-	pr.parentResults = pr.parentResults[1:]
-	return result.output, pr
-}
-func (pr ParseResult) setID(id int32) {
-	if len(pr.parentResults) == 0 {
-		return
-	}
-	if pr.parentResults[len(pr.parentResults)-1].id < 0 {
-		pr.parentResults[len(pr.parentResults)-1].id = id
-	}
-}
-func (pr ParseResult) prepareOutputFor(id int32) ParseResult {
-	i := slices.IndexFunc(pr.parentResults, func(result parentResult) bool {
-		return result.id == id
-	})
-	if i == -1 {
-		return pr
-	}
-	pr.parentResults = pr.parentResults[i:]
-	pr.parentResults[0].id = -1 // prepare the result for fetch
-	return pr
-}
 func (pr ParseResult) parents() *parents {
-	return &parents{parentResults: pr.parentResults, parentIdx: -1}
+	return &parents{parentResults: nil, parentIdx: -1}
 }
 
 // ============================================================================
@@ -106,11 +68,13 @@ func (pr ParseResult) parents() *parents {
 // (slices, maps, ...).
 type AnyParser interface {
 	ID() int32
-	parse(State) ParseResult
+	LastParent() int32
+	parse(parent int32, state State) ParseResult
 	IsSaveSpot() bool
 	Recover(*ParserError, State) int
 	IsStepRecoverer() bool
-	setID(int32) // only sets own ID
+	setID(int32)     // only sets own ID
+	setParent(int32) // sets current parent ID
 }
 
 // BranchParser is a more internal interface used by orchestrators.
@@ -119,18 +83,16 @@ type AnyParser interface {
 // BranchParser just adds 2 methods to the Parser and AnyParser interfaces.
 type BranchParser interface {
 	children() []AnyParser
-	parseAfterError(pe *ParserError, childID int32, childResult ParseResult) ParseResult
+	parseAfterError(pe *ParserError, childID, parentID int32, childResult ParseResult) ParseResult
 }
 
 // RunParser runs any parser and is able to handle branch parsers specially.
 // That is necessary to run child parsers of branch parsers correctly.
-func RunParser(ap AnyParser, inResult ParseResult) ParseResult {
+func RunParser(ap AnyParser, parent int32, inResult ParseResult) ParseResult {
 	if bp, ok := ap.(BranchParser); ok {
-		return bp.parseAfterError(nil, -1, inResult)
+		return bp.parseAfterError(nil, -1, parent, inResult)
 	}
-	outResult := ap.parse(inResult.EndState)
-	outResult.parentResults = inResult.parentResults
-	return outResult
+	return ap.parse(parent, inResult.EndState)
 }
 
 // ============================================================================
@@ -163,6 +125,7 @@ func NewPreparedParser[Output any](p Parser[Output]) *PreparedParser[Output] {
 func (pp *PreparedParser[Output]) registerParsers(ap AnyParser, parentID int32) {
 	id := int32(len(pp.parsers))
 	ap.setID(id)
+	ap.setParent(parentID)
 	pp.parsers = append(pp.parsers, parserData{parser: ap, parentID: parentID})
 
 	if bp, ok := ap.(BranchParser); ok {
@@ -193,7 +156,7 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 	// The childID is ALWAYS < 0.
 	// ParseResult.AddOutput and .setID are used;
 	//   .FetchOutput and .prepareOutputFor are NOT used.
-	result := p.parser.parse(state)
+	result := p.parser.parse(-1, state)
 	nextID, nState := id, result.EndState
 	for result.Error != nil {
 		pe := result.Error
@@ -214,12 +177,9 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 
 		// BOTTOM->UP: Recovery parsing starts with a leaf parser
 		// and goes all the way up to the root parser (with or without error).
-		// The childID is NEVER < 0.
-		// ParseResult.FetchOutput and .prepareOutputFor are used;
-		//   .AddOutput and .setID are NOT used (except for a new error).
-		realParents := result.parents()
-		result = RunParser(p.parser, result) // should always be successful (or the recoverer didn't do its job)
-		parentID := realParents.realParentID(p)
+		// The childID is NEVER < 0 and err is NEVER nil.
+		result = RunParser(p.parser, ParentUnknown, result) // should always be successful (or the recoverer didn't do its job)
+		parentID := p.parser.LastParent()
 		for parentID >= 0 { // force the new result through all levels (error or not)
 			if result.Error != nil {
 				pe = result.Error
@@ -227,9 +187,9 @@ func (pp *PreparedParser[Output]) parseAll(state State) (Output, error) {
 			childID := nextID
 			nextID = parentID
 			p = pp.parsers[nextID]
-			result = (p.parser.(BranchParser)).parseAfterError(pe, childID, result)
+			result = (p.parser.(BranchParser)).parseAfterError(pe, childID, ParentUnknown, result)
 			Debugf("parseAll - parent (ID=%d) new Error?=%v", nextID, result.Error)
-			parentID = realParents.realParentID(p)
+			parentID = p.parser.LastParent()
 		}
 	}
 	out, _ := result.Output.(Output)
@@ -310,7 +270,7 @@ func (pp *PreparedParser[Output]) findMinStepWaste(stepRecs []AnyParser, state S
 	minWaste = 0
 	for curState.BytesRemaining() > 0 && minWaste < maxWaste {
 		for _, sr := range stepRecs {
-			result := sr.parse(curState)
+			result := sr.parse(-1, curState)
 			if result.Error == nil {
 				Debugf("findMinStepWaste - best slow recoverer: ID=%d, waste=%d", sr.ID(), minWaste)
 				return minWaste, sr

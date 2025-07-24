@@ -286,28 +286,32 @@ func (e expr[Output]) parseAfterError(pe *comb.ParserError, childID int32, resul
 	return e.parseLevelAfterError(len(e.levels)-1, childID, result)
 }
 func (e expr[Output]) parseLevelAfterError(l int, childID int32, result comb.ParseResult) comb.ParseResult {
-	nResult := e.parseSpace(result)
+	nResult := e.parseSpace(e.subParser.ID(), result)
 	if nResult.Error != nil {
 		return nResult
 	}
 	if l < 0 { // parse value or parentheses
 		if e.openParenParser == nil {
-			return comb.RunParser(e.value, nResult)
+			// TODO: store and use last parent
+			return comb.RunParser(e.value, 0, nResult)
 		}
-		oResult := comb.RunParser(e.openParenParser, nResult)
+		// TODO: store and use last parent
+		oResult := comb.RunParser(e.openParenParser, 0, nResult)
 		if oResult.Error != nil {
-			return comb.RunParser(e.value, nResult)
+			// TODO: store and use last parent
+			return comb.RunParser(e.value, 0, nResult)
 		}
 		openParen, _ := oResult.Output.(string)
 		pResult := e.parseLevelAfterError(len(e.levels)-1, childID, oResult)
 		if pResult.Error != nil {
 			return pResult
 		}
-		qResult := e.parseSpace(pResult)
+		qResult := e.parseSpace(e.subParser.ID(), pResult)
 		if qResult.Error != nil {
 			return qResult
 		}
-		rResult := comb.RunParser(e.closeParenParsers[openParen], qResult)
+		// TODO: store and use last parent
+		rResult := comb.RunParser(e.closeParenParsers[openParen], 0, qResult)
 		if qResult.Error != nil {
 			// TODO: partial result?
 			return rResult
@@ -319,21 +323,22 @@ func (e expr[Output]) parseLevelAfterError(l int, childID int32, result comb.Par
 	level := e.levels[l]
 	switch {
 	case level.prefixLevel != nil:
-		return e.parsePrefixLevelAfterChild(l, level, childID, result.EndState, nResult)
+		return e.parsePrefixLevelAfterError(l, level, childID, result.EndState, nResult)
 	case level.infixLevel != nil:
-		return e.parseInfixLevelAfterChild(l, level, childID, result.EndState, nResult)
+		return e.parseInfixLevelAfterError(l, level, childID, result.EndState, nResult)
 	default:
-		return e.parsePostfixLevelAfterChild(l, level, childID, result.EndState, nResult)
+		return e.parsePostfixLevelAfterError(l, level, childID, result.EndState, nResult)
 	}
 }
-func (e expr[Output]) parsePrefixLevelAfterChild(
+func (e expr[Output]) parsePrefixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
 	childID int32,
 	startState comb.State,
 	nResult comb.ParseResult,
 ) comb.ParseResult {
-	oResult := comb.RunParser(level.opParser, nResult)
+	// TODO: store and use last parent
+	oResult := comb.RunParser(level.opParser, 0, nResult)
 	if oResult.Error != nil {
 		return e.parseLevelAfterError(l-1, childID, nResult)
 	}
@@ -350,7 +355,7 @@ func (e expr[Output]) parsePrefixLevelAfterChild(
 	}
 	return pResult
 }
-func (e expr[Output]) parseInfixLevelAfterChild(
+func (e expr[Output]) parseInfixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
 	childID int32,
@@ -359,11 +364,12 @@ func (e expr[Output]) parseInfixLevelAfterChild(
 ) comb.ParseResult {
 	oResult := e.parseLevelAfterError(l-1, childID, nResult)
 	for oResult.Error == nil {
-		pResult := e.parseSpace(oResult)
+		pResult := e.parseSpace(e.subParser.ID(), oResult)
 		if pResult.Error != nil {
 			return oResult
 		}
-		qResult := comb.RunParser(level.opParser, pResult)
+		// TODO: store and use last parent
+		qResult := comb.RunParser(level.opParser, 0, pResult)
 		if qResult.Error != nil {
 			return oResult
 		}
@@ -384,7 +390,7 @@ func (e expr[Output]) parseInfixLevelAfterChild(
 	}
 	return oResult
 }
-func (e expr[Output]) parsePostfixLevelAfterChild(
+func (e expr[Output]) parsePostfixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
 	childID int32,
@@ -396,12 +402,13 @@ func (e expr[Output]) parsePostfixLevelAfterChild(
 		return oResult
 	}
 	for oResult.Error == nil {
-		oResult = e.parseSpace(oResult)
+		oResult = e.parseSpace(e.subParser.ID(), oResult)
 		if oResult.Error != nil {
 			return oResult
 		}
 
-		pResult := comb.RunParser(level.opParser, oResult)
+		// TODO: store and use last parent
+		pResult := comb.RunParser(level.opParser, 0, oResult)
 		if pResult.Error != nil {
 			return oResult
 		}
@@ -416,8 +423,8 @@ func (e expr[Output]) parsePostfixLevelAfterChild(
 	oResult.StartState = startState
 	return oResult
 }
-func (e expr[Output]) parseSpace(result comb.ParseResult) comb.ParseResult {
-	state, _, err := e.space.Parse(result.EndState)
+func (e expr[Output]) parseSpace(parent int32, result comb.ParseResult) comb.ParseResult {
+	state, _, err := e.space.Parse(parent, result.EndState)
 	result.StartState = result.EndState
 	if err == nil {
 		result.EndState = state

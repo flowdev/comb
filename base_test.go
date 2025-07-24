@@ -83,7 +83,7 @@ func TestErrorReporting(t *testing.T) {
 	for _, spec := range specs {
 		t.Run(spec.name, func(t *testing.T) {
 			nState := spec.givenState.MoveBy(spec.givenPosition)
-			gotError := nState.SaveError(nState.NewSemanticError("error")).Errors().Error()
+			gotError := nState.SaveError(nState.NewSemanticError(42, "error")).Errors().Error()
 
 			if gotError != spec.expectedError {
 				t.Errorf("Expected error %q, got: %q", spec.expectedError, gotError)
@@ -150,7 +150,7 @@ func TestErrorReportingWithMoveBackTo(t *testing.T) {
 	for _, spec := range specs {
 		t.Run(spec.name, func(t *testing.T) {
 			nState := spec.givenState.MoveBackTo(spec.givenPosition)
-			gotError := nState.SaveError(nState.NewSemanticError("error")).Errors().Error()
+			gotError := nState.SaveError(nState.NewSemanticError(42, "error")).Errors().Error()
 
 			if gotError != spec.expectedError {
 				t.Errorf("Expected error %q, got: %q", spec.expectedError, gotError)

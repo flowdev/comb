@@ -72,7 +72,7 @@ func TestInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -95,7 +95,7 @@ func BenchmarkInt64(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }
 
@@ -149,7 +149,7 @@ func TestUInt64(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			newState, gotResult, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -172,6 +172,6 @@ func BenchmarkUInt64(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(input)
+		_, _, _ = parser.Parse(-1, input)
 	}
 }

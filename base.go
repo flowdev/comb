@@ -44,15 +44,17 @@ const DefaultMaxErrors = 10 // the maximum number of errors to recover from (sam
 //   - A parser that consumes some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	ID() int32
+	LastParent() int32
 	Expected() string
-	Parse(State) (State, Output, *ParserError) // used by compiler (for type inference) and tests
-	parse(State) ParseResult                   // used by PreparedParser
+	Parse(parentID int32, state State) (State, Output, *ParserError) // used by compiler (for type inference) and tests
+	parse(parentID int32, state State) ParseResult                   // used by PreparedParser
 	IsSaveSpot() bool
 	setSaveSpot() // used by SafeSpot parser
 	Recover(*ParserError, State) int
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during the construction phase
 	setID(int32)             // used by PreparedParser; only sets own ID
+	setParent(int32)         // sets current parent ID
 }
 
 // ============================================================================

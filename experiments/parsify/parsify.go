@@ -34,12 +34,12 @@ func Parsify[Output any, Parsish Parserish[Output]](p Parsish) Parser[Output] {
 				r, size := utf8.DecodeRuneInString(state.CurrentString())
 				if r == utf8.RuneError {
 					if size == 0 {
-						return state, oruneErr, state.NewSyntaxError("%q (at EOF)", expected)
+						return state, oruneErr, state.NewSyntaxError(0, "%q (at EOF)", expected)
 					}
-					return state, oruneErr, state.NewSyntaxError("%q (got UTF-8 error)", expected)
+					return state, oruneErr, state.NewSyntaxError(0, "%q (got UTF-8 error)", expected)
 				}
 				if r != ap {
-					return state, oruneErr, state.NewSyntaxError("%q (got %q)", expected, r)
+					return state, oruneErr, state.NewSyntaxError(0, "%q (got %q)", expected, r)
 				}
 
 				return state.MoveBy(size), op, nil

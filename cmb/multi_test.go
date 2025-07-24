@@ -80,7 +80,7 @@ func BenchmarkCount(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(state)
+		_, _, _ = parser.Parse(-1, state)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	state := comb.NewFromString("abcdef", 1)
 	parser := Many0(Digit0())
 
-	newState, output, err := parser.Parse(state)
+	newState, output, err := parser.Parse(-1, state)
 
 	assert.Error(t, err)
 	assert.Equal(t, []string{""}, output)
@@ -155,7 +155,7 @@ func BenchmarkMany0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(state)
+		_, _, _ = parser.Parse(-1, state)
 	}
 }
 
@@ -231,7 +231,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	state := comb.NewFromString("abcdef", 1)
 	parser := Many1(Digit0())
 
-	newState, output, err := parser.Parse(state)
+	newState, output, err := parser.Parse(-1, state)
 
 	assert.Error(t, err)
 	assert.Equal(t, []string{""}, output)
@@ -244,7 +244,7 @@ func BenchmarkMany1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(state)
+		_, _, _ = parser.Parse(-1, state)
 	}
 }
 
@@ -327,7 +327,7 @@ func BenchmarkSeparated0(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		_, _, _ = parser.Parse(state)
+		_, _, _ = parser.Parse(-1, state)
 	}
 }
 
@@ -398,6 +398,6 @@ func BenchmarkSeparated1(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		_, _, _ = parser.Parse(state)
+		_, _, _ = parser.Parse(-1, state)
 	}
 }

@@ -11,20 +11,23 @@ import (
 // If there is still input left to parse, an error is returned.
 // This IS already a `SafeSpot` parser (its recoverer consumes the rest of the input).
 func EOF() comb.Parser[interface{}] {
+	var p comb.Parser[interface{}]
+
 	expected := "end of the input"
 
 	parse := func(state comb.State) (comb.State, interface{}, *comb.ParserError) {
 		remaining := state.BytesRemaining()
 		if remaining > 0 {
-			return state, nil, state.NewSyntaxError("%s (still %d bytes of input left)", expected, remaining)
+			return state, nil, state.NewSyntaxError(p.ID(), "%s (still %d bytes of input left)", expected, remaining)
 		}
 
 		return state, nil, nil
 	}
 
-	return comb.SafeSpot(
+	p = comb.SafeSpot(
 		comb.NewParser[interface{}](expected, parse, func(_ *comb.ParserError, state comb.State) int {
 			return state.BytesRemaining()
 		}),
 	)
+	return p
 }
