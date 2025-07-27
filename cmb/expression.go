@@ -129,13 +129,14 @@ func PostfixLevel[Output any](ops []PostfixOp[Output]) PrecedenceLevel[Output] {
 }
 
 type expr[Output any] struct {
+	id                func() int32
 	value             comb.Parser[Output]
 	space             comb.Parser[string]
 	levels            []PrecedenceLevel[Output]
 	parens            []parens
 	openParenParser   comb.Parser[string]
 	closeParenParsers map[string]comb.Parser[string]
-	subParser         comb.Parser[levelIdx] // do we use this, or many sub-parsers instead?
+	subParser         comb.Parser[levelIdx]
 }
 type parens struct {
 	open, close string
@@ -191,12 +192,15 @@ func (e expr[Output]) SetSpace(spaceParser comb.Parser[string]) expr[Output] {
 //   - double opening parentheses
 //   - double operators of the same type (prefix, infix or postfix)
 func (e expr[Output]) Parser() comb.Parser[Output] {
+	var p comb.Parser[Output]
 	e.checkOperators()
 	ee := e.prepareParens()
 	if ee.space == nil {
 		ee.space = Whitespace0()
 	}
-	return comb.NewBranchParser[Output]("Expression", ee.children, ee.parseAfterError)
+	ee.id = func() int32 { return p.ID() }
+	p = comb.NewBranchParser[Output]("Expression", ee.children, ee.parseAfterError)
+	return p
 }
 func (e expr[Output]) checkOperators() bool {
 	prefixCheck := make(map[string]struct{})
@@ -262,12 +266,8 @@ func (e expr[Output]) prepareParens() expr[Output] {
 }
 
 func (e expr[Output]) children() []comb.AnyParser {
-	allChildren := make([]comb.AnyParser, 0, 128)
-	allChildren = append(allChildren, e.value, e.space)
-	for _, level := range e.levels {
-		allChildren = append(allChildren, level.children()...)
-	}
-	return allChildren
+	//return []comb.AnyParser{e.value, e.subParser, e.space}
+	return []comb.AnyParser{e.value, e.space}
 }
 
 // subParse is only used during error recovery.
@@ -286,7 +286,7 @@ func (e expr[Output]) parseAfterError(pe *comb.ParserError, childID int32, resul
 	return e.parseLevelAfterError(len(e.levels)-1, childID, result)
 }
 func (e expr[Output]) parseLevelAfterError(l int, childID int32, result comb.ParseResult) comb.ParseResult {
-	nResult := e.parseSpace(e.subParser.ID(), result)
+	nResult := e.parseSpace(e.id(), result)
 	if nResult.Error != nil {
 		return nResult
 	}
@@ -306,7 +306,7 @@ func (e expr[Output]) parseLevelAfterError(l int, childID int32, result comb.Par
 		if pResult.Error != nil {
 			return pResult
 		}
-		qResult := e.parseSpace(e.subParser.ID(), pResult)
+		qResult := e.parseSpace(e.id(), pResult)
 		if qResult.Error != nil {
 			return qResult
 		}
@@ -364,7 +364,7 @@ func (e expr[Output]) parseInfixLevelAfterError(
 ) comb.ParseResult {
 	oResult := e.parseLevelAfterError(l-1, childID, nResult)
 	for oResult.Error == nil {
-		pResult := e.parseSpace(e.subParser.ID(), oResult)
+		pResult := e.parseSpace(e.id(), oResult)
 		if pResult.Error != nil {
 			return oResult
 		}
@@ -402,7 +402,7 @@ func (e expr[Output]) parsePostfixLevelAfterError(
 		return oResult
 	}
 	for oResult.Error == nil {
-		oResult = e.parseSpace(e.subParser.ID(), oResult)
+		oResult = e.parseSpace(e.id(), oResult)
 		if oResult.Error != nil {
 			return oResult
 		}

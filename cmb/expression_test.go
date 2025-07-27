@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func testExpression_HappyPath(t *testing.T) {
+func TestExpression_HappyPath(t *testing.T) {
 	testCases := []struct {
 		name          string
 		parser        comb.Parser[int64]
