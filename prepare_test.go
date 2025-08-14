@@ -310,18 +310,18 @@ func TestBranchParserToAnyParser(t *testing.T) {
 			aParse := prepp.parsers[0]
 			_, out, err := aParse.ParseAny(-1, NewFromString(tt.givenInput, 10))
 			if got, want := aParse.IsSaveSpot(), false; got != want {
-				t.Errorf("save spot parseSimple=%t, want=%t", got, want)
+				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			_, gotBranchParser := aParse.(BranchParser)
 			if got, want := gotBranchParser, true; got != want {
-				t.Errorf("branch parseSimple=%t, want=%t", got, want)
+				t.Errorf("branch parser=%t, want=%t", got, want)
 			}
 			if got, want := err != nil, tt.expectedError; got != want {
 				t.Errorf("result.Error=%v, want=%t", got, want)
 			}
 			if err != nil {
 				if got, want := err.parserID, tt.expectedID; got != want {
-					t.Errorf("error parseSimple ID=%d, want=%d", got, want)
+					t.Errorf("error parser ID=%d, want=%d", got, want)
 				}
 			}
 			gotOutput, ok := out.(string)
@@ -330,7 +330,7 @@ func TestBranchParserToAnyParser(t *testing.T) {
 			}
 
 			if got, want := aParse.IsStepRecoverer(), false; got != want {
-				t.Errorf("save spot parseSimple=%t, want=%t", got, want)
+				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 		})
 	}
@@ -416,18 +416,18 @@ func TestLeafParserToAnyParser(t *testing.T) {
 			aParse := prepp.parsers[0]
 			_, out, err := aParse.ParseAny(-1, NewFromString(tt.givenInput, 10))
 			if got, want := givenParser.IsSaveSpot(), tt.expectedSaveSpot; got != want {
-				t.Errorf("save spot parseSimple=%t, want=%t", got, want)
+				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			_, gotBranchParser := givenParser.(BranchParser)
 			if got, want := gotBranchParser, false; got != want {
-				t.Errorf("branch parseSimple=%t, want=%t", got, want)
+				t.Errorf("branch parser=%t, want=%t", got, want)
 			}
 			if got, want := err != nil, tt.expectedError; got != want {
 				t.Errorf("result.Error=%v, want=%t", got, want)
 			}
 			if err != nil {
 				if got, want := err.parserID, aParse.ID(); got != want {
-					t.Errorf("error parseSimple ID=%d, want=%d", got, want)
+					t.Errorf("error parser ID=%d, want=%d", got, want)
 				}
 			}
 			gotOutput, ok := out.(rune)
@@ -436,12 +436,12 @@ func TestLeafParserToAnyParser(t *testing.T) {
 			}
 
 			if got, want := givenParser.IsStepRecoverer(), tt.expectedStepRecoverer; got != want {
-				t.Errorf("save spot parseSimple=%t, want=%t", got, want)
+				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			if !givenParser.IsStepRecoverer() {
 				waste, _ := givenParser.Recover(NewFromString(tt.givenInput, 10), nil)
 				if got, want := waste, tt.expectedWaste; got != want {
-					t.Errorf("save spot parseSimple=%d, want=%d", got, want)
+					t.Errorf("save spot parser=%d, want=%d", got, want)
 				}
 			}
 		})

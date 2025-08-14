@@ -182,7 +182,7 @@ func (pp *PreparedParser[Output]) findMinWaste(pe *ParserError, state State, rec
 		stepRecs = make([]AnyParser, len(pp.stepRecoverers)+1)
 		copy(stepRecs, pp.stepRecoverers)
 		stepRecs[len(pp.stepRecoverers)] = pp.parsers[pe.parserID]
-		Debugf("findMinWaste - failed parseSimple has slow recoverer: ID=%d", pe.parserID)
+		Debugf("findMinWaste - failed parser has slow recoverer: ID=%d", pe.parserID)
 	}
 	return pp.findMinStepWaste(stepRecs, state, pe, minWaste, minRec)
 }
