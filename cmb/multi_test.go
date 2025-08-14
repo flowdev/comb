@@ -1,8 +1,9 @@
 package cmb
 
 import (
-	"github.com/flowdev/comb"
 	"testing"
+
+	"github.com/flowdev/comb"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -36,21 +37,21 @@ func TestCount(t *testing.T) {
 			parser:     Count(String("abc"), 2),
 			input:      "abc123",
 			wantErr:    true,
-			wantOutput: nil,
+			wantOutput: []string{"abc"},
 		},
 		{
 			name:       "parsing no count should fail",
 			parser:     Count(String("abc"), 2),
 			input:      "123123",
 			wantErr:    true,
-			wantOutput: nil,
+			wantOutput: []string{},
 		},
 		{
 			name:       "parsing empty input should fail",
 			parser:     Count(String("abc"), 2),
 			input:      "",
 			wantErr:    true,
-			wantOutput: nil,
+			wantOutput: []string{},
 		},
 	}
 
@@ -80,7 +81,7 @@ func BenchmarkCount(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, state)
+		_, _, _ = parser.Parse(state)
 	}
 }
 
@@ -142,7 +143,7 @@ func TestMany0DetectsInfiniteLoops(t *testing.T) {
 	state := comb.NewFromString("abcdef", 1)
 	parser := Many0(Digit0())
 
-	newState, output, err := parser.Parse(-1, state)
+	newState, output, err := parser.Parse(state)
 
 	assert.Error(t, err)
 	assert.Equal(t, []string{""}, output)
@@ -155,7 +156,7 @@ func BenchmarkMany0(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, state)
+		_, _, _ = parser.Parse(state)
 	}
 }
 
@@ -195,14 +196,14 @@ func TestMany1(t *testing.T) {
 			input:      "abc",
 			parser:     Many1(Char('#')),
 			wantErr:    true,
-			wantOutput: nil,
+			wantOutput: []rune{},
 		},
 		{
 			name:       "empty input should fail",
 			input:      "",
 			parser:     Many1(Char('#')),
 			wantErr:    true,
-			wantOutput: nil,
+			wantOutput: []rune{},
 		},
 	}
 	for _, tc := range testCases {
@@ -210,15 +211,15 @@ func TestMany1(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotResult, gotErr := comb.RunOnString(tc.input, tc.parser)
+			gotOutput, gotErr := comb.RunOnString(tc.input, tc.parser)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
 
-			// testify makes it easier comparing slices
+			// testify makes it easier to compare slices
 			assert.Equal(t,
-				tc.wantOutput, gotResult,
-				"got output %v, want output %v", gotResult, tc.wantOutput,
+				tc.wantOutput, gotOutput,
+				"got output %v, want output %v", gotOutput, tc.wantOutput,
 			)
 		})
 	}
@@ -231,7 +232,7 @@ func TestMany1DetectsInfiniteLoops(t *testing.T) {
 	state := comb.NewFromString("abcdef", 1)
 	parser := Many1(Digit0())
 
-	newState, output, err := parser.Parse(-1, state)
+	newState, output, err := parser.Parse(state)
 
 	assert.Error(t, err)
 	assert.Equal(t, []string{""}, output)
@@ -244,7 +245,7 @@ func BenchmarkMany1(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, state)
+		_, _, _ = parser.Parse(state)
 	}
 }
 
@@ -327,7 +328,7 @@ func BenchmarkSeparated0(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		_, _, _ = parser.Parse(-1, state)
+		_, _, _ = parser.Parse(state)
 	}
 }
 
@@ -370,7 +371,7 @@ func TestSeparated1(t *testing.T) {
 			input:      "",
 			parser:     Separated1(String("abc"), Char(','), false),
 			wantErr:    true,
-			wantOutput: nil,
+			wantOutput: []string{},
 		},
 	}
 	for _, tc := range testCases {
@@ -398,6 +399,6 @@ func BenchmarkSeparated1(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		_, _, _ = parser.Parse(-1, state)
+		_, _, _ = parser.Parse(state)
 	}
 }

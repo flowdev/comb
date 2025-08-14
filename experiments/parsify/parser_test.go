@@ -1,10 +1,11 @@
 package parsify
 
 import (
+	"testing"
+
 	"github.com/flowdev/comb"
 	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"testing"
 )
 
 func TestDelimitedByChar(t *testing.T) {
@@ -47,7 +48,7 @@ func TestDelimitedByChar(t *testing.T) {
 			if tc.basicParser2 != nil {
 				state, firstOutput, firstError = tc.basicParser2(comb.NewFromString(input[:1], 10))
 			} else {
-				state, firstOutput, firstError = tc.basicParser1.Parse(-1, comb.NewFromString(input[:1], 10))
+				state, firstOutput, firstError = tc.basicParser1.Parse(comb.NewFromString(input[:1], 10))
 			}
 			t.Log("Error1? :", firstError)
 
@@ -69,7 +70,7 @@ func TestDelimitedByChar(t *testing.T) {
 			if tc.basicParser2 != nil {
 				newState, gotOutput, gotError = tc.complexParser2(comb.NewFromString(input, 10))
 			} else {
-				newState, gotOutput, gotError = tc.complexParser1.Parse(-1, comb.NewFromString(input, 10))
+				newState, gotOutput, gotError = tc.complexParser1.Parse(comb.NewFromString(input, 10))
 			}
 			t.Log("Error2? :", gotError)
 

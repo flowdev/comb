@@ -14,40 +14,29 @@ func Optional[Output any](parser comb.Parser[Output]) comb.Parser[Output] {
 		"Optional",
 		func() []comb.AnyParser {
 			return []comb.AnyParser{parser}
-		}, func(err *comb.ParserError, childID int32, childResult comb.ParseResult) comb.ParseResult {
+		}, func(
+			childID int32,
+			childStartState, childState comb.State,
+			childOut interface{},
+			childErr *comb.ParserError,
+			data interface{},
+		) (comb.State, Output, *comb.ParserError, interface{}) {
 			var out Output
-			comb.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
-			if childID >= 0 { // on the way up: Fetch
-				o := err.ParserData(childID)
-				out, _ = o.(Output)
+			comb.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childState.CurrentPos())
+			if childID >= 0 { // bottom-up
+				out, _ = data.(Output)
+			} else { // top-down
+				childStartState = childState
+				childState, childOut, childErr = parser.ParseAny(p.ID(), childStartState)
+				out, _ = childOut.(Output)
 			}
-			endResult := childResult
-			if childID >= 0 {
-				if childID != parser.ID() {
-					childResult.Error = childResult.EndState.NewSemanticError(p.ID(),
-						"unable to parse after child with unknown ID %d; expected: %d", childID, parser.ID())
-					childResult.Error.StoreParserData(p.ID(), out)
-					return childResult
-				}
-				out, _ = childResult.Output.(Output)
-			} else {
-				endResult = comb.RunParser(parser, p.ID(), childResult)
-				if childID < 0 || endResult.Error == nil {
-					out, _ = endResult.Output.(Output)
-				}
-				childResult.StartState = childResult.EndState
+			if childErr != nil && childStartState.SafeSpotMoved(childState) { // we can't ignore the error
+				return childState, out, childErr, out
 			}
-			if endResult.Error != nil && childResult.StartState.SafeSpotMoved(endResult.EndState) { // we can't ignore the error
-				endResult.Error.StoreParserData(p.ID(), out)
-				return endResult
+			if childErr != nil { // successful result without input consumption
+				return childStartState, out, nil, nil
 			}
-			endResult.Output = out
-			if endResult.Error != nil { // successful result without input consumption
-				endResult.EndState = endResult.StartState
-				endResult.Error = nil
-				return endResult
-			}
-			return endResult
+			return childState, out, nil, nil
 		},
 	)
 	return p
@@ -63,8 +52,9 @@ func Optional[Output any](parser comb.Parser[Output]) comb.Parser[Output] {
 func Peek[Output any](parse comb.Parser[Output]) comb.Parser[Output] {
 	var p comb.Parser[Output]
 	peekParse := func(state comb.State) (comb.State, Output, *comb.ParserError) {
-		_, out, err := parse.Parse(p.ID(), state)
-		return state, out, comb.ClaimError(err, p.ID())
+		_, aOut, err := parse.ParseAny(comb.ParentUnknown, state)
+		out, _ := aOut.(Output)
+		return state, out, comb.ClaimError(err)
 	}
 	p = comb.NewParser[Output]("Peek", peekParse, Forbidden())
 	return p
@@ -85,11 +75,11 @@ func Not[Output any](parser comb.Parser[Output]) comb.Parser[bool] {
 
 	expected := "not " + parser.Expected()
 	notParse := func(state comb.State) (comb.State, bool, *comb.ParserError) {
-		_, _, err := parser.Parse(p.ID(), state)
+		_, _, err := parser.ParseAny(comb.ParentUnknown, state)
 		if err != nil {
 			return state, true, nil
 		}
-		return state, false, state.NewSyntaxError(p.ID(), expected)
+		return state, false, state.NewSyntaxError(expected)
 	}
 	p = comb.NewParser[bool](expected, notParse, Forbidden())
 	return p

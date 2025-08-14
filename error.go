@@ -37,9 +37,10 @@ func (e *ParserError) StoreParserData(parserID int32, data interface{}) {
 }
 
 // ClaimError takes over an error from a sub-parser.
-func ClaimError(err *ParserError, parserID int32) *ParserError {
+// This is used for sub-parsers that aren't reported as children.
+func ClaimError(err *ParserError) *ParserError {
 	if err != nil {
-		err.parserID = parserID
+		err.parserID = -1
 	}
 	return err
 }

@@ -2,9 +2,10 @@ package cmb
 
 import (
 	"errors"
-	"github.com/flowdev/comb"
 	"strconv"
 	"testing"
+
+	"github.com/flowdev/comb"
 )
 
 func TestOptional(t *testing.T) {
@@ -62,7 +63,7 @@ func BenchmarkOptional(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -114,7 +115,7 @@ func BenchmarkPeek(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -166,7 +167,7 @@ func BenchmarkAssign(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -203,7 +204,7 @@ func TestDelimited(t *testing.T) {
 			input:      "+1",
 			parser:     Delimited(Char('+'), Digit1(), CRLF()),
 			wantErr:    true,
-			wantOutput: "",
+			wantOutput: "1",
 		}, {
 			name:       "empty input should fail",
 			input:      "",
@@ -236,7 +237,7 @@ func BenchmarkDelimited(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -302,7 +303,7 @@ func BenchmarkPrefixed(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -328,7 +329,7 @@ func TestSuffixed(t *testing.T) {
 			input:      "1-23",
 			parser:     Suffixed(Digit1(), Char('+')),
 			wantErr:    true,
-			wantOutput: "",
+			wantOutput: "1",
 		},
 		{
 			name:       "no parser match should fail",
@@ -368,7 +369,7 @@ func BenchmarkTerminated(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -448,7 +449,7 @@ func BenchmarkMap(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }
 
@@ -535,6 +536,6 @@ func BenchmarkMap2(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = parser.Parse(-1, input)
+		_, _, _ = parser.Parse(input)
 	}
 }

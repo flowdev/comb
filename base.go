@@ -20,16 +20,16 @@ type Separator interface {
 	~rune | ~byte | ~string | ~[]byte
 }
 
-// Recoverer is a simplified parser that only returns the number of bytes
+// Recoverer is a simplified parser that returns the number of bytes
 // to reach a SafeSpot.
 // If it can't recover from the given state, it should return RecoverWasteTooMuch.
 // If it can't recover AT ALL, it should return RecoverNever.
+// The data given to it and returned from it is arbitrary internal data of the parser.
+// Usually it is a partial result of the parser.
 //
-// A Recoverer is used for recovering from an error in the input.
-// It helps to move forward to the next SafeSpot.
 // If no special recoverer is given, we will try the parser until it succeeds moving
 // forward 1 rune/byte at a time. :(
-type Recoverer func(pe *ParserError, state State) int
+type Recoverer func(state State, data interface{}) (int, interface{})
 
 const RecoverWasteUnknown = -1 // default value; 0 can't be used because it's a valid normal value
 const RecoverWasteTooMuch = -2 // used by recoverers to convey that they can't recover from the current state
@@ -44,17 +44,18 @@ const DefaultMaxErrors = 10 // the maximum number of errors to recover from (sam
 //   - A parser that consumes some input must advance with state.MoveBy()
 type Parser[Output any] interface {
 	ID() int32
-	LastParent() int32
 	Expected() string
-	Parse(parentID int32, state State) (State, Output, *ParserError) // used by compiler (for type inference) and tests
-	parse(parentID int32, state State) ParseResult                   // used by PreparedParser
+	Parse(state State) (State, Output, *ParserError)                         // used by compiler (for type inference) and tests
+	ParseAny(parentID int32, state State) (State, interface{}, *ParserError) // used by PreparedParser (top -> down)
+	parseAnyAfterError(err *ParserError, state State,
+	) (lastParentID int32, newState State, output interface{}, newErr *ParserError) // used by parseAll (bottom -> up)
 	IsSaveSpot() bool
-	setSaveSpot() // used by SafeSpot parser
-	Recover(*ParserError, State) int
+	setSaveSpot() // used by SafeSpot parseSimple
+	Recover(State, interface{}) (int, interface{})
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during the construction phase
 	setID(int32)             // used by PreparedParser; only sets own ID
-	setParent(int32)         // sets current parent ID
+	setParent(int32)         // sets initial parent ID
 }
 
 // ============================================================================

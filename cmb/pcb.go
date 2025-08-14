@@ -18,15 +18,15 @@ func EOF() comb.Parser[interface{}] {
 	parse := func(state comb.State) (comb.State, interface{}, *comb.ParserError) {
 		remaining := state.BytesRemaining()
 		if remaining > 0 {
-			return state, nil, state.NewSyntaxError(p.ID(), "%s (still %d bytes of input left)", expected, remaining)
+			return state, nil, state.NewSyntaxError("%s (still %d bytes of input left)", expected, remaining)
 		}
 
 		return state, nil, nil
 	}
 
 	p = comb.SafeSpot(
-		comb.NewParser[interface{}](expected, parse, func(_ *comb.ParserError, state comb.State) int {
-			return state.BytesRemaining()
+		comb.NewParser[interface{}](expected, parse, func(state comb.State, _ interface{}) (int, interface{}) {
+			return state.BytesRemaining(), nil
 		}),
 	)
 	return p

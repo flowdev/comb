@@ -50,7 +50,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 		fullInput := state.CurrentString()
 		input := fullInput
 		if input == "" {
-			return state, "", state.NewSyntaxError(p.ID(), expected+" at EOF")
+			return state, "", state.NewSyntaxError(expected + " at EOF")
 		}
 
 		n := 0 // number of bytes read from input
@@ -61,7 +61,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 				input = input[1:]
 				n = 1
 				if input == "" {
-					return state, "", state.NewSyntaxError(p.ID(), expected+" at EOF")
+					return state, "", state.NewSyntaxError(expected + " at EOF")
 				}
 			}
 		}
@@ -88,7 +88,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 		}
 
 		if !good {
-			return state, "", state.NewSyntaxError(p.ID(), "%s found '%c'", expected, digit)
+			return state, "", state.NewSyntaxError("%s found '%c'", expected, digit)
 		}
 		return state.MoveBy(n), fullInput[:n], nil
 	}
@@ -153,13 +153,14 @@ func Int64(signAllowed bool, base int) comb.Parser[int64] {
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
 	parser := func(state comb.State) (comb.State, int64, *comb.ParserError) {
-		nState, str, pErr := intParser.Parse(p.ID(), state)
+		nState, out, pErr := intParser.ParseAny(p.ID(), state)
+		str, _ := out.(string)
 		if pErr != nil {
-			return state, 0, comb.ClaimError(pErr, p.ID())
+			return state, 0, comb.ClaimError(pErr)
 		}
 		i, err := strconv.ParseInt(str, base, 64)
 		if err != nil {
-			return nState, i, state.NewSemanticError(p.ID(), err.Error())
+			return nState, i, state.NewSemanticError(err.Error())
 		}
 		return nState, i, nil
 	}
@@ -178,13 +179,14 @@ func UInt64(signAllowed bool, base int) comb.Parser[uint64] {
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
 	parser := func(state comb.State) (comb.State, uint64, *comb.ParserError) {
-		nState, str, pErr := intParser.Parse(p.ID(), state)
+		nState, out, pErr := intParser.ParseAny(p.ID(), state)
+		str, _ := out.(string)
 		if pErr != nil {
-			return state, 0, comb.ClaimError(pErr, p.ID())
+			return state, 0, comb.ClaimError(pErr)
 		}
 		ui, err := strconv.ParseUint(str, base, 64)
 		if err != nil {
-			return nState, ui, state.NewSemanticError(p.ID(), err.Error())
+			return nState, ui, state.NewSemanticError(err.Error())
 		}
 		return nState, ui, nil
 	}

@@ -1,9 +1,10 @@
 package cmb_test
 
 import (
+	"testing"
+
 	"github.com/flowdev/comb"
 	"github.com/flowdev/comb/cmb"
-	"testing"
 )
 
 func TestExpression_HappyPath(t *testing.T) {
@@ -155,7 +156,7 @@ func TestExpression_HappyPath(t *testing.T) {
 			})).Parser(),
 			input:         " \t 1 + 3 * \t 2 - 6 / 3 ag",
 			wantOutput:    5,
-			wantRemaining: " ag",
+			wantRemaining: "ag",
 		}, {
 			name: "parentheses and infix ops",
 			parser: cmb.Expression(cmb.Int64(false, 10), cmb.InfixLevel([]cmb.InfixOp[int64]{
@@ -281,7 +282,7 @@ func TestExpression_HappyPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newState, gotOutput, gotErr := tc.parser.Parse(-1, comb.NewFromString(tc.input, 10))
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
 			if gotErr != nil {
 				t.Errorf("found error %v", gotErr)
 			}
