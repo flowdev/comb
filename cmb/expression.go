@@ -129,13 +129,15 @@ func PostfixLevel[Output any](ops []PostfixOp[Output]) PrecedenceLevel[Output] {
 }
 
 type expr[Output any] struct {
+	id                func() int32
+	expected          string
 	value             comb.Parser[Output]
 	space             comb.Parser[string]
 	levels            []PrecedenceLevel[Output]
 	parens            []parens
 	openParenParser   comb.Parser[string]
 	closeParenParsers map[string]comb.Parser[string]
-	subParser         comb.Parser[levelIdx] // do we use this, or many sub-parsers instead?
+	saveSpot          bool
 }
 type parens struct {
 	open, close string
@@ -154,35 +156,44 @@ type levelIdx struct {
 // The first level added, binds the strongest (e.g., unary sign operator) and
 // the last level added binds the least (e.g., assignment operator).
 // It's also possible to later add (multiple) pairs of parentheses.
-func Expression[Output any](valueParser comb.Parser[Output], levels ...PrecedenceLevel[Output]) expr[Output] {
-	e := expr[Output]{
+func Expression[Output any](valueParser comb.Parser[Output], levels ...PrecedenceLevel[Output]) *expr[Output] {
+	e := &expr[Output]{
 		value:  valueParser,
 		levels: levels,
 	}
 	return e
 }
-func (e expr[Output]) AddPrefixLevel(level ...PrefixOp[Output]) expr[Output] {
+func (e *expr[Output]) AddPrefixLevel(level ...PrefixOp[Output]) *expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{prefixLevel: level})
 	return e
 }
-func (e expr[Output]) AddInfixLevel(level ...InfixOp[Output]) expr[Output] {
+func (e *expr[Output]) AddInfixLevel(level ...InfixOp[Output]) *expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{infixLevel: level})
 	return e
 }
-func (e expr[Output]) AddPostfixLevel(level ...PostfixOp[Output]) expr[Output] {
+func (e *expr[Output]) AddPostfixLevel(level ...PostfixOp[Output]) *expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{postfixLevel: level})
 	return e
 }
-func (e expr[Output]) AddParentheses(open, close string) expr[Output] {
+func (e *expr[Output]) AddParentheses(open, close string) *expr[Output] {
 	e.parens = append(e.parens, parens{open: open, close: close})
 	return e
 }
 
-// SetSpace sets the parser for handling spaces between tokens in the expression and
+// WithSpace sets the parser for handling spaces between tokens in the expression and
 // returns the updated expression object.
 // If no parser is explicitly set, Whitespace0 is the default.
-func (e expr[Output]) SetSpace(spaceParser comb.Parser[string]) expr[Output] {
+func (e *expr[Output]) WithSpace(spaceParser comb.Parser[string]) *expr[Output] {
 	e.space = spaceParser
+	return e
+}
+
+// WithExpected sets what kind of expression is expected and
+// returns the updated expression object.
+// This is used by other parsers embedding this one, like the `Not` parser.
+// If nothing is explicitly set, 'expression' is the default.
+func (e *expr[Output]) WithExpected(expected string) *expr[Output] {
+	e.expected = expected
 	return e
 }
 
@@ -190,19 +201,26 @@ func (e expr[Output]) SetSpace(spaceParser comb.Parser[string]) expr[Output] {
 // It will panic in the following cases:
 //   - double opening parentheses
 //   - double operators of the same type (prefix, infix or postfix)
-func (e expr[Output]) Parser() comb.Parser[Output] {
-	e.checkOperators()
-	ee := e.prepareParens()
-	if ee.space == nil {
-		ee.space = Whitespace0()
+func (e *expr[Output]) Parser() comb.Parser[Output] {
+	var p comb.Parser[Output]
+	safeSpot := e.checkOperators()
+	e.prepareParens()
+	e.saveSpot = safeSpot
+	if e.space == nil {
+		e.space = Whitespace0()
 	}
-	return comb.NewBranchParser[Output]("Expression", ee.children, ee.parseAfterChild)
+	if e.expected == "" {
+		e.expected = "expression"
+	}
+	e.id = func() int32 { return p.ID() }
+	p = comb.NewParserWithData(e.expected, e.parseWithData, e.recover)
+	return p
 }
-func (e expr[Output]) checkOperators() bool {
+func (e *expr[Output]) checkOperators() bool {
 	prefixCheck := make(map[string]struct{})
 	infixCheck := make(map[string]struct{})
 	postfixCheck := make(map[string]struct{})
-	safeSpot := e.value.IsSaveSpot()
+	safeSpot := false
 
 	for _, level := range e.levels {
 		switch {
@@ -240,9 +258,9 @@ func (e expr[Output]) checkOperators() bool {
 	}
 	return safeSpot
 }
-func (e expr[Output]) prepareParens() expr[Output] {
+func (e *expr[Output]) prepareParens() {
 	if len(e.parens) == 0 {
-		return e
+		return
 	}
 	opens := make([]string, len(e.parens))
 	parsers := make(map[string]comb.Parser[string], len(e.parens))
@@ -258,171 +276,184 @@ func (e expr[Output]) prepareParens() expr[Output] {
 	}
 	e.openParenParser = OneOf(opens...)
 	e.closeParenParsers = parsers
-	return e
-}
-
-func (e expr[Output]) children() []comb.AnyParser {
-	allChildren := make([]comb.AnyParser, 0, 128)
-	allChildren = append(allChildren, e.value, e.space)
-	for _, level := range e.levels {
-		allChildren = append(allChildren, level.children()...)
-	}
-	return allChildren
-}
-
-// subParse is only used during error recovery.
-// We don't know which operator to use. But we know that one operator matches immediately.
-// We just have to try them in the same order as the recover method.
-func (e expr[Output]) subParse(state comb.State) (comb.State, levelIdx, *comb.ParserError) {
-	return state, levelIdx{}, nil
 }
 
 // recover finds the operator with minimal waste that has the highest priority.
-func (e expr[Output]) recover(pe *comb.ParserError, state comb.State) int {
-	return comb.RecoverWasteTooMuch
+func (e *expr[Output]) recover(state comb.State, data interface{}) (int, interface{}) {
+	return comb.RecoverWasteTooMuch, data
 }
 
-func (e expr[Output]) parseAfterChild(pe *comb.ParserError, childID int32, result comb.ParseResult) comb.ParseResult {
-	return e.parseLevelAfterChild(len(e.levels)-1, childID, result)
+func (e *expr[Output]) parseWithData(state comb.State, data interface{}) (comb.State, Output, *comb.ParserError, interface{}) {
+	return e.parseLevelAfterError(len(e.levels)-1, state, data)
 }
-func (e expr[Output]) parseLevelAfterChild(l int, childID int32, result comb.ParseResult) comb.ParseResult {
-	nResult := e.parseSpace(result)
-	if nResult.Error != nil {
-		return nResult
+func (e *expr[Output]) parseLevelAfterError(
+	l int, state comb.State, data interface{},
+) (comb.State, Output, *comb.ParserError, interface{}) {
+	var out Output
+	var aOut interface{}
+
+	nState, err := e.parseSpace(state)
+	if err != nil {
+		return nState, out, err, nil
 	}
+	state = nState
+
 	if l < 0 { // parse value or parentheses
-		if e.openParenParser == nil {
-			return comb.RunParser(e.value, nResult)
+		if e.openParenParser != nil {
+			nState, aOut, err = e.openParenParser.ParseAny(e.id(), state)
 		}
-		oResult := comb.RunParser(e.openParenParser, nResult)
-		if oResult.Error != nil {
-			return comb.RunParser(e.value, nResult)
+		if err != nil || e.openParenParser == nil {
+			nState, aOut, err = e.value.ParseAny(e.id(), state)
+			out, _ = aOut.(Output)
+			return nState, out, comb.ClaimError(err), data // TODO: in case of error: return temp data
 		}
-		openParen, _ := oResult.Output.(string)
-		pResult := e.parseLevelAfterChild(len(e.levels)-1, oResult)
-		if pResult.Error != nil {
-			return pResult
+		state = nState
+		openParen, _ := aOut.(string)
+
+		nState, aOut, err, data = e.parseLevelAfterError(len(e.levels)-1, state, data)
+		out, _ = aOut.(Output)
+		if err != nil {
+			return nState, out, err, data
 		}
-		qResult := e.parseSpace(pResult)
-		if qResult.Error != nil {
-			return qResult
+		state = nState
+
+		nState, err = e.parseSpace(state)
+		if err != nil {
+			return nState, out, err, data
 		}
-		rResult := comb.RunParser(e.closeParenParsers[openParen], qResult)
-		if qResult.Error != nil {
-			// TODO: partial result?
-			return rResult
-		}
-		rResult.Output = pResult.Output
-		return rResult
+		state = nState
+
+		nState, aOut, err = e.closeParenParsers[openParen].ParseAny(e.id(), state)
+		return nState, out, err, data // TODO: in case of error: return temp data
 	}
 
 	level := e.levels[l]
 	switch {
 	case level.prefixLevel != nil:
-		return e.parsePrefixLevelAfterChild(l, level, result.EndState, nResult)
+		return e.parsePrefixLevelAfterError(l, level, state, data)
 	case level.infixLevel != nil:
-		return e.parseInfixLevelAfterChild(l, level, result.EndState, nResult)
+		return e.parseInfixLevelAfterError(l, level, state, data)
 	default:
-		return e.parsePostfixLevelAfterChild(l, level, result.EndState, nResult)
+		return e.parsePostfixLevelAfterError(l, level, state, data)
 	}
 }
-func (e expr[Output]) parsePrefixLevelAfterChild(
+func (e *expr[Output]) parsePrefixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
-	childID int32,
 	startState comb.State,
-	nResult comb.ParseResult,
-) comb.ParseResult {
-	oResult := comb.RunParser(level.opParser, nResult)
-	if oResult.Error != nil {
-		return e.parseLevelAfterChild(l-1, nResult)
-	}
-	op, _ := oResult.Output.(string)
-	pResult := e.parseLevelAfterChild(l, oResult)
-	if pResult.Error != nil {
-		return e.parseLevelAfterChild(l-1, nResult)
-	}
-	val, _ := pResult.Output.(Output)
-	pResult.Output = level.opFn1s[op](val)
-	pResult.StartState = startState
-	if level.opSafeSpots[op] {
-		pResult.EndState = pResult.EndState.MoveSafeSpot()
-	}
-	return pResult
-}
-func (e expr[Output]) parseInfixLevelAfterChild(
-	l int,
-	level PrecedenceLevel[Output],
-	childID int32,
-	startState comb.State,
-	nResult comb.ParseResult,
-) comb.ParseResult {
-	oResult := e.parseLevelAfterChild(l-1, nResult)
-	for oResult.Error == nil {
-		pResult := e.parseSpace(oResult)
-		if pResult.Error != nil {
-			return oResult
-		}
-		qResult := comb.RunParser(level.opParser, pResult)
-		if qResult.Error != nil {
-			return oResult
-		}
-		op, _ := qResult.Output.(string)
-		rResult := e.parseLevelAfterChild(l-1, qResult)
-		if rResult.Error != nil {
-			// TODO: save partial result
-			return rResult
-		}
-		val1, _ := oResult.Output.(Output)
-		val2, _ := rResult.Output.(Output)
-		rResult.Output = level.opFn2s[op](val1, val2)
-		rResult.StartState = startState
-		if level.opSafeSpots[op] {
-			rResult.EndState = rResult.EndState.MoveSafeSpot()
-		}
-		oResult = rResult
-	}
-	return oResult
-}
-func (e expr[Output]) parsePostfixLevelAfterChild(
-	l int,
-	level PrecedenceLevel[Output],
-	childID int32,
-	startState comb.State,
-	nResult comb.ParseResult,
-) comb.ParseResult {
-	oResult := e.parseLevelAfterChild(l-1, nResult)
-	if oResult.Error != nil {
-		return oResult
-	}
-	for oResult.Error == nil {
-		oResult = e.parseSpace(oResult)
-		if oResult.Error != nil {
-			return oResult
-		}
+	data interface{},
+) (comb.State, Output, *comb.ParserError, interface{}) {
+	var out Output
 
-		pResult := comb.RunParser(level.opParser, oResult)
-		if pResult.Error != nil {
-			return oResult
-		}
-		op, _ := pResult.Output.(string)
-		val, _ := oResult.Output.(Output)
-		pResult.Output = level.opFn1s[op](val)
-		if level.opSafeSpots[op] {
-			pResult.EndState = pResult.EndState.MoveSafeSpot()
-		}
-		oResult = pResult
+	state := startState
+	nState, aOut, err := level.opParser.ParseAny(e.id(), state)
+	if err != nil {
+		return e.parseLevelAfterError(l-1, startState, data)
 	}
-	oResult.StartState = startState
-	return oResult
+	state = nState
+	op, _ := aOut.(string)
+
+	nState, err = e.parseSpace(state)
+	if err != nil {
+		return nState, out, err, data
+	}
+	state = nState
+
+	// go recursive to support: '-- ++ a'
+	nState, out, err, data = e.parseLevelAfterError(l, state, data)
+	if err != nil {
+		return nState, out, err, data
+	}
+
+	out = level.opFn1s[op](out)
+	if level.opSafeSpots[op] {
+		nState = nState.MoveSafeSpot()
+	}
+	return nState, out, nil, data
 }
-func (e expr[Output]) parseSpace(result comb.ParseResult) comb.ParseResult {
-	state, _, err := e.space.Parse(result.EndState)
-	result.StartState = result.EndState
-	if err == nil {
-		result.EndState = state
-	} else {
-		result.Error = err
+func (e *expr[Output]) parseInfixLevelAfterError(
+	l int,
+	level PrecedenceLevel[Output],
+	startState comb.State,
+	data interface{},
+) (comb.State, Output, *comb.ParserError, interface{}) {
+	var aOut interface{}
+
+	state := startState
+	nState, out, err, data2 := e.parseLevelAfterError(l-1, state, data)
+	if err != nil {
+		return nState, out, err, data2
 	}
-	return result
+	state = nState
+
+	for {
+		nState, err = e.parseSpace(state)
+		if err != nil {
+			return nState, out, err, data
+		}
+		state = nState
+		startState = state
+
+		nState, aOut, err = level.opParser.ParseAny(e.id(), state)
+		if err != nil {
+			return state, out, nil, data
+		}
+		state = nState
+		op, _ := aOut.(string)
+
+		val1 := out
+		nState, out, err, data2 = e.parseLevelAfterError(l-1, state, data)
+		if err != nil {
+			return nState, level.opFn2s[op](val1, out), err, data2
+		}
+		state = nState
+
+		out = level.opFn2s[op](val1, out)
+		if level.opSafeSpots[op] {
+			state = nState.MoveSafeSpot()
+		}
+	}
+}
+func (e *expr[Output]) parsePostfixLevelAfterError(
+	l int,
+	level PrecedenceLevel[Output],
+	startState comb.State,
+	data interface{},
+) (comb.State, Output, *comb.ParserError, interface{}) {
+	var aOut interface{}
+
+	state := startState
+	nState, out, err, data2 := e.parseLevelAfterError(l-1, state, data)
+	if err != nil {
+		return nState, out, err, data2
+	}
+	state = nState
+
+	for {
+		nState, err = e.parseSpace(state)
+		if err != nil {
+			return nState, out, err, data
+		}
+		state = nState
+
+		nState, aOut, err = level.opParser.ParseAny(e.id(), state)
+		if err != nil {
+			return state, out, nil, data
+		}
+		state = nState
+		op, _ := aOut.(string)
+
+		out = level.opFn1s[op](out)
+		if level.opSafeSpots[op] {
+			nState = nState.MoveSafeSpot()
+		}
+	}
+}
+
+func (e *expr[Output]) parseSpace(state comb.State) (comb.State, *comb.ParserError) {
+	nState, _, err := e.space.ParseAny(e.id(), state)
+	if err != nil {
+		return state, comb.ClaimError(err)
+	}
+	return nState, nil
 }

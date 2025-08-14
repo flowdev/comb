@@ -1,10 +1,11 @@
 package comb_test
 
 import (
-	"github.com/flowdev/comb"
-	"github.com/flowdev/comb/cmb"
 	"strings"
 	"testing"
+
+	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/cmb"
 )
 
 func TestSaveSpot(t *testing.T) {

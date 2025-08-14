@@ -1,9 +1,10 @@
 package cmb
 
 import (
-	"github.com/flowdev/comb"
 	"math"
 	"testing"
+
+	"github.com/flowdev/comb"
 )
 
 func TestInt64(t *testing.T) {

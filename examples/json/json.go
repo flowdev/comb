@@ -1,17 +1,12 @@
-package main
+package json
 
 import (
-	_ "embed"
-	"fmt"
+	"strconv"
+
 	"github.com/flowdev/comb"
 	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"log"
-	"strconv"
 )
-
-//go:embed test.json
-var testJSON string
 
 // break initialization cycle:
 func init() {
@@ -22,16 +17,6 @@ func init() {
 	objectp = comb.LazyBranchParser(parseObject)
 	arrayp = parseArray()
 	valuep = parseValue()
-}
-
-func main() {
-	output, err := comb.RunOnString(testJSON, valuep)
-	if err != nil {
-		log.Fatal(err.Error())
-		return
-	}
-
-	fmt.Println(output)
 }
 
 type (

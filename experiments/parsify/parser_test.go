@@ -1,10 +1,11 @@
 package parsify
 
 import (
+	"testing"
+
 	"github.com/flowdev/comb"
 	"github.com/flowdev/comb/cmb"
 	. "github.com/flowdev/comb/cute"
-	"testing"
 )
 
 func TestDelimitedByChar(t *testing.T) {

@@ -96,9 +96,9 @@ func Char2[Output rune](char rune) Parser[Output] {
 	}
 }
 
-// UntilString parses until it finds a token in the input, and returns
+// UntilString parses until it finds a token in the input and returns
 // the part of the input that preceded the token.
-// If found the parser moves beyond the stop string.
+// If found, the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
 func UntilString(stop string) Parser[string] {
 	return func(state comb.State) (comb.State, string, *comb.ParserError) {

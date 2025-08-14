@@ -8,78 +8,81 @@ import (
 // if not successful.
 // Optional will ignore any parsing error except if a SafeSpot is active.
 func Optional[Output any](parser comb.Parser[Output]) comb.Parser[Output] {
-	return comb.NewBranchParser[Output](
+	var p comb.Parser[Output]
+
+	p = comb.NewBranchParser[Output](
 		"Optional",
 		func() []comb.AnyParser {
 			return []comb.AnyParser{parser}
-		}, func(_ *comb.ParserError, childID int32, childResult comb.ParseResult) comb.ParseResult {
+		}, func(
+			childID int32,
+			childStartState, childState comb.State,
+			childOut interface{},
+			childErr *comb.ParserError,
+			data interface{},
+		) (comb.State, Output, *comb.ParserError, interface{}) {
 			var out Output
-			comb.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
-			if childID >= 0 { // on the way up: Fetch
-				var o interface{}
-				o, childResult = childResult.FetchOutput()
-				out, _ = o.(Output)
+			comb.Debugf("Optional.parseAfterChild - childID=%d, pos=%d", childID, childState.CurrentPos())
+			if childID >= 0 { // bottom-up
+				out, _ = data.(Output)
+			} else { // top-down
+				childStartState = childState
+				childState, childOut, childErr = parser.ParseAny(p.ID(), childStartState)
+				out, _ = childOut.(Output)
 			}
-			endResult := childResult
-			if childID >= 0 {
-				if childID != parser.ID() {
-					childResult.Error = childResult.EndState.NewSemanticError(
-						"unable to parse after child with unknown ID %d", childID)
-					return childResult
-				}
-				out, _ = childResult.Output.(Output)
-			} else {
-				endResult = comb.RunParser(parser, childResult)
-				childResult.StartState = childResult.EndState
+			if childErr != nil && childStartState.SafeSpotMoved(childState) { // we can't ignore the error
+				return childState, out, childErr, out
 			}
-			if endResult.Error != nil && childResult.StartState.SafeSpotMoved(endResult.EndState) { // we can't ignore the error
-				return endResult.AddOutput(out)
+			if childErr != nil { // successful result without input consumption
+				return childStartState, out, nil, nil
 			}
-			if endResult.Error != nil { // successful result without input consumption
-				endResult.EndState = endResult.StartState
-				endResult.Error = nil
-				return endResult.AddOutput(out)
-			}
-			return endResult.AddOutput(out)
+			return childState, out, nil, nil
 		},
 	)
+	return p
 }
 
 // Peek tries to apply the provided parser without consuming any input.
-// It effectively allows to look ahead in the input.
+// It effectively allows looking ahead in the input.
 //
 // NOTE:
 //   - SafeSpot isn't honored here because we aren't officially parsing anything.
-//   - Even though Peek accepts a parser as argument it behaves like a leaf parser
-//     to the outside. There will be no error recovery as we don't parse anything.
+//   - Even though Peek accepts a parser as an argument, it behaves like a leaf parser
+//     to the outside world. There will be no error recovery as we don't parse anything.
 func Peek[Output any](parse comb.Parser[Output]) comb.Parser[Output] {
+	var p comb.Parser[Output]
 	peekParse := func(state comb.State) (comb.State, Output, *comb.ParserError) {
-		_, out, err := parse.Parse(state)
+		_, aOut, err := parse.ParseAny(comb.ParentUnknown, state)
+		out, _ := aOut.(Output)
 		return state, out, comb.ClaimError(err)
 	}
-	return comb.NewParser[Output]("Peek", peekParse, Forbidden())
+	p = comb.NewParser[Output]("Peek", peekParse, Forbidden())
+	return p
 }
 
 // Not tries to apply the provided parser without consuming any input.
 // Not succeeds if the parser fails and succeeds if the parser fails.
-// It effectively allows to look ahead in the input.
+// It effectively allows looking ahead in the input.
 // An error returned should be handled (or ignored) by the parent parser.
 //
 // NOTE:
 //   - SafeSpot isn't honored here because we aren't officially parsing anything.
-//   - Even though Not accepts a parser as argument it behaves like a leaf parser
-//     to the outside. There will be no error recovery as we don't parse anything.
+//   - Even though Not accepts a parser as an argument, it behaves like a leaf parser
+//     to the outside world. There will be no error recovery as we don't parse anything.
 //   - The returned boolean value indicates its own success and not the given parsers.
 func Not[Output any](parser comb.Parser[Output]) comb.Parser[bool] {
+	var p comb.Parser[bool]
+
 	expected := "not " + parser.Expected()
 	notParse := func(state comb.State) (comb.State, bool, *comb.ParserError) {
-		_, _, err := parser.Parse(state)
+		_, _, err := parser.ParseAny(comb.ParentUnknown, state)
 		if err != nil {
 			return state, true, nil
 		}
 		return state, false, state.NewSyntaxError(expected)
 	}
-	return comb.NewParser[bool](expected, notParse, Forbidden())
+	p = comb.NewParser[bool](expected, notParse, Forbidden())
+	return p
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise

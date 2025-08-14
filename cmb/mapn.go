@@ -9,7 +9,7 @@ import (
 // Only the `fn`n function has to be provided.
 // All other `fn`X functions are expected to be `nil`.
 // Only parsers up to `p`n have to be provided.
-// All higher numbered parsers are expected to be nil.
+// All higher-numbered parsers are expected to be nil.
 func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	expected string,
 	p1 comb.Parser[PO1], p2 comb.Parser[PO2], p3 comb.Parser[PO3], p4 comb.Parser[PO4], p5 comb.Parser[PO5],
@@ -71,10 +71,13 @@ func MapN[PO1, PO2, PO3, PO4, PO5 any, MO any](
 		fn1: fn1, fn2: fn2, fn3: fn3, fn4: fn4, fn5: fn5,
 	}
 
-	return comb.NewBranchParser[MO](expected, md.children, md.parseAfterChild)
+	p := comb.NewBranchParser[MO](expected, md.children, md.parseAfterChild)
+	md.id = p.ID
+	return p
 }
 
 type mapData[PO1, PO2, PO3, PO4, PO5 any, MO any] struct {
+	id       func() int32
 	expected string
 	p1       comb.Parser[PO1]
 	p2       comb.Parser[PO2]
@@ -116,192 +119,158 @@ func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) children() []comb.AnyParser {
 }
 
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) parseAfterChild(
-	_ *comb.ParserError, childID int32, childResult comb.ParseResult,
-) comb.ParseResult {
+	childID int32,
+	childStartState, childState comb.State,
+	childOut interface{},
+	childErr *comb.ParserError,
+	data interface{},
+) (comb.State, MO, *comb.ParserError, interface{}) {
 	var zero MO
 	var partRes partialMapResult[PO1, PO2, PO3, PO4]
 
-	comb.Debugf("MapN.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+	comb.Debugf("MapN.parseAfterChild - childID=%d, pos=%d", childID, childState.CurrentPos())
 
 	if childID >= 0 { // on the way up: Fetch
-		var o interface{}
-		o, childResult = childResult.FetchOutput()
-		partRes, _ = o.(partialMapResult[PO1, PO2, PO3, PO4])
+		partRes, _ = data.(partialMapResult[PO1, PO2, PO3, PO4])
 	}
 
-	if childResult.Error != nil {
-		return childResult.AddOutput(partRes) // we can't avoid any errors by going another path
+	if childErr != nil {
+		return childState, zero, childErr, partRes
 	}
 
-	state := childResult.EndState
-	id := childID // use new variable to keep the original childID (for distinguishing way: up/down)
-	idErrResult := comb.ParseResult{
-		StartState: state,
-		EndState:   state,
-		Output:     zero,
-		Error:      state.NewSemanticError("unable to parse after child with unknown ID %d", id),
-	}
-	idErrResult = idErrResult.GetParentResults(childResult).AddOutput(partRes)
+	id := childID // use a new variable to keep the original childID (for distinguishing way: up/down)
+	idErr := childState.NewSemanticError("unable to parse after child with unknown ID %d", id)
 	if id >= 0 && id != md.p1.ID() {
 		if md.n <= 1 {
-			return idErrResult
+			return childState, zero, idErr, partRes
 		}
 		if id != md.p2.ID() {
 			if md.n <= 2 {
-				return idErrResult
+				return childState, zero, idErr, partRes
 			}
 			if id != md.p3.ID() {
 				if md.n <= 3 {
-					return idErrResult
+					return childState, zero, idErr, partRes
 				}
 				if id != md.p4.ID() {
 					if md.n <= 4 {
-						return idErrResult
+						return childState, zero, idErr, partRes
 					}
 					if id != md.p5.ID() {
-						return idErrResult
+						return childState, zero, idErr, partRes
 					}
 				}
 			}
 		}
 	}
 
-	result1 := childResult
 	if id < 0 {
-		result1 = comb.RunParser(md.p1, childResult)
-		partRes.out1, _ = result1.Output.(PO1)
-		if result1.Error != nil {
-			return result1.AddOutput(partRes)
+		childStartState = childState
+		childState, childOut, childErr = md.p1.ParseAny(md.id(), childStartState)
+		partRes.out1, _ = childOut.(PO1)
+		if childErr != nil {
+			return childState, zero, childErr, partRes
 		}
 	} else if id == md.p1.ID() {
-		partRes.out1, _ = childResult.Output.(PO1)
+		partRes.out1, _ = childOut.(PO1)
 		id = -1
 	}
 
 	if md.n > 1 {
-		result2 := childResult
 		if id < 0 {
-			result2 = comb.RunParser(md.p2, result1)
-			partRes.out2, _ = result2.Output.(PO2)
-			if result2.Error != nil {
+			childStartState = childState
+			childState, childOut, childErr = md.p2.ParseAny(md.id(), childStartState)
+			partRes.out2, _ = childOut.(PO2)
+			if childErr != nil {
 				out, _ := md.fn(partRes)
-				result2.Output = out
-				return result2.AddOutput(partRes)
+				return childState, out, childErr, partRes
 			}
 		} else if id == md.p2.ID() {
-			partRes.out2, _ = childResult.Output.(PO2)
+			partRes.out2, _ = childOut.(PO2)
 			id = -1
 		}
 
 		if md.n > 2 {
-			result3 := childResult
 			if id < 0 {
-				result3 = comb.RunParser(md.p3, result2)
-				partRes.out3, _ = result3.Output.(PO3)
-				if result3.Error != nil {
+				childStartState = childState
+				childState, childOut, childErr = md.p3.ParseAny(md.id(), childStartState)
+				partRes.out3, _ = childOut.(PO3)
+				if childErr != nil {
 					out, _ := md.fn(partRes)
-					result3.Output = out
-					return result3.AddOutput(partRes)
+					return childState, out, childErr, partRes
 				}
 			} else if id == md.p3.ID() {
-				partRes.out3, _ = childResult.Output.(PO3)
+				partRes.out3, _ = childOut.(PO3)
 				id = -1
 			}
 
 			if md.n > 3 {
-				result4 := childResult
 				if id < 0 {
-					result4 = comb.RunParser(md.p4, result3)
-					partRes.out4, _ = result4.Output.(PO4)
-					if result4.Error != nil {
+					childStartState = childState
+					childState, childOut, childErr = md.p4.ParseAny(md.id(), childStartState)
+					partRes.out4, _ = childOut.(PO4)
+					if childErr != nil {
 						out, _ := md.fn(partRes)
-						result4.Output = out
-						return result4.AddOutput(partRes)
+						return childState, out, childErr, partRes
 					}
 				} else if id == md.p4.ID() {
-					partRes.out4, _ = childResult.Output.(PO4)
+					partRes.out4, _ = childOut.(PO4)
 					id = -1
 				}
 
 				if md.n > 4 {
 					var out5 PO5
 
-					result5 := childResult
 					if id < 0 {
-						result5 = comb.RunParser(md.p5, result4)
-						out5, _ = result5.Output.(PO5)
-						if result5.Error != nil {
+						childStartState = childState
+						childState, childOut, childErr = md.p5.ParseAny(md.id(), childStartState)
+						out5, _ = childOut.(PO5)
+						if childErr != nil {
 							out, _ := md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, out5)
-							result5.Output = out
-							return result5.AddOutput(partRes)
+							return childState, out, childErr, partRes
 						}
 					} else {
-						out5, _ = childResult.Output.(PO5)
+						out5, _ = childOut.(PO5)
 					}
 
 					out, err := md.fn5(partRes.out1, partRes.out2, partRes.out3, partRes.out4, out5)
-					var pErr *comb.ParserError
 					if err != nil {
-						pErr = result5.EndState.NewSemanticError(err.Error())
+						childState = childState.SaveError(childState.NewSemanticError(err.Error()))
+						return childState, out, nil, partRes
 					}
-					return comb.ParseResult{
-						StartState: state,
-						EndState:   result5.EndState,
-						Output:     out,
-						Error:      pErr,
-					}.GetParentResults(childResult).AddOutput(partRes)
+					return childState, out, nil, nil
 				}
 
 				out, err := md.fn4(partRes.out1, partRes.out2, partRes.out3, partRes.out4)
-				var pErr *comb.ParserError
 				if err != nil {
-					pErr = result4.EndState.NewSemanticError(err.Error())
+					childState = childState.SaveError(childState.NewSemanticError(err.Error()))
+					return childState, out, nil, partRes
 				}
-				return comb.ParseResult{
-					StartState: state,
-					EndState:   result4.EndState,
-					Output:     out,
-					Error:      pErr,
-				}.GetParentResults(childResult).AddOutput(partRes)
+				return childState, out, nil, nil
 			}
 
 			out, err := md.fn3(partRes.out1, partRes.out2, partRes.out3)
-			var pErr *comb.ParserError
 			if err != nil {
-				pErr = result3.EndState.NewSemanticError(err.Error())
+				childState = childState.SaveError(childState.NewSemanticError(err.Error()))
+				return childState, out, nil, partRes
 			}
-			return comb.ParseResult{
-				StartState: state,
-				EndState:   result3.EndState,
-				Output:     out,
-				Error:      pErr,
-			}.GetParentResults(childResult).AddOutput(partRes)
+			return childState, out, nil, nil
 		}
 
 		out, err := md.fn2(partRes.out1, partRes.out2)
-		var pErr *comb.ParserError
 		if err != nil {
-			pErr = result2.EndState.NewSemanticError(err.Error())
+			childState = childState.SaveError(childState.NewSemanticError(err.Error()))
+			return childState, out, nil, partRes
 		}
-		return comb.ParseResult{
-			StartState: state,
-			EndState:   result2.EndState,
-			Output:     out,
-			Error:      pErr,
-		}.GetParentResults(childResult).AddOutput(partRes)
+		return childState, out, nil, nil
 	}
 
 	out, err := md.fn1(partRes.out1)
-	var pErr *comb.ParserError
 	if err != nil {
-		pErr = result1.EndState.NewSemanticError(err.Error())
+		childState = childState.SaveError(childState.NewSemanticError(err.Error()))
+		return childState, out, nil, partRes
 	}
-	return comb.ParseResult{
-		StartState: state,
-		EndState:   result1.EndState,
-		Output:     out,
-		Error:      pErr,
-	}.GetParentResults(childResult).AddOutput(partRes)
+	return childState, out, nil, nil
 }
 
 func (md *mapData[PO1, PO2, PO3, PO4, PO5, MO]) fn(partRes partialMapResult[PO1, PO2, PO3, PO4]) (MO, error) {

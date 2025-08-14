@@ -3,13 +3,14 @@ package cmb
 import (
 	"bytes"
 	"fmt"
-	"github.com/flowdev/comb"
 	"math"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/flowdev/comb"
 )
 
 // Char parses a single rune and matches it with
@@ -18,6 +19,8 @@ import (
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func Char(char rune) comb.Parser[rune] {
+	var p comb.Parser[rune]
+
 	expected := strconv.QuoteRune(char)
 
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
@@ -35,7 +38,8 @@ func Char(char rune) comb.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	return comb.NewParser[rune](expected, parse, IndexOf(char))
+	p = comb.NewParser[rune](expected, parse, IndexOf(char))
+	return p
 }
 
 // Byte parses a single byte and matches it with
@@ -44,6 +48,8 @@ func Char(char rune) comb.Parser[rune] {
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func Byte(byt byte) comb.Parser[byte] {
+	var p comb.Parser[byte]
+
 	expected := "0x" + strconv.FormatUint(uint64(byt), 16)
 
 	parse := func(state comb.State) (comb.State, byte, *comb.ParserError) {
@@ -59,15 +65,18 @@ func Byte(byt byte) comb.Parser[byte] {
 		return state.MoveBy(1), b, nil
 	}
 
-	return comb.NewParser[byte](expected, parse, IndexOf(byt))
+	p = comb.NewParser[byte](expected, parse, IndexOf(byt))
+	return p
 }
 
-// Satisfy parses a single character, and ensures that it satisfies the given predicate.
+// Satisfy parses a single character and ensures that it satisfies the given predicate.
 // `expected` is used in error messages to tell the user what is expected at the current position.
 //
 // This parser is a good candidate for SafeSpot and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer)`.
 func Satisfy(expected string, predicate func(rune) bool) comb.Parser[rune] {
+	var p comb.Parser[rune]
+
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
 		r, size := utf8.DecodeRuneInString(state.CurrentString())
 		if r == utf8.RuneError {
@@ -83,19 +92,22 @@ func Satisfy(expected string, predicate func(rune) bool) comb.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	recoverer := func(_ *comb.ParserError, state comb.State) int {
-		return strings.IndexFunc(state.CurrentString(), predicate)
+	recoverer := func(state comb.State, _ interface{}) (int, interface{}) {
+		return strings.IndexFunc(state.CurrentString(), predicate), nil
 	}
 
-	return comb.NewParser[rune](expected, parse, recoverer)
+	p = comb.NewParser[rune](expected, parse, recoverer)
+	return p
 }
 
-// String parses a token from the input, and returns the part of the input that
+// String parses a token from the input and returns the part of the input that
 // matched the token.
 // If the token could not be found at the current position,
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func String(token string) comb.Parser[string] {
+	var p comb.Parser[string]
+
 	expected := strconv.Quote(token)
 
 	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
@@ -107,14 +119,17 @@ func String(token string) comb.Parser[string] {
 		return newState, token, nil
 	}
 
-	return comb.NewParser[string](expected, parse, IndexOf(token))
+	p = comb.NewParser[string](expected, parse, IndexOf(token))
+	return p
 }
 
-// Bytes parses a token from the input, and returns the part of the input that
+// Bytes parses a token from the input and returns the part of the input that
 // matched the token.
 // If the token could not be found at the current position,
 // the parser returns an error result.
 func Bytes(token []byte) comb.Parser[[]byte] {
+	var p comb.Parser[[]byte]
+
 	expected := fmt.Sprintf("0x%x", token)
 
 	parse := func(state comb.State) (comb.State, []byte, *comb.ParserError) {
@@ -126,10 +141,11 @@ func Bytes(token []byte) comb.Parser[[]byte] {
 		return newState, token, nil
 	}
 
-	return comb.NewParser[[]byte](expected, parse, IndexOf(token))
+	p = comb.NewParser[[]byte](expected, parse, IndexOf(token))
+	return p
 }
 
-// UntilString parses until it finds a token in the input, and returns
+// UntilString parses until it finds a token in the input and returns
 // the part of the input that preceded the token.
 // If found the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
@@ -141,6 +157,8 @@ func Bytes(token []byte) comb.Parser[[]byte] {
 //     In error cases it will usually start earlier because other parsers are skipped.
 //     Especially using it as a `SafeSpot` parser is a bad idea!
 func UntilString(stop string) comb.Parser[string] {
+	var p comb.Parser[string]
+
 	expected := fmt.Sprintf("... %q", stop)
 
 	if stop == "" {
@@ -158,16 +176,17 @@ func UntilString(stop string) comb.Parser[string] {
 		return newState, input[:i], nil
 	}
 
-	return comb.NewParser[string](
+	p = comb.NewParser[string](
 		expected,
 		parse,
-		func(_ *comb.ParserError, state comb.State) int {
+		func(state comb.State, _ interface{}) (int, interface{}) {
 			if strings.Contains(state.CurrentString(), stop) {
-				return 0 // this is probably not what the user wants but the only correct value :(
+				return 0, nil // this is probably not what the user wants but the only correct value :(
 			}
-			return comb.RecoverWasteTooMuch
+			return comb.RecoverWasteTooMuch, nil
 		},
 	)
+	return p
 }
 
 // SatisfyMN returns the longest input subset that matches the predicate,
@@ -179,12 +198,15 @@ func UntilString(stop string) comb.Parser[string] {
 // This parser is a good candidate for SafeSpot and has an optimized Recoverer.
 // An even more specialized Recoverer can be used later with `parser.SwapRecoverer(newRecoverer) Parser`.
 func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) comb.Parser[string] {
+	var p comb.Parser[string]
+
 	if atLeast < 0 {
 		panic("SatisfyMN is unable to handle negative `atLeast` argument")
 	}
 	if atMost < 0 {
 		panic("SatisfyMN is unable to handle negative `atMost` argument")
 	}
+
 	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
 		current := state
 		count := 0
@@ -196,11 +218,9 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 					return current, output, nil
 				}
 				if size == 0 {
-					return state, "", state.NewSyntaxError("%s (need %d, found %d at EOF)",
-						expected, atLeast, count)
+					return state, "", state.NewSyntaxError("%s (need %d, found %d at EOF)", expected, atLeast, count)
 				}
-				return state, "", state.NewSyntaxError("%s (need %d, found %d, got UTF-8 error)",
-					expected, atLeast, count)
+				return state, "", state.NewSyntaxError("%s (need %d, found %d, got UTF-8 error)", expected, atLeast, count)
 			}
 
 			if !predicate(r) {
@@ -208,8 +228,7 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 					output := state.StringTo(current)
 					return current, output, nil
 				}
-				return state, "", state.NewSyntaxError("%s (need %d, found %d, got %q)",
-					expected, atLeast, count, r)
+				return state, "", state.NewSyntaxError("%s (need %d, found %d, got %q)", expected, atLeast, count, r)
 			}
 
 			current = current.MoveBy(size)
@@ -220,11 +239,12 @@ func SatisfyMN(expected string, atLeast, atMost int, predicate func(rune) bool) 
 		return current, output, nil
 	}
 
-	return comb.NewParser[string](expected, parse, satisfyMNRecoverer(atLeast, predicate))
+	p = comb.NewParser[string](expected, parse, satisfyMNRecoverer(atLeast, predicate))
+	return p
 }
 
 func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) comb.Recoverer {
-	return func(_ *comb.ParserError, state comb.State) int {
+	return func(state comb.State, _ interface{}) (int, interface{}) {
 		count := 0
 		start := 0
 		for i, r := range state.CurrentString() {
@@ -234,13 +254,13 @@ func satisfyMNRecoverer(atLeast int, predicate func(rune) bool) comb.Recoverer {
 				}
 				count++
 				if count >= atLeast {
-					return start
+					return start, nil
 				}
 			} else {
 				count = 0
 			}
 		}
-		return comb.RecoverWasteTooMuch
+		return comb.RecoverWasteTooMuch, nil
 	}
 }
 
@@ -249,7 +269,7 @@ func AlphaMN(atLeast, atMost int) comb.Parser[string] {
 	return SatisfyMN("letter", atLeast, atMost, unicode.IsLetter)
 }
 
-// Alpha0 parses a zero or more lowercase or uppercase alphabetic characters: a-z, A-Z.
+// Alpha0 parses zero or more lowercase or uppercase alphabetic characters: a-z, A-Z.
 // In the cases where the input is empty, or no character is found, the parser
 // returns the input as is.
 func Alpha0() comb.Parser[string] {
@@ -331,8 +351,8 @@ func OneOfRunes(collection ...rune) comb.Parser[rune] {
 	parser := Satisfy(expected, func(r rune) bool {
 		return slices.Contains(collection, r)
 	})
-	parser.SwapRecoverer(func(_ *comb.ParserError, state comb.State) int {
-		return strings.IndexAny(state.CurrentString(), string(collection))
+	parser.SwapRecoverer(func(state comb.State, _ interface{}) (int, interface{}) {
+		return strings.IndexAny(state.CurrentString(), string(collection)), nil
 	})
 	return parser
 }
@@ -340,6 +360,8 @@ func OneOfRunes(collection ...rune) comb.Parser[rune] {
 // OneOf parses a single string from the given set of strings.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func OneOf(collection ...string) comb.Parser[string] {
+	var p comb.Parser[string]
+
 	n := len(collection)
 	if n == 0 {
 		panic("OneOf has no strings to match")
@@ -357,7 +379,8 @@ func OneOf(collection ...string) comb.Parser[string] {
 		return state, "", state.NewSyntaxError(expected)
 	}
 
-	return comb.NewParser[string](expected, parse, IndexOfAny(collection...))
+	p = comb.NewParser[string](expected, parse, IndexOfAny(collection...))
+	return p
 }
 
 // LF parses a line feed `\n` character.

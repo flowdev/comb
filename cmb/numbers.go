@@ -21,6 +21,8 @@ import (
 // No check on position or number of (consecutive) underscores is done.
 // The Go parse functions will do more checks on this.
 func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[string] {
+	var p comb.Parser[string]
+
 	if base != 0 && (base < 2 || base > 36) {
 		panic(fmt.Sprintf(
 			"The base has to be 0 or between 2 and 36, but is: %d", base,
@@ -53,7 +55,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 
 		n := 0 // number of bytes read from input
 
-		// Pick off leading sign.
+		// Pick off the leading sign.
 		if signAllowed {
 			if input[0] == '+' || input[0] == '-' {
 				input = input[1:]
@@ -96,7 +98,8 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 		recovererBase = 10
 	}
 	allRunes := digitsToRunes(allDigits)
-	return comb.NewParser[string](expected, parser, IndexOfAny(allRunes[:recovererBase]...))
+	p = comb.NewParser[string](expected, parser, IndexOfAny(allRunes[:recovererBase]...))
+	return p
 }
 
 func rebaseInput(input string, base, n int) (string, int, int) {
@@ -141,6 +144,8 @@ func digitsToRunes(digits string) []rune {
 
 // Int64 parses an integer from the input using `strconv.ParseInt`.
 func Int64(signAllowed bool, base int) comb.Parser[int64] {
+	var p comb.Parser[int64]
+
 	underscoreAllowed := false
 	if base == 0 {
 		underscoreAllowed = true
@@ -148,7 +153,8 @@ func Int64(signAllowed bool, base int) comb.Parser[int64] {
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
 	parser := func(state comb.State) (comb.State, int64, *comb.ParserError) {
-		nState, str, pErr := intParser.Parse(state)
+		nState, out, pErr := intParser.ParseAny(p.ID(), state)
+		str, _ := out.(string)
 		if pErr != nil {
 			return state, 0, comb.ClaimError(pErr)
 		}
@@ -158,11 +164,14 @@ func Int64(signAllowed bool, base int) comb.Parser[int64] {
 		}
 		return nState, i, nil
 	}
-	return comb.NewParser[int64](intParser.Expected(), parser, intParser.Recover)
+	p = comb.NewParser[int64](intParser.Expected(), parser, intParser.Recover)
+	return p
 }
 
 // UInt64 parses an integer from the input using `strconv.ParseUint`.
 func UInt64(signAllowed bool, base int) comb.Parser[uint64] {
+	var p comb.Parser[uint64]
+
 	underscoreAllowed := false
 	if base == 0 {
 		underscoreAllowed = true
@@ -170,7 +179,8 @@ func UInt64(signAllowed bool, base int) comb.Parser[uint64] {
 	intParser := Integer(signAllowed, base, underscoreAllowed)
 
 	parser := func(state comb.State) (comb.State, uint64, *comb.ParserError) {
-		nState, str, pErr := intParser.Parse(state)
+		nState, out, pErr := intParser.ParseAny(p.ID(), state)
+		str, _ := out.(string)
 		if pErr != nil {
 			return state, 0, comb.ClaimError(pErr)
 		}
@@ -180,7 +190,8 @@ func UInt64(signAllowed bool, base int) comb.Parser[uint64] {
 		}
 		return nState, ui, nil
 	}
-	return comb.NewParser[uint64](intParser.Expected(), parser, intParser.Recover)
+	p = comb.NewParser[uint64](intParser.Expected(), parser, intParser.Recover)
+	return p
 }
 
 // ============================================================================

@@ -2,9 +2,10 @@ package cmb
 
 import (
 	"errors"
-	"github.com/flowdev/comb"
 	"strconv"
 	"testing"
+
+	"github.com/flowdev/comb"
 )
 
 func TestOptional(t *testing.T) {
@@ -203,7 +204,7 @@ func TestDelimited(t *testing.T) {
 			input:      "+1",
 			parser:     Delimited(Char('+'), Digit1(), CRLF()),
 			wantErr:    true,
-			wantOutput: "",
+			wantOutput: "1",
 		}, {
 			name:       "empty input should fail",
 			input:      "",
@@ -328,7 +329,7 @@ func TestSuffixed(t *testing.T) {
 			input:      "1-23",
 			parser:     Suffixed(Digit1(), Char('+')),
 			wantErr:    true,
-			wantOutput: "",
+			wantOutput: "1",
 		},
 		{
 			name:       "no parser match should fail",

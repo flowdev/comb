@@ -16,10 +16,13 @@ func FirstSuccessful[Output any](parsers ...comb.Parser[Output]) comb.Parser[Out
 
 	fsd := &firstSuccessfulData[Output]{parsers: parsers}
 
-	return comb.NewBranchParser[Output]("FirstSuccessful", fsd.children, fsd.parseAfterChild)
+	p := comb.NewBranchParser[Output]("FirstSuccessful", fsd.children, fsd.parseAfterChild)
+	fsd.id = p.ID
+	return p
 }
 
 type firstSuccessfulData[Output any] struct {
+	id      func() int32
 	parsers []comb.Parser[Output]
 }
 
@@ -38,62 +41,77 @@ func (fsd *firstSuccessfulData[Output]) children() []comb.AnyParser {
 }
 
 func (fsd *firstSuccessfulData[Output]) parseAfterChild(
-	_ *comb.ParserError, childID int32, childResult comb.ParseResult,
-) comb.ParseResult {
+	childID int32,
+	childStartState, childState comb.State,
+	childOut interface{},
+	childErr *comb.ParserError,
+	data interface{},
+) (comb.State, Output, *comb.ParserError, interface{}) {
 	var bestRes partialFSResult[Output]
-	var bestResult comb.ParseResult
+	var bestState comb.State
+	var bestOut Output
+	var bestErr *comb.ParserError
 
-	comb.Debugf("FirstSuccessful.parseAfterChild - childID=%d, pos=%d", childID, childResult.EndState.CurrentPos())
+	comb.Debugf("FirstSuccessful.parseAfterChild - childID=%d, pos=%d", childID, childState.CurrentPos())
 
+	bestState = childState
 	if childID >= 0 { // on the way up: Fetch
-		var o interface{}
-		o, childResult = childResult.FetchOutput()
-		bestRes, _ = o.(partialFSResult[Output])
-	}
+		bestRes, _ = data.(partialFSResult[Output])
+		bestOut, _ = childOut.(Output)
+		bestState = childState
+		bestErr = childErr
 
-	if childID >= 0 && (childResult.Error == nil || childResult.StartState.SafeSpotMoved(childResult.EndState)) {
-		return childResult.AddOutput(bestRes) // we can't avoid this error by going another path
+		if childErr == nil {
+			return bestState, bestOut, nil, nil
+		} else if childStartState.SafeSpotMoved(childState) {
+			return bestState, bestOut, bestErr, bestRes // we can't avoid this error by going another path
+		}
 	}
 
 	idx := 0
-	startResult := childResult
-	bestResult.Error = childResult.Error
 	if childID >= 0 {
 		idx = fsd.indexForID(childID)
 		if idx < 0 {
-			childResult.Error = childResult.EndState.NewSemanticError(
-				"unable to parse after child with unknown ID %d", childID)
-			return childResult.AddOutput(bestRes)
+			bestErr = childState.NewSemanticError("parsing after child with unknown ID %d", childID)
+			childStartState = childStartState.SaveError(bestErr)
+			bestState = bestState.SaveError(bestErr)
+			idx = -1 // will be 0 before usage
 		}
-		startResult.EndState = childResult.StartState
-		bestResult = childResult
-		bestRes.out, _ = childResult.Output.(Output)
-		bestRes.pos = childResult.EndState.CurrentPos()
+		bestRes.pos = childState.CurrentPos()
 		idx++
 	}
 
 	for i := idx; i < len(fsd.parsers); i++ {
 		p := fsd.parsers[i]
-		result := comb.RunParser(p, startResult)
-		if result.Error == nil || startResult.EndState.SafeSpotMoved(result.EndState) {
-			return result.AddOutput(bestRes)
+		childState, childOut, childErr = p.ParseAny(fsd.id(), childStartState)
+		if childErr == nil {
+			bestRes.out, _ = childOut.(Output)
+			return childState, bestRes.out, nil, nil
+		} else if childStartState.SafeSpotMoved(childState) {
+			bestRes.out, _ = childOut.(Output)
+			bestRes.pos = childState.CurrentPos()
+			return childState, bestRes.out, childErr, bestRes // we can't avoid this error by going another path
 		}
 
 		// may the best error win:
 		if i == 0 {
-			bestResult = result
-			bestRes.out, _ = result.Output.(Output)
-			bestRes.pos = result.EndState.CurrentPos()
+			bestState = childState
+			bestOut, _ = childOut.(Output)
+			bestErr = childErr
+			bestRes.out, _ = childOut.(Output)
+			bestRes.pos = childState.CurrentPos()
 		} else {
-			_, other := comb.BetterOf(bestResult.EndState, result.EndState)
+			_, other := comb.BetterOf(bestState, childState)
 			if other {
-				bestResult = result
-				bestRes.out, _ = result.Output.(Output)
-				bestRes.pos = result.EndState.CurrentPos()
+				bestState = childState
+				bestOut, _ = childOut.(Output)
+				bestErr = childErr
+				bestRes.out, _ = childOut.(Output)
+				bestRes.pos = childState.CurrentPos()
 			}
 		}
 	}
-	return bestResult.AddOutput(bestRes)
+	return bestState, bestOut, bestErr, bestRes
 }
 
 func (fsd *firstSuccessfulData[Output]) indexForID(id int32) int {

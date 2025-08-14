@@ -1,11 +1,12 @@
 package cmb_test
 
 import (
-	"github.com/flowdev/comb"
-	"github.com/flowdev/comb/cmb"
 	"testing"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/cmb"
 )
 
 func TestChar(t *testing.T) {

@@ -148,7 +148,13 @@ from the `comb` package:
 func NewBranchParser[Output any](
     expected string,
     children func() []AnyParser,
-    parseAfterChild func(childID int32, childResult ParseResult) ParseResult,
+    parseAfterChild func(
+                        childID int32,
+                        childStartState, childState State,
+                        childOut interface{},
+                        childErr *ParserError,
+                        data interface{},
+                    ) (State, Output, *ParserError, interface{}),
 ) Parser[Output]
 ```
 The `expected` string is usually just the name of the branch parser.
@@ -161,41 +167,22 @@ It is allowed to not return child parsers as long as they never fail
 (e.g. because they don't have to consume input)
 and they are no safe spot parsers.
 A child parser consuming optional space is a good example.
+If you want to have a child parser that can fail, without reporting it,
+you have to claim any error returned by it with `comb.ClaimError(err)`.
 
 The `parseAfterChild` function is the heart of a branch parser and
 performs the parsing itself.
 It will be called with a `childID < 0` if it should parse from the beginning.
 This way you have to implement _only one_ function for parsing. \
-The state to start own parsing with always is the `childResult.EndState`.
-During normal parsing the `childID` will always be `< 0`.
-A `childID >= 0` signals that error recovery is going on. \
-The `parseAfterChild` function has to use a few functions and methods from the main parser package:
-* Child parsers have to be called with:
-    ```go
-    func RunParser(ap AnyParser, inResult ParseResult) ParseResult
-    ```
-  This ensures the correct handling of branch parsers.
-* Partial output has to be saved by calling:
-    ```go
-    func (pr ParseResult) AddOutput(partialOutput interface{}) ParseResult
-    ```
-  This ensures that no parser output gets lost.
-  It's usually done when returning, e.g.: `return result.AddOutput(partial)`
-* If the `childID >= 0`, the partial output can be fetched with:
-    ```go
-    func (pr ParseResult) FetchOutput() (interface{}, ParseResult)
-    ```
-  This gives the partial output saved with `AddOutput` back.
-* If you want to create a **new** `ParseResult`, you have to transfer the
-  existing partial results to the new one with:
-    ```go
-    func (pr ParseResult) GetParentResults(source ParseResult) ParseResult
-    ```
-  Otherwise, all partial results from other parsers would be lost.
+The state to start own parsing with always is the `childState`.
+During normal parsing `childErr` will always be `nil` and the `childID` will always be `< 0`.
+A `childErr != nil` or `childID >= 0` signals that error recovery is going on. \
+The `parseAfterChild` function gets data from earlier calls as `data` argument
+(e.g. partial output). It can return such data as the last return value.
 
 So please follow these rules. They shouldn't restrict you in any way.
 If your branch parser doesn't have any partial results to be saved,
-you needn't use `AddOutput` and `FetchOutput` at all.
+you can just return `nil` and ignore the `data` argument.
 
 Of course, you are welcome to use
 `FirstSuccessful`, `MapN`, `SeparatedMN` or  `Expression` as a starting point.

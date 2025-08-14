@@ -15,7 +15,7 @@ import (
 type State struct {
 	constant *ConstState
 	pos      int           // current position in the input a.k.a. the *byte* index
-	prevNl   int           // position of newline preceding 'pos' (-1 for line==1)
+	prevNl   int           // position of the newline preceding 'pos' (-1 for line==1)
 	line     int           // current line number
 	safeSpot int           // mark set by the SafeSpot parser
 	errors   []ParserError // errors that have been handled
@@ -162,30 +162,31 @@ func (st State) SaveError(err *ParserError) State {
 		st.errors = append(st.errors, *err)
 	}
 	if st.constant.maxErrors > 0 && len(st.errors) >= st.constant.maxErrors {
+		// always reported by the root parser: too many errors, giving up
 		st.errors = append(st.errors, *(st.NewSemanticError("too many errors, giving up")))
 		st.MoveBy(st.BytesRemaining()) // give up: move to end
 	}
 	return st
 }
 
-// NewSyntaxError creates a syntax error with the message and arguments at
-// the current state position.
+// NewSyntaxError creates a syntax error with the
+// message and arguments at the current state position.
 // For syntax errors `expected ` is prepended to the message, and the usual
 // position and source line including marker are appended.
 func (st State) NewSyntaxError(msg string, args ...interface{}) *ParserError {
 	return st.NewSemanticError(`expected `+msg, args...)
 }
 
-// NewSemanticError creates a semantic error with the message and arguments at
-// the current state position.
+// NewSemanticError creates a semantic error
+// with the message and arguments at the current state position.
 // The usual position and source line including marker are appended to the message.
 func (st State) NewSemanticError(msg string, args ...interface{}) *ParserError {
 	newErr := &ParserError{
-		id:       currentErrorID.Add(1), // only 0 after overflow
-		text:     fmt.Sprintf(msg, args...),
-		pos:      st.pos,
-		binary:   st.constant.binary,
-		parserID: -1,
+		text:       fmt.Sprintf(msg, args...),
+		pos:        st.pos,
+		binary:     st.constant.binary,
+		parserID:   -1,
+		parserData: make(map[int32]interface{}),
 	}
 	if st.constant.binary { // the rare binary case is misusing the text case data a bit...
 		newErr.line, newErr.col, newErr.srcLine = st.bytesAround(st.pos)
