@@ -156,26 +156,26 @@ type levelIdx struct {
 // The first level added, binds the strongest (e.g., unary sign operator) and
 // the last level added binds the least (e.g., assignment operator).
 // It's also possible to later add (multiple) pairs of parentheses.
-func Expression[Output any](valueParser comb.Parser[Output], levels ...PrecedenceLevel[Output]) *expr[Output] {
-	e := &expr[Output]{
+func Expression[Output any](valueParser comb.Parser[Output], levels ...PrecedenceLevel[Output]) expr[Output] {
+	e := expr[Output]{
 		value:  valueParser,
 		levels: levels,
 	}
 	return e
 }
-func (e *expr[Output]) AddPrefixLevel(level ...PrefixOp[Output]) *expr[Output] {
+func (e expr[Output]) AddPrefixLevel(level ...PrefixOp[Output]) expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{prefixLevel: level})
 	return e
 }
-func (e *expr[Output]) AddInfixLevel(level ...InfixOp[Output]) *expr[Output] {
+func (e expr[Output]) AddInfixLevel(level ...InfixOp[Output]) expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{infixLevel: level})
 	return e
 }
-func (e *expr[Output]) AddPostfixLevel(level ...PostfixOp[Output]) *expr[Output] {
+func (e expr[Output]) AddPostfixLevel(level ...PostfixOp[Output]) expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{postfixLevel: level})
 	return e
 }
-func (e *expr[Output]) AddParentheses(open, close string) *expr[Output] {
+func (e expr[Output]) AddParentheses(open, close string) expr[Output] {
 	e.parens = append(e.parens, parens{open: open, close: close})
 	return e
 }
@@ -183,7 +183,7 @@ func (e *expr[Output]) AddParentheses(open, close string) *expr[Output] {
 // WithSpace sets the parser for handling spaces between tokens in the expression and
 // returns the updated expression object.
 // If no parser is explicitly set, Whitespace0 is the default.
-func (e *expr[Output]) WithSpace(spaceParser comb.Parser[string]) *expr[Output] {
+func (e expr[Output]) WithSpace(spaceParser comb.Parser[string]) expr[Output] {
 	e.space = spaceParser
 	return e
 }
@@ -192,7 +192,7 @@ func (e *expr[Output]) WithSpace(spaceParser comb.Parser[string]) *expr[Output] 
 // returns the updated expression object.
 // This is used by other parsers embedding this one, like the `Not` parser.
 // If nothing is explicitly set, 'expression' is the default.
-func (e *expr[Output]) WithExpected(expected string) *expr[Output] {
+func (e expr[Output]) WithExpected(expected string) expr[Output] {
 	e.expected = expected
 	return e
 }
@@ -201,22 +201,22 @@ func (e *expr[Output]) WithExpected(expected string) *expr[Output] {
 // It will panic in the following cases:
 //   - double opening parentheses
 //   - double operators of the same type (prefix, infix or postfix)
-func (e *expr[Output]) Parser() comb.Parser[Output] {
+func (e expr[Output]) Parser() comb.Parser[Output] {
 	var p comb.Parser[Output]
 	safeSpot := e.checkOperators()
-	e.prepareParens()
-	e.saveSpot = safeSpot
-	if e.space == nil {
-		e.space = Whitespace0()
+	ee := e.prepareParens()
+	ee.saveSpot = safeSpot
+	if ee.space == nil {
+		ee.space = Whitespace0()
 	}
-	if e.expected == "" {
-		e.expected = "expression"
+	if ee.expected == "" {
+		ee.expected = "expression"
 	}
-	e.id = func() int32 { return p.ID() }
-	p = comb.NewParserWithData(e.expected, e.parseWithData, e.recover)
+	ee.id = func() int32 { return p.ID() }
+	p = comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
 	return p
 }
-func (e *expr[Output]) checkOperators() bool {
+func (e expr[Output]) checkOperators() bool {
 	prefixCheck := make(map[string]struct{})
 	infixCheck := make(map[string]struct{})
 	postfixCheck := make(map[string]struct{})
@@ -258,9 +258,9 @@ func (e *expr[Output]) checkOperators() bool {
 	}
 	return safeSpot
 }
-func (e *expr[Output]) prepareParens() {
+func (e expr[Output]) prepareParens() expr[Output] {
 	if len(e.parens) == 0 {
-		return
+		return e
 	}
 	opens := make([]string, len(e.parens))
 	parsers := make(map[string]comb.Parser[string], len(e.parens))
@@ -276,17 +276,18 @@ func (e *expr[Output]) prepareParens() {
 	}
 	e.openParenParser = OneOf(opens...)
 	e.closeParenParsers = parsers
+	return e
 }
 
 // recover finds the operator with minimal waste that has the highest priority.
-func (e *expr[Output]) recover(state comb.State, data interface{}) (int, interface{}) {
+func (e expr[Output]) recover(state comb.State, data interface{}) (int, interface{}) {
 	return comb.RecoverWasteTooMuch, data
 }
 
-func (e *expr[Output]) parseWithData(state comb.State, data interface{}) (comb.State, Output, *comb.ParserError, interface{}) {
+func (e expr[Output]) parseWithData(state comb.State, data interface{}) (comb.State, Output, *comb.ParserError, interface{}) {
 	return e.parseLevelAfterError(len(e.levels)-1, state, data)
 }
-func (e *expr[Output]) parseLevelAfterError(
+func (e expr[Output]) parseLevelAfterError(
 	l int, state comb.State, data interface{},
 ) (comb.State, Output, *comb.ParserError, interface{}) {
 	var out Output
@@ -337,7 +338,7 @@ func (e *expr[Output]) parseLevelAfterError(
 		return e.parsePostfixLevelAfterError(l, level, state, data)
 	}
 }
-func (e *expr[Output]) parsePrefixLevelAfterError(
+func (e expr[Output]) parsePrefixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
 	startState comb.State,
@@ -371,7 +372,7 @@ func (e *expr[Output]) parsePrefixLevelAfterError(
 	}
 	return nState, out, nil, data
 }
-func (e *expr[Output]) parseInfixLevelAfterError(
+func (e expr[Output]) parseInfixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
 	startState comb.State,
@@ -414,7 +415,7 @@ func (e *expr[Output]) parseInfixLevelAfterError(
 		}
 	}
 }
-func (e *expr[Output]) parsePostfixLevelAfterError(
+func (e expr[Output]) parsePostfixLevelAfterError(
 	l int,
 	level PrecedenceLevel[Output],
 	startState comb.State,
@@ -450,7 +451,7 @@ func (e *expr[Output]) parsePostfixLevelAfterError(
 	}
 }
 
-func (e *expr[Output]) parseSpace(state comb.State) (comb.State, *comb.ParserError) {
+func (e expr[Output]) parseSpace(state comb.State) (comb.State, *comb.ParserError) {
 	nState, _, err := e.space.ParseAny(e.id(), state)
 	if err != nil {
 		return state, comb.ClaimError(err)
