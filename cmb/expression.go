@@ -2,6 +2,7 @@ package cmb
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/flowdev/comb"
 )
@@ -135,10 +136,16 @@ type expr[Output any] struct {
 	parens            []parens
 	openParenParser   comb.Parser[string]
 	closeParenParsers map[string]comb.Parser[string]
-	saveSpot          bool
+	safeSpots         []safeSpot
 }
 type parens struct {
 	open, close string
+}
+
+type safeSpot struct {
+	op  string
+	l   int
+	rec comb.AnyParser
 }
 
 type recoverData[Output any] struct {
@@ -211,9 +218,8 @@ func (e expr[Output]) WithExpected(expected string) expr[Output] {
 //   - double opening parentheses
 //   - double operators of the same type (prefix, infix or postfix)
 func (e expr[Output]) Parser() comb.Parser[Output] {
-	safeSpot := e.checkOperators()
-	ee := e.prepareParens()
-	ee.saveSpot = safeSpot
+	ee := e.checkOperators()
+	ee = ee.prepareParens()
 	if ee.space == nil {
 		ee.space = Whitespace0()
 	}
@@ -221,15 +227,21 @@ func (e expr[Output]) Parser() comb.Parser[Output] {
 		ee.expected = "expression"
 	}
 	ee.levels = append([]PrecedenceLevel[Output]{{}}, ee.levels...) // add level for values and parentheses
+	if len(ee.safeSpots) > 0 {
+		return comb.SafeSpot(comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover))
+	}
 	return comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
 }
-func (e expr[Output]) checkOperators() bool {
+func (e expr[Output]) checkOperators() expr[Output] {
 	prefixCheck := make(map[string]struct{})
 	infixCheck := make(map[string]struct{})
 	postfixCheck := make(map[string]struct{})
-	safeSpot := false
+	safeSpots := make([]safeSpot, 0, 64)
 
-	for _, level := range e.levels {
+	if e.value.IsSaveSpot() {
+		safeSpots = append(safeSpots, safeSpot{op: "value", l: 0, rec: e.value})
+	}
+	for l, level := range e.levels {
 		switch {
 		case level.prefixLevel != nil:
 			for _, op := range level.prefixLevel {
@@ -238,7 +250,7 @@ func (e expr[Output]) checkOperators() bool {
 				}
 				prefixCheck[op.Op] = struct{}{}
 				if op.SafeSpot {
-					safeSpot = true
+					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: String(op.Op)})
 				}
 			}
 		case level.infixLevel != nil:
@@ -248,7 +260,7 @@ func (e expr[Output]) checkOperators() bool {
 				}
 				infixCheck[op.Op] = struct{}{}
 				if op.SafeSpot {
-					safeSpot = true
+					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: String(op.Op)})
 				}
 			}
 		default:
@@ -258,12 +270,13 @@ func (e expr[Output]) checkOperators() bool {
 				}
 				postfixCheck[op.Op] = struct{}{}
 				if op.SafeSpot {
-					safeSpot = true
+					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: String(op.Op)})
 				}
 			}
 		}
 	}
-	return safeSpot
+	e.safeSpots = safeSpots
+	return e
 }
 func (e expr[Output]) prepareParens() expr[Output] {
 	if len(e.parens) == 0 {
@@ -288,7 +301,27 @@ func (e expr[Output]) prepareParens() expr[Output] {
 
 // recover finds the operator with minimal waste that has the highest priority.
 func (e expr[Output]) recover(state comb.State, data interface{}) (int, interface{}) {
-	return comb.RecoverWasteTooMuch, data
+	rData, _ := data.(*recoverData[Output])
+	waste := math.MaxInt
+	bestSaveSpot := safeSpot{}
+
+	for _, ss := range e.safeSpots {
+		nWaste, _ := ss.rec.Recover(state, nil)
+		if nWaste >= 0 && nWaste < waste {
+			waste = nWaste
+			bestSaveSpot = ss
+			if waste == 0 {
+				break
+			}
+		}
+	}
+	if bestSaveSpot.op == "" { // no safe spot found
+		return comb.RecoverWasteTooMuch, rData
+	}
+
+	rData.saveSpotOp = bestSaveSpot.op
+	rData.saveSpotLevel = bestSaveSpot.l
+	return waste, rData
 }
 
 func (e expr[Output]) parseWithData(state comb.State, data interface{}) (comb.State, Output, *comb.ParserError, interface{}) {
@@ -593,7 +626,7 @@ func prefixParseCase[Output any](l int, data *recoverData[Output]) (returnValue,
 		return true, false, false, false // clean up lData
 	}
 	// CASE4: data.saveSpotOp != "" && data.saveSpotLevel < l => we should call the next lower level and use its out as value
-	return false, false, false, true // we will get saveSpot value; no parsing of op before value
+	return false, false, false, true // we will get safeSpot value; no parsing of op before value
 }
 func infixParseCase[Output any](l int, data *recoverData[Output]) (returnValue, parseVal1, parseSpace, parseOp, parseVal2 bool) {
 	if data == nil { // CASE1: no error => parse normally from the beginning
@@ -606,7 +639,7 @@ func infixParseCase[Output any](l int, data *recoverData[Output]) (returnValue, 
 		return true, false, false, false, false // clean up lData
 	}
 	// CASE4: data.saveSpotOp != "" && data.saveSpotLevel < l => we should call the next lower level and use its out as value
-	return false, true, true, true, true // we will get saveSpot value
+	return false, true, true, true, true // we will get safeSpot value
 }
 func postfixParseCase[Output any](l int, data *recoverData[Output]) (returnValue, parseVal1, parseSpace, parseOp bool) {
 	if data == nil { // CASE1: no error => parse normally from the beginning
