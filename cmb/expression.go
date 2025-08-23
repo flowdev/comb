@@ -86,14 +86,11 @@ func InfixLevel[Output any](ops []InfixOp[Output]) PrecedenceLevel[Output] {
 			panic(fmt.Sprintf("infix operation %q (index %d) has no mapping function", op.Op, i))
 		}
 		if _, ok := fn2map[op.Op]; ok {
-			panic(fmt.Sprintf("prefix operation %q (index %d) is a duplicate", op.Op, i))
+			panic(fmt.Sprintf("infix operation %q (index %d) is a duplicate", op.Op, i))
 		}
 		sops[i] = op.Op
 		fn2map[op.Op] = op.Fn
 		safeSpots[op.Op] = op.SafeSpot
-	}
-	if len(fn2map) < len(ops) {
-		panic(fmt.Sprintf("unable to use double infix operator: got %q, only %d are unique", sops, len(fn2map)))
 	}
 	return PrecedenceLevel[Output]{infixLevel: ops, opParser: OneOf(sops...), opFn2s: fn2map, opSafeSpots: safeSpots}
 }
@@ -121,9 +118,6 @@ func PostfixLevel[Output any](ops []PostfixOp[Output]) PrecedenceLevel[Output] {
 		sops[i] = op.Op
 		fn1map[op.Op] = op.Fn
 		safeSpots[op.Op] = op.SafeSpot
-	}
-	if len(fn1map) < len(ops) {
-		panic(fmt.Sprintf("unable to use double postfix operator: got %q, only %d are unique", sops, len(fn1map)))
 	}
 	return PrecedenceLevel[Output]{postfixLevel: ops, opParser: OneOf(sops...), opFn1s: fn1map, opSafeSpots: safeSpots}
 }
@@ -160,11 +154,16 @@ type recoverData[Output any] struct {
 // A value of 0 for exit signals that there is no data for the level.
 type levelData[Output any] struct {
 	out  Output
+	op   string
 	exit int
 }
 
 // Expression returns a branch parser for parsing (mathematical) expressions
 // with prefix, infix and postfix operators.
+// The valueParser should be a SafeSpot parser if reasonable.
+// It's also very good to turn all operators into safe spots, as long as they aren't used in other contexts, too.
+// The valueParser MUST be a simple parser that doesn't need any data for error recovery.
+//
 // PrecedenceLevel s can be set in this function call or added one by one later.
 // Each PrecedenceLevel can only contain either all prefix or all infix or all postfix operators.
 // Within each level evaluation is always from left to right.
@@ -172,6 +171,15 @@ type levelData[Output any] struct {
 // The first level added, binds the strongest (e.g., unary sign operator) and
 // the last level added binds the least (e.g., assignment operator).
 // It's also possible to later add (multiple) pairs of parentheses.
+//
+// The Expression parser is a safe spot parser iff the valueParser is or
+// one of its operators is marked as a safe spot.
+//
+// The Expression parser will panic in the following cases:
+//   - empty string for any operator
+//   - nil function for output calculation
+//   - double operators of the same type (prefix, infix or postfix)
+//   - double opening parentheses
 func Expression[Output any](valueParser comb.Parser[Output], levels ...PrecedenceLevel[Output]) expr[Output] {
 	e := expr[Output]{
 		value:  valueParser,
@@ -302,8 +310,11 @@ func (e expr[Output]) prepareParens() expr[Output] {
 // recover finds the operator with minimal waste that has the highest priority.
 func (e expr[Output]) recover(state comb.State, data interface{}) (int, interface{}) {
 	rData, _ := data.(*recoverData[Output])
+	if rData == nil {
+		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels))}
+	}
 	waste := math.MaxInt
-	bestSaveSpot := safeSpot{}
+	bestSaveSpot := safeSpot{l: -1}
 
 	for _, ss := range e.safeSpots {
 		nWaste, _ := ss.rec.Recover(state, nil)
@@ -315,7 +326,7 @@ func (e expr[Output]) recover(state comb.State, data interface{}) (int, interfac
 			}
 		}
 	}
-	if bestSaveSpot.op == "" { // no safe spot found
+	if bestSaveSpot.l < 0 { // no safe spot found
 		return comb.RecoverWasteTooMuch, rData
 	}
 
@@ -332,14 +343,14 @@ func (e expr[Output]) parseLevelWithData(
 	l int, state comb.State, data *recoverData[Output],
 ) (comb.State, Output, *comb.ParserError, *recoverData[Output]) {
 	var out Output
-	var aOut interface{}
 	var rData *recoverData[Output]
 
 	if data == nil {
-		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels)+1)}
+		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels))}
 	} else {
 		rData = data
 	}
+	openParen := ""
 
 	if l == 0 { // parse value or parentheses
 		nState, err := e.parseSpace(state)
@@ -350,11 +361,10 @@ func (e expr[Output]) parseLevelWithData(
 		state = nState
 
 		if e.openParenParser != nil {
-			nState, aOut, err = e.openParenParser.ParseAny(0, state)
+			nState, openParen, err = e.openParenParser.Parse(state)
 		}
 		if err != nil || e.openParenParser == nil {
-			nState, aOut, err = e.value.ParseAny(0, state)
-			out, _ = aOut.(Output)
+			nState, out, err = e.value.Parse(state)
 			if err != nil {
 				rData.lData[l] = levelData[Output]{exit: 2, out: out}
 				return state, out, comb.ClaimError(err), rData // exit 2
@@ -362,22 +372,22 @@ func (e expr[Output]) parseLevelWithData(
 			return nState, out, nil, nil
 		}
 		state = nState
-		openParen, _ := aOut.(string)
 
 		nState, out, err, data = e.parseLevelWithData(len(e.levels)-1, state, data)
 		if err != nil {
-			return nState, out, err, data
+			rData.lData[l] = levelData[Output]{exit: 3, out: out}
+			return nState, out, err, data // exit 3
 		}
 		state = nState
 
 		nState, err = e.parseSpace(state)
 		if err != nil {
-			rData.lData[l] = levelData[Output]{exit: 3, out: out}
-			return nState, out, err, rData // exit 3
+			rData.lData[l] = levelData[Output]{exit: 4, out: out}
+			return nState, out, err, rData // exit 4
 		}
 		state = nState
 
-		nState, aOut, err = e.closeParenParsers[openParen].ParseAny(0, state)
+		nState, _, err = e.closeParenParsers[openParen].Parse(state)
 		if err != nil {
 			rData.lData[l] = levelData[Output]{exit: 4, out: out}
 			return state, out, comb.ClaimError(err), rData // exit 4
@@ -402,19 +412,19 @@ func (e expr[Output]) parsePrefixLevelWithData(
 	data *recoverData[Output],
 ) (comb.State, Output, *comb.ParserError, *recoverData[Output]) {
 	var zero, out Output
-	var aOut interface{}
 	var err *comb.ParserError
 	var rData *recoverData[Output]
 
 	returnValue, parseSpace, parseOp, parseVal2 := prefixParseCase(l, data)
 
 	if data == nil {
-		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels)+1)}
+		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels))}
 	} else {
 		rData = data
 	}
 	state := startState
 	nState := state
+	op := ""
 
 	if returnValue {
 		if rData.lData[l].exit > 0 {
@@ -429,27 +439,44 @@ func (e expr[Output]) parsePrefixLevelWithData(
 	if parseSpace {
 		nState, err = e.parseSpace(state)
 		if err != nil {
-			return e.parseLevelWithData(l-1, startState, data) // we can't parse, maybe the next level can
+			nState, out, err, rData = e.parseLevelWithData(l-1, startState, data) // we can't parse, maybe the next level can
+			if err != nil {
+				rData.lData[l] = levelData[Output]{exit: 1, out: out}
+			}
+			return nState, out, err, rData
 		}
 		state = nState
 	}
 	if parseOp {
-		nState, aOut, err = level.opParser.ParseAny(0, state)
+		nState, op, err = level.opParser.Parse(state)
 		if err != nil {
-			return e.parseLevelWithData(l-1, startState, data) // we can't parse, maybe the next level can
+			nState, out, err, rData = e.parseLevelWithData(l-1, startState, data) // we can't parse, maybe the next level can
+			if err != nil {
+				rData.lData[l] = levelData[Output]{exit: 2, out: out}
+				return nState, out, err, rData
+			}
+			return nState, out, nil, nil
 		}
 		state = nState
+	} else {
+		op = rData.lData[l].op
 	}
-	op, _ := aOut.(string)
 	if parseVal2 {
 		// go recursive to support: '-- ++ a'
 		if parseOp {
 			nState, out, err, data = e.parseLevelWithData(l, state, nil)
+			if err != nil {
+				if data.lData[l].op == "" && op != "" {
+					data.lData[l].op = op
+				}
+				return nState, out, err, data
+			}
 		} else {
-			return e.parseLevelWithData(l-1, startState, data) // we didn't parse, maybe the next level will
-		}
-		if err != nil {
-			return nState, out, err, data
+			nState, out, err, rData = e.parseLevelWithData(l-1, startState, data) // we didn't parse, maybe the next level will
+			if err != nil {
+				rData.lData[l] = levelData[Output]{exit: 3, out: out, op: op}
+				return nState, out, err, rData
+			}
 		}
 	}
 
@@ -468,14 +495,13 @@ func (e expr[Output]) parseInfixLevelWithData(
 	data *recoverData[Output],
 ) (comb.State, Output, *comb.ParserError, *recoverData[Output]) {
 	var zero Output
-	var aOut interface{}
 	var err *comb.ParserError
 	var rData *recoverData[Output]
 
 	returnValue, parseVal1, parseSpace, parseOp, parseVal2 := infixParseCase(l, data)
 
 	if data == nil {
-		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels)+1)}
+		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels))}
 	} else {
 		rData = data
 	}
@@ -483,6 +509,7 @@ func (e expr[Output]) parseInfixLevelWithData(
 	nState := state
 	out := zero
 	data2 := data
+	op := ""
 
 	if returnValue {
 		if rData.lData[l].exit > 0 {
@@ -516,27 +543,30 @@ func (e expr[Output]) parseInfixLevelWithData(
 		}
 		parseSpace = true
 		if parseOp {
-			nState, aOut, err = level.opParser.ParseAny(0, state)
+			nState, op, err = level.opParser.Parse(state)
 			if err != nil {
 				return startState, out, nil, nil // good case
 			}
 			state = nState
+		} else {
+			op = rData.lData[l].op
 		}
-		op, _ := aOut.(string)
 		parseOp = true
 		val1 := out
 		if parseVal2 {
 			nState, out, err, data2 = e.parseLevelWithData(l-1, state, data)
 			if err != nil {
 				rData = data2
-				rData.lData[l] = levelData[Output]{exit: 3, out: level.opFn2s[op](val1, out)}
-				return nState, level.opFn2s[op](val1, out), err, rData // exit 3
+				rData.lData[l] = levelData[Output]{exit: 2, out: level.opFn2s[op](val1, out)}
+				return nState, level.opFn2s[op](val1, out), err, rData // exit 2
 			}
 			state = nState
 		}
 		parseVal2 = true
 
-		out = level.opFn2s[op](val1, out)
+		if op != "" {
+			out = level.opFn2s[op](val1, out)
+		}
 		if level.opSafeSpots[op] {
 			state = nState.MoveSafeSpot()
 		}
@@ -549,14 +579,13 @@ func (e expr[Output]) parsePostfixLevelWithData(
 	data *recoverData[Output],
 ) (comb.State, Output, *comb.ParserError, *recoverData[Output]) {
 	var zero Output
-	var aOut interface{}
 	var err *comb.ParserError
 	var rData *recoverData[Output]
 
 	returnValue, parseVal1, parseSpace, parseOp := postfixParseCase(l, data)
 
 	if data == nil {
-		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels)+1)}
+		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels))}
 	} else {
 		rData = data
 	}
@@ -564,6 +593,7 @@ func (e expr[Output]) parsePostfixLevelWithData(
 	nState := state
 	out := zero
 	data2 := data
+	op := ""
 
 	if returnValue {
 		if rData.lData[l].exit > 0 {
@@ -584,6 +614,8 @@ func (e expr[Output]) parsePostfixLevelWithData(
 		}
 		state = nState
 		startState = nState
+	} else {
+		out = rData.lData[l].out
 	}
 	for {
 		if parseSpace {
@@ -595,13 +627,12 @@ func (e expr[Output]) parsePostfixLevelWithData(
 		}
 		parseSpace = true
 		if parseOp {
-			nState, aOut, err = level.opParser.ParseAny(0, state)
+			nState, op, err = level.opParser.Parse(state)
 			if err != nil {
 				return startState, out, nil, nil
 			}
 			state = nState
 		}
-		op, _ := aOut.(string)
 		parseOp = true
 
 		if op != "" {
@@ -656,7 +687,7 @@ func postfixParseCase[Output any](l int, data *recoverData[Output]) (returnValue
 }
 
 func (e expr[Output]) parseSpace(state comb.State) (comb.State, *comb.ParserError) {
-	nState, _, err := e.space.ParseAny(0, state)
+	nState, _, err := e.space.Parse(state)
 	if err != nil {
 		return state, comb.ClaimError(err)
 	}
