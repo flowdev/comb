@@ -1,6 +1,7 @@
 package cmb_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/flowdev/comb"
@@ -309,61 +310,121 @@ func TestExpression_ErrorCases(t *testing.T) {
 
 	testCases := []struct {
 		name       string
-		parser     comb.Parser[int64]
+		parser     comb.Parser[[]int64]
 		input      string
-		wantOutput int64
+		wantOutput []int64
 		wantErrors int
 	}{
 		{
 			name:       "additional character before value",
-			parser:     cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10))).Parser(),
+			parser:     cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10))).Parser(), 1),
 			input:      "] 123",
-			wantOutput: 123,
+			wantOutput: []int64{123},
 			wantErrors: 1,
 		}, {
 			name: "prefix op",
-			parser: cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+			parser: cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)),
+				cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+					{
+						Op:       "-",
+						SafeSpot: true,
+						Fn: func(i int64) int64 {
+							return -i
+						},
+					},
+				})).Parser(), 1),
+			input:      "! - | 123",
+			wantOutput: []int64{-123},
+			wantErrors: 2,
+		}, {
+			name: "infix op",
+			parser: cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.InfixLevel([]cmb.InfixOp[int64]{
 				{
-					Op:       "-",
+					Op:       "+",
 					SafeSpot: true,
-					Fn: func(i int64) int64 {
-						return -i
+					Fn: func(a, b int64) int64 {
+						return a + b
 					},
 				},
-			})).Parser(),
-			input:      "! - | 123",
-			wantOutput: -123,
+			})).Parser(), 2),
+			input:      "(123)+ !=456",
+			wantOutput: []int64{123, 456},
+			wantErrors: 3,
+		}, {
+			name: "postfix op",
+			parser: cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op:       "++",
+					SafeSpot: true,
+					Fn: func(i int64) int64 {
+						return i + 1
+					},
+				},
+			})).Parser(), 2),
+			input:      "{123 ]++",
+			wantOutput: []int64{123, 1},
 			wantErrors: 2,
-			/*
-				}, {
-					name: "infix op",
-					parser: cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.InfixLevel([]cmb.InfixOp[int64]{
-						{
-							Op:       "+",
-							SafeSpot: true,
-							Fn: func(a, b int64) int64 {
-								return a + b
-							},
+		}, {
+			name: "multi prefix ops",
+			parser: cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)),
+				cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+					{
+						Op:       "--",
+						SafeSpot: true,
+						Fn: func(i int64) int64 {
+							return i - 1
 						},
-					})).Parser(),
-					input:      "(123)+ !=456",
-					wantOutput: 579,
-					wantErrors: 3,
-				}, {
-					name: "postfix op",
-					parser: cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.PostfixLevel([]cmb.PostfixOp[int64]{
-						{
-							Op:       "++",
-							SafeSpot: true,
-							Fn: func(i int64) int64 {
-								return i + 1
-							},
+					}, {
+						Op:       "**",
+						SafeSpot: true,
+						Fn: func(i int64) int64 {
+							return i * 2
 						},
-					})).Parser(),
-					input:      "{123 ]++",
-					wantOutput: 124,
-					wantErrors: 2,
-			*/
+					},
+				})).Parser(), 1),
+			input:      "! -- { ** | 123",
+			wantOutput: []int64{245},
+			wantErrors: 3,
+		}, {
+			name: "multi infix ops",
+			parser: cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.InfixLevel([]cmb.InfixOp[int64]{
+				{
+					Op:       "+",
+					SafeSpot: true,
+					Fn: func(a, b int64) int64 {
+						return a + b
+					},
+				}, {
+					Op:       "-",
+					SafeSpot: true,
+					Fn: func(a, b int64) int64 {
+						return a - b
+					},
+				},
+			})).Parser(), 3),
+			input:      "(1)+ !=2 [-] 8",
+			wantOutput: []int64{1, 2, -8},
+			wantErrors: 5,
+		}, {
+			name: "multi postfix ops",
+			parser: cmb.Count(cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)), cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op:       "++",
+					SafeSpot: true,
+					Fn: func(i int64) int64 {
+						return i + 1
+					},
+				}, {
+					Op:       "**",
+					SafeSpot: true,
+					Fn: func(i int64) int64 {
+						return i * 2
+					},
+				},
+			})).Parser(), 3),
+			input:      "{123 ]++ | ++ **",
+			wantOutput: []int64{123, 1, 2},
+			wantErrors: 3,
 		},
 	}
 
@@ -374,8 +435,8 @@ func TestExpression_ErrorCases(t *testing.T) {
 
 			gotOutput, err := comb.RunOnString(tc.input, tc.parser)
 			t.Logf("got error(s) %v", err)
-			if gotOutput != tc.wantOutput {
-				t.Errorf("got output %d, want output %d", gotOutput, tc.wantOutput)
+			if slices.Compare(gotOutput, tc.wantOutput) != 0 {
+				t.Errorf("got output %#v, want output %#v", gotOutput, tc.wantOutput)
 			}
 			if got, want := len(comb.UnwrapErrors(err)), tc.wantErrors; got != want {
 				t.Errorf("err=%v, want errors=%d", err, want)

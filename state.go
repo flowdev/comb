@@ -14,11 +14,11 @@ import (
 // State represents the current state of a parser.
 type State struct {
 	constant *ConstState
-	pos      int           // current position in the input a.k.a. the *byte* index
-	prevNl   int           // position of the newline preceding 'pos' (-1 for line==1)
-	line     int           // current line number
-	safeSpot int           // mark set by the SafeSpot parser
-	errors   []ParserError // errors that have been handled
+	pos      int     // current position in the input a.k.a. the *byte* index
+	prevNl   int     // position of the newline preceding 'pos' (-1 for line==1)
+	line     int     // current line number
+	safeSpot int     // mark set by the SafeSpot parser
+	errors   []error // errors that have been handled
 }
 
 // ============================================================================
@@ -159,12 +159,12 @@ func (st State) Delete1() State {
 // SaveError saves an error and returns the new state.
 func (st State) SaveError(err *ParserError) State {
 	if err != nil {
-		st.errors = append(st.errors, *err)
+		st.errors = append(st.errors, errors.New(err.Error()))
 	}
 	if st.constant.maxErrors > 0 && len(st.errors) >= st.constant.maxErrors {
 		// always reported by the root parser: too many errors, giving up
-		st.errors = append(st.errors, *(st.NewSemanticError("too many errors, giving up")))
-		st.MoveBy(st.BytesRemaining()) // give up: move to end
+		st.errors = append(st.errors, errors.New(st.NewSemanticError("too many errors, giving up").Error()))
+		st = st.MoveBy(st.BytesRemaining()) // give up: move to end
 	}
 	return st
 }
@@ -174,7 +174,7 @@ func (st State) SaveError(err *ParserError) State {
 // For syntax errors `expected ` is prepended to the message, and the usual
 // position and source line including marker are appended.
 func (st State) NewSyntaxError(msg string, args ...interface{}) *ParserError {
-	return st.NewSemanticError(`expected `+msg, args...)
+	return st.NewSemanticError(SyntaxErrorStart+msg, args...)
 }
 
 // NewSemanticError creates a semantic error
@@ -290,16 +290,7 @@ func (st State) tryWhere(prevNl int, pos int, nextNl int, lineNum int) (line, co
 // Errors returns all error messages accumulated by the state as a Go error.
 // Multiple errors have been joined (by errors.Join()).
 func (st State) Errors() error {
-	if len(st.errors) == 0 {
-		return nil
-	}
-
-	goErrors := make([]error, len(st.errors))
-	for i, pe := range st.errors {
-		goErrors[i] = errors.New(singleErrorMsg(pe))
-	}
-
-	return errors.Join(goErrors...)
+	return errors.Join(st.errors...)
 }
 
 // MoveSafeSpot returns the state with the safe spot moved to the current position.
