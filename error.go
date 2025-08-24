@@ -45,6 +45,9 @@ func (e *ParserError) StoreParserData(parserID int32, data interface{}) {
 }
 
 func (e *ParserError) PatchMessage(subMsg string) {
+	if strings.Contains(e.text, subMsg) {
+		return
+	}
 	if strings.HasPrefix(e.text, SyntaxErrorStart) {
 		e.text = SyntaxErrorStart + subMsg + e.text[len(SyntaxErrorStart):]
 	} else {

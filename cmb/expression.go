@@ -148,11 +148,13 @@ type expr[Output any] struct {
 	levels            []PrecedenceLevel[Output]
 	parens            []parens
 	openParenParser   comb.Parser[string]
+	closeParenParser  comb.Parser[string]
 	closeParenParsers map[string]comb.Parser[string]
 	safeSpots         []safeSpot
 }
 type parens struct {
 	open, close string
+	safeSpot    bool
 }
 
 type safeSpot struct {
@@ -219,8 +221,8 @@ func (e expr[Output]) AddPostfixLevel(level ...PostfixOp[Output]) expr[Output] {
 	e.levels = append(e.levels, PrecedenceLevel[Output]{postfixLevel: level})
 	return e
 }
-func (e expr[Output]) AddParentheses(open, close string) expr[Output] {
-	e.parens = append(e.parens, parens{open: open, close: close})
+func (e expr[Output]) AddParentheses(open, close string, safeSpot bool) expr[Output] {
+	e.parens = append(e.parens, parens{open: open, close: close, safeSpot: safeSpot})
 	return e
 }
 
@@ -266,8 +268,22 @@ func (e expr[Output]) checkOperators() expr[Output] {
 	postfixCheck := make(map[string]struct{})
 	safeSpots := make([]safeSpot, 0, 64)
 
+	safeOpenParens := make([]string, 0, len(e.parens))
+	safeCloseParens := make([]string, 0, len(e.parens))
+	for _, paren := range e.parens {
+		if paren.safeSpot {
+			safeOpenParens = append(safeOpenParens, paren.open)
+			safeCloseParens = append(safeCloseParens, paren.close)
+		}
+	}
+	if len(safeOpenParens) > 0 {
+		safeSpots = append(safeSpots, safeSpot{op: "(", l: 0, rec: OneOf(safeOpenParens...)})
+	}
 	if e.value.IsSaveSpot() {
 		safeSpots = append(safeSpots, safeSpot{op: "value", l: 0, rec: e.value})
+	}
+	if len(safeCloseParens) > 0 {
+		safeSpots = append(safeSpots, safeSpot{op: ")", l: 0, rec: OneOf(safeCloseParens...)})
 	}
 	for l, level := range e.levels {
 		switch {
@@ -311,6 +327,7 @@ func (e expr[Output]) prepareParens() expr[Output] {
 		return e
 	}
 	opens := make([]string, len(e.parens))
+	closes := make([]string, len(e.parens))
 	parsers := make(map[string]comb.Parser[string], len(e.parens))
 	check := make(map[string]struct{}, len(e.parens))
 
@@ -320,9 +337,11 @@ func (e expr[Output]) prepareParens() expr[Output] {
 		}
 		check[paren.open] = struct{}{}
 		opens[i] = paren.open
+		closes[i] = paren.close
 		parsers[paren.open] = String(paren.close)
 	}
 	e.openParenParser = OneOf(opens...)
+	e.closeParenParser = OneOf(closes...)
 	e.closeParenParsers = parsers
 	return e
 }
@@ -362,7 +381,24 @@ func (e expr[Output]) parseWithData(state comb.State, data interface{}) (comb.St
 func (e expr[Output]) parseLevelWithData(
 	l int, state comb.State, data *recoverData[Output],
 ) (comb.State, Output, *comb.ParserError, *recoverData[Output]) {
+	if l == 0 { // parse value or parentheses
+		return e.parseValueLevelWithData(state, data)
+	}
+	switch {
+	case e.levels[l].prefixLevel != nil:
+		return e.parsePrefixLevelWithData(l, e.levels[l], state, data)
+	case e.levels[l].infixLevel != nil:
+		return e.parseInfixLevelWithData(l, e.levels[l], state, data)
+	default:
+		return e.parsePostfixLevelWithData(l, e.levels[l], state, data)
+	}
+}
+func (e expr[Output]) parseValueLevelWithData(
+	startState comb.State,
+	data *recoverData[Output],
+) (comb.State, Output, *comb.ParserError, *recoverData[Output]) {
 	var out Output
+	var err *comb.ParserError
 	var rData *recoverData[Output]
 
 	if data == nil {
@@ -370,60 +406,70 @@ func (e expr[Output]) parseLevelWithData(
 	} else {
 		rData = data
 	}
-	openParen := ""
+	state := startState
+	nState := state
 
-	if l == 0 { // parse value or parentheses
-		nState, err := e.parseSpace(state)
+	if data != nil && data.saveSpotLevel > 0 { // just provide data for the upper levels
+		return startState, data.lData[0].out, nil, nil
+	}
+
+	if data == nil {
+		nState, err = e.parseSpace(state)
 		if err != nil {
-			rData.lData[l] = levelData[Output]{exit: 1, out: out}
+			rData.lData[0] = levelData[Output]{exit: 1}
 			return nState, out, err, rData // exit 1
 		}
 		state = nState
+	}
 
-		if e.openParenParser != nil {
-			nState, openParen, err = e.openParenParser.Parse(state)
-		}
-		if err != nil || e.openParenParser == nil {
-			nState, out, err = e.value.Parse(state)
-			if err != nil {
-				rData.lData[l] = levelData[Output]{exit: 2, out: out}
-				return state, out, comb.ClaimError(err), rData // exit 2
-			}
-			return nState, out, nil, nil
-		}
-		state = nState
-
-		nState, out, err, data = e.parseLevelWithData(len(e.levels)-1, state, data)
+	openParen := ""
+	if e.openParenParser != nil && (data == nil || data.saveSpotOp == "(") {
+		nState, openParen, err = e.openParenParser.Parse(state)
+	}
+	if err != nil || e.openParenParser == nil || (data != nil && data.saveSpotOp == "value") {
+		nState, out, err = e.value.Parse(state)
 		if err != nil {
-			rData.lData[l] = levelData[Output]{exit: 3, out: out}
-			return nState, out, err, data // exit 3
+			rData.lData[0] = levelData[Output]{exit: 2, out: out}
+			return state, out, comb.ClaimError(err), rData // exit 2
+		}
+		return nState, out, nil, nil
+	}
+	state = nState
+
+	if data == nil || data.saveSpotOp == "(" {
+		nState, out, err, data = e.parseLevelWithData(len(e.levels)-1, state, nil)
+		if err != nil {
+			rData.lData[0] = levelData[Output]{exit: 3, out: out, op: openParen}
+			return nState, out, err, rData // exit 3
 		}
 		state = nState
 
 		nState, err = e.parseSpace(state)
 		if err != nil {
-			rData.lData[l] = levelData[Output]{exit: 4, out: out}
+			rData.lData[0] = levelData[Output]{exit: 4, out: out, op: openParen}
 			return nState, out, err, rData // exit 4
 		}
 		state = nState
+	} else {
+		out = rData.lData[0].out
+	}
 
-		nState, _, err = e.closeParenParsers[openParen].Parse(state)
+	// special case: the closing parenthesis is the safe spot
+	if e.closeParenParser != nil && data != nil && data.saveSpotOp == ")" {
+		nState, _, err = e.closeParenParser.Parse(state)
 		if err != nil {
-			rData.lData[l] = levelData[Output]{exit: 4, out: out}
-			return state, out, comb.ClaimError(err), rData // exit 4
+			rData.lData[0].exit = 5
+			return nState, out, err, rData // exit 5
 		}
-		return nState, out, nil, nil
+		return nState, rData.lData[0].out, nil, nil
 	}
 
-	level := e.levels[l]
-	switch {
-	case level.prefixLevel != nil:
-		return e.parsePrefixLevelWithData(l, level, state, data)
-	case level.infixLevel != nil:
-		return e.parseInfixLevelWithData(l, level, state, data)
-	default:
-		return e.parsePostfixLevelWithData(l, level, state, data)
+	nState, _, err = e.closeParenParsers[openParen].Parse(state)
+	if err != nil {
+		rData.lData[0] = levelData[Output]{exit: 6, out: out, op: openParen}
+		return state, out, comb.ClaimError(err), rData // exit 6
 	}
+	return nState, out, nil, nil
 }
 func (e expr[Output]) parsePrefixLevelWithData(
 	l int,
@@ -506,7 +552,9 @@ func (e expr[Output]) parsePrefixLevelWithData(
 			rData.lData[l].exit = 3
 			rData.lData[l].out = out
 			rData.lData[l].preOps = append(rData.lData[l].preOps, saveOps...)
-			rData.lData[l].preOps = append(rData.lData[l].preOps, op)
+			if op != "" {
+				rData.lData[l].preOps = append(rData.lData[l].preOps, op)
+			}
 			return nState, out, err, rData
 		}
 	}
@@ -592,7 +640,7 @@ func (e expr[Output]) parseInfixLevelWithData(
 		parseOp = true
 		val1 := out
 		if parseVal2 {
-			nState, out, err, data2 = e.parseLevelWithData(l-1, state, data)
+			nState, out, err, data2 = e.parseLevelWithData(l-1, state, nil)
 			if err != nil {
 				err.PatchMessage("infix operator " + level.opsText + " or ")
 				rData = data2
