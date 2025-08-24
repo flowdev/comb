@@ -38,10 +38,6 @@ type PrecedenceLevel[Output any] struct {
 	opsText      string
 }
 
-func (pl PrecedenceLevel[Output]) children() []comb.AnyParser {
-	return nil
-}
-
 // PrefixLevel returns a precedence level for evaluating expressions that
 // consists of prefix operators.
 // It will panic in the following cases:
@@ -210,15 +206,15 @@ func Expression[Output any](valueParser comb.Parser[Output], levels ...Precedenc
 	return e
 }
 func (e expr[Output]) AddPrefixLevel(level ...PrefixOp[Output]) expr[Output] {
-	e.levels = append(e.levels, PrecedenceLevel[Output]{prefixLevel: level})
+	e.levels = append(e.levels, PrefixLevel(level))
 	return e
 }
 func (e expr[Output]) AddInfixLevel(level ...InfixOp[Output]) expr[Output] {
-	e.levels = append(e.levels, PrecedenceLevel[Output]{infixLevel: level})
+	e.levels = append(e.levels, InfixLevel(level))
 	return e
 }
 func (e expr[Output]) AddPostfixLevel(level ...PostfixOp[Output]) expr[Output] {
-	e.levels = append(e.levels, PrecedenceLevel[Output]{postfixLevel: level})
+	e.levels = append(e.levels, PostfixLevel(level))
 	return e
 }
 func (e expr[Output]) AddParentheses(open, close string, safeSpot bool) expr[Output] {

@@ -327,6 +327,16 @@ func (lp *lazyprsr[Output]) setParent(id int32) {
 //     SafeSpot will treat the sub-parser as a leaf parser.
 //     Any error will look as if coming from SafeSpot itself.
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
+	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
+	recoverer := p.Recover
+	tstState := NewFromBytes([]byte{}, 0)
+	if recoverer != nil {
+		waste, _ := recoverer(tstState, nil)
+		if waste == RecoverNever {
+			panic("can't make parser with Forbidden recoverer a safe spot")
+		}
+	}
+
 	pp, ok := p.(*prsr[Output])
 	if !ok {
 		panic("SafeSpot can only be applied to leaf parsers")
@@ -343,20 +353,6 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	return pp
 	/*
 		var sp Parser[Output]
-		// call Recoverer to find a Forbidden recoverer during the construction phase and panic
-		recoverer := p.Recover
-		tstState := NewFromBytes([]byte{}, 0)
-		if recoverer != nil {
-			waste, _ := recoverer(tstState, nil)
-			if waste == RecoverNever {
-				panic("can't make parser with Forbidden recoverer a safe spot")
-			}
-		}
-
-		if _, ok := p.(BranchParser); ok {
-			panic("a branch parser can never be a save spot")
-		}
-
 		//nParse := func(state State) (State, Output, *ParserError) {
 		//	if p.ID() < 0 {
 		//		p.setID(sp.ID()) // share the same ID because we will never have any own error data
