@@ -3,6 +3,9 @@ package cmb
 import (
 	"fmt"
 	"math"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/flowdev/comb"
 )
@@ -64,7 +67,6 @@ func PrefixLevel[Output any](ops []PrefixOp[Output]) PrecedenceLevel[Output] {
 	}
 	return PrecedenceLevel[Output]{
 		prefixLevel: ops,
-		opParser:    OneOf(sops...),
 		opFn1s:      fn1map,
 		opSafeSpots: safeSpots,
 		opsText:     fmt.Sprintf("%q", sops),
@@ -97,7 +99,6 @@ func InfixLevel[Output any](ops []InfixOp[Output]) PrecedenceLevel[Output] {
 	}
 	return PrecedenceLevel[Output]{
 		infixLevel:  ops,
-		opParser:    OneOf(sops...),
 		opFn2s:      fn2map,
 		opSafeSpots: safeSpots,
 		opsText:     fmt.Sprintf("%q", sops),
@@ -130,7 +131,6 @@ func PostfixLevel[Output any](ops []PostfixOp[Output]) PrecedenceLevel[Output] {
 	}
 	return PrecedenceLevel[Output]{
 		postfixLevel: ops,
-		opParser:     OneOf(sops...),
 		opFn1s:       fn1map,
 		opSafeSpots:  safeSpots,
 		opsText:      fmt.Sprintf("%q", sops),
@@ -244,8 +244,8 @@ func (e expr[Output]) WithExpected(expected string) expr[Output] {
 //   - double opening parentheses
 //   - double operators of the same type (prefix, infix or postfix)
 func (e expr[Output]) Parser() comb.Parser[Output] {
-	ee := e.checkOperators()
-	ee = ee.prepareParens()
+	ee := e.prepareParens()
+	ee = ee.checkOperators()
 	if ee.space == nil {
 		ee.space = Whitespace0()
 	}
@@ -253,10 +253,11 @@ func (e expr[Output]) Parser() comb.Parser[Output] {
 		ee.expected = "expression"
 	}
 	ee.levels = append([]PrecedenceLevel[Output]{{}}, ee.levels...) // add level for values and parentheses
+	p := comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
 	if len(ee.safeSpots) > 0 {
-		return comb.SafeSpot(comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover))
+		return comb.SafeSpot(p)
 	}
-	return comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
+	return p
 }
 func (e expr[Output]) checkOperators() expr[Output] {
 	prefixCheck := make(map[string]struct{})
@@ -282,38 +283,43 @@ func (e expr[Output]) checkOperators() expr[Output] {
 		safeSpots = append(safeSpots, safeSpot{op: ")", l: 0, rec: OneOf(safeCloseParens...)})
 	}
 	for l, level := range e.levels {
+		sops := make([]string, len(level.prefixLevel)+len(level.infixLevel)+len(level.postfixLevel))
 		switch {
 		case level.prefixLevel != nil:
-			for _, op := range level.prefixLevel {
+			for i, op := range level.prefixLevel {
 				if _, ok := prefixCheck[op.Op]; ok {
 					panic(fmt.Sprintf("prefix operation %q is a duplicate", op.Op))
 				}
 				prefixCheck[op.Op] = struct{}{}
 				if op.SafeSpot {
-					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: String(op.Op)})
+					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: e.oneOfOperator(op.Op)})
 				}
+				sops[i] = op.Op
 			}
 		case level.infixLevel != nil:
-			for _, op := range level.infixLevel {
+			for i, op := range level.infixLevel {
 				if _, ok := infixCheck[op.Op]; ok {
 					panic(fmt.Sprintf("infix operation %q is a duplicate", op.Op))
 				}
 				infixCheck[op.Op] = struct{}{}
 				if op.SafeSpot {
-					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: String(op.Op)})
+					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: e.oneOfOperator(op.Op)})
 				}
+				sops[i] = op.Op
 			}
 		default:
-			for _, op := range level.postfixLevel {
+			for i, op := range level.postfixLevel {
 				if _, ok := postfixCheck[op.Op]; ok {
 					panic(fmt.Sprintf("postfix operation %q is a duplicate", op.Op))
 				}
 				postfixCheck[op.Op] = struct{}{}
 				if op.SafeSpot {
-					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: String(op.Op)})
+					safeSpots = append(safeSpots, safeSpot{op: op.Op, l: l + 1, rec: e.oneOfOperator(op.Op)})
 				}
+				sops[i] = op.Op
 			}
 		}
+		e.levels[l].opParser = e.oneOfOperator(sops...)
 	}
 	e.safeSpots = safeSpots
 	return e
@@ -340,6 +346,81 @@ func (e expr[Output]) prepareParens() expr[Output] {
 	e.closeParenParser = OneOf(closes...)
 	e.closeParenParsers = parsers
 	return e
+}
+func (e expr[Output]) oneOfOperator(collection ...string) comb.Parser[string] {
+	var p comb.Parser[string]
+
+	n := len(collection)
+	if n == 0 {
+		panic("oneOfOperator has no strings to match")
+	}
+	expected := fmt.Sprintf("one operator of %q", collection)
+
+	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
+		input := state.CurrentString()
+		for _, token := range collection {
+			if strings.HasPrefix(input, token) {
+				nState := state.MoveBy(len(token))
+				if e.isEndOfOp(nState) {
+					return nState, token, nil
+				}
+			}
+		}
+		return state, "", state.NewSyntaxError(expected)
+	}
+
+	p = comb.NewParser[string](expected, parse, e.indexOfAnyOperator(collection...))
+	return p
+}
+func (e expr[Output]) indexOfAnyOperator(stops ...string) comb.Recoverer {
+	n := len(stops)
+
+	if n == 0 {
+		panic("no operators provided")
+	}
+
+	return func(state comb.State, _ interface{}) (int, interface{}) {
+		input := state.CurrentString()
+		pos := comb.RecoverWasteTooMuch
+		for i := 0; i < n; i++ {
+			switch j := strings.Index(input, stops[i]); j {
+			case -1: // ignore
+			case 0: // it won't get better than this
+				if e.isEndOfOp(state.MoveBy(len(stops[i]))) {
+					return 0, nil
+				}
+			default:
+				if pos < 0 || j < pos {
+					if e.isEndOfOp(state.MoveBy(j + len(stops[i]))) {
+						pos = j
+					}
+				}
+			}
+		}
+		return pos, nil
+	}
+}
+func (e expr[Output]) isEndOfOp(state comb.State) bool {
+	if state.AtEnd() {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(state.CurrentString())
+	if r != utf8.RuneError {
+		if IsAlphanumeric(r) || unicode.IsSpace(r) {
+			return true
+		}
+	}
+	if e.openParenParser != nil {
+		if _, _, err := e.openParenParser.Parse(state); err == nil {
+			return true
+		}
+	}
+	if e.closeParenParser != nil {
+		if _, _, err := e.closeParenParser.Parse(state); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // recover finds the operator with minimal waste that has the highest priority.
