@@ -17,7 +17,7 @@ type AnyParser interface {
 	ParseAny(parentID int32, state State) (State, interface{}, *ParserError) // top -> down
 	parseAnyAfterError(err *ParserError, state State,
 	) (lastParentID int32, newState State, output interface{}, newErr *ParserError) // used by parseAll (bottom -> up)
-	IsSaveSpot() bool
+	IsSafeSpot() bool
 	Recover(State, interface{}) (int, interface{})
 	IsStepRecoverer() bool
 	setID(int32)     // only sets own ID
@@ -71,7 +71,7 @@ func (pp *PreparedParser[Output]) registerParsers(ap AnyParser, parentID int32) 
 		for _, cp := range bp.children() {
 			pp.registerParsers(cp, id)
 		}
-	} else if ap.IsSaveSpot() {
+	} else if ap.IsSafeSpot() {
 		if ap.IsStepRecoverer() {
 			pp.stepRecoverers = append(pp.stepRecoverers, ap)
 		} else {

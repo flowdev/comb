@@ -309,7 +309,7 @@ func TestBranchParserToAnyParser(t *testing.T) {
 			prepp := NewPreparedParser[string](parser) // this calls ParserToAnyParser
 			aParse := prepp.parsers[0]
 			_, out, err := aParse.ParseAny(-1, NewFromString(tt.input, 10))
-			if got, want := aParse.IsSaveSpot(), false; got != want {
+			if got, want := aParse.IsSafeSpot(), false; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			_, gotBranchParser := aParse.(BranchParser)
@@ -415,7 +415,7 @@ func TestLeafParserToAnyParser(t *testing.T) {
 			prepp := NewPreparedParser[rune](parser) // this calls ParserToAnyParser
 			aParse := prepp.parsers[0]
 			_, out, err := aParse.ParseAny(-1, NewFromString(tt.input, 10))
-			if got, want := parser.IsSaveSpot(), tt.wantSaveSpot; got != want {
+			if got, want := parser.IsSafeSpot(), tt.wantSaveSpot; got != want {
 				t.Errorf("save spot parser=%t, want=%t", got, want)
 			}
 			_, gotBranchParser := parser.(BranchParser)

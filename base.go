@@ -49,8 +49,8 @@ type Parser[Output any] interface {
 	ParseAny(parentID int32, state State) (State, interface{}, *ParserError) // used by PreparedParser (top -> down)
 	parseAnyAfterError(err *ParserError, state State,
 	) (lastParentID int32, newState State, output interface{}, newErr *ParserError) // used by parseAll (bottom -> up)
-	IsSaveSpot() bool
-	setSaveSpot() // used by SafeSpot parser
+	IsSafeSpot() bool
+	setSafeSpot() // used by SafeSpot parser
 	Recover(State, interface{}) (int, interface{})
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during the construction phase

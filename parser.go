@@ -35,7 +35,7 @@ type prsr[Output any] struct {
 	expected      string
 	parseWithData func(State, interface{}) (State, Output, *ParserError, interface{})
 	recoverer     Recoverer
-	saveSpot      bool
+	safeSpot      bool
 }
 
 // NewParser is THE way to create simple leaf parsers.
@@ -107,11 +107,11 @@ func (p *prsr[Output]) parseAnyAfterError(err *ParserError, state State) (int32,
 	}
 	return p.ParserIDs.parent, nState, out, newErr
 }
-func (p *prsr[Output]) IsSaveSpot() bool {
-	return p.saveSpot
+func (p *prsr[Output]) IsSafeSpot() bool {
+	return p.safeSpot
 }
-func (p *prsr[Output]) setSaveSpot() {
-	p.saveSpot = true
+func (p *prsr[Output]) setSafeSpot() {
+	p.safeSpot = true
 }
 func (p *prsr[Output]) Recover(state State, data interface{}) (int, interface{}) {
 	return p.recoverer(state, data)
@@ -130,7 +130,6 @@ func (p *prsr[Output]) SwapRecoverer(newRecoverer Recoverer) {
 type brnchprsr[Output any] struct {
 	ParserIDs
 	expected      string
-	saveSpot      bool
 	childs        func() []AnyParser
 	prsAfterChild func(childID int32, childStartState, childState State, childOut interface{}, childErr *ParserError, data interface{},
 	) (State, Output, *ParserError, interface{})
@@ -187,11 +186,11 @@ func (bp *brnchprsr[Output]) parseAfterError(
 func (bp *brnchprsr[Output]) parseAnyAfterError(_ *ParserError, _ State) (int32, State, interface{}, *ParserError) {
 	panic("a branch parser has to be called with `parseAfterError` instead")
 }
-func (bp *brnchprsr[Output]) IsSaveSpot() bool {
-	return bp.saveSpot
+func (bp *brnchprsr[Output]) IsSafeSpot() bool {
+	return false // a branch parser can never be a safe spot
 }
-func (bp *brnchprsr[Output]) setSaveSpot() {
-	bp.saveSpot = true
+func (bp *brnchprsr[Output]) setSafeSpot() {
+	panic("a branch parser can never be a safe spot")
 }
 func (bp *brnchprsr[Output]) Recover(_ State, _ interface{}) (int, interface{}) {
 	return RecoverNever, nil // never recover with a branch parser
@@ -264,13 +263,13 @@ func (lp *lazyprsr[Output]) parseAfterError(
 func (lp *lazyprsr[Output]) parseAnyAfterError(_ *ParserError, _ State) (int32, State, interface{}, *ParserError) {
 	panic("a branch parser has to be called with `parseAfterError` instead")
 }
-func (lp *lazyprsr[Output]) IsSaveSpot() bool {
+func (lp *lazyprsr[Output]) IsSafeSpot() bool {
 	lp.once.Do(lp.ensurePrsr)
-	return lp.cachedPrsr.IsSaveSpot()
+	return lp.cachedPrsr.IsSafeSpot()
 }
-func (lp *lazyprsr[Output]) setSaveSpot() {
+func (lp *lazyprsr[Output]) setSafeSpot() {
 	lp.once.Do(lp.ensurePrsr)
-	lp.cachedPrsr.setSaveSpot()
+	lp.cachedPrsr.setSafeSpot()
 }
 func (lp *lazyprsr[Output]) Recover(state State, data interface{}) (int, interface{}) {
 	lp.once.Do(lp.ensurePrsr)
@@ -341,7 +340,7 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	if !ok {
 		panic("SafeSpot can only be applied to leaf parsers")
 	}
-	pp.setSaveSpot()
+	pp.setSafeSpot()
 	parse := pp.parseWithData
 	pp.parseWithData = func(state State, data interface{}) (State, Output, *ParserError, interface{}) {
 		nState, out, err, data2 := parse(state, data)
@@ -351,45 +350,4 @@ func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 		return nState, out, err, data2
 	}
 	return pp
-	/*
-		var sp Parser[Output]
-		//nParse := func(state State) (State, Output, *ParserError) {
-		//	if p.ID() < 0 {
-		//		p.setID(sp.ID()) // share the same ID because we will never have any own error data
-		//	}
-		//	nState, aOut, err := p.ParseAny(sp.ID(), state)
-		//	if err == nil {
-		//		nState = nState.MoveSafeSpot() // move the mark!
-		//	}
-		//	out, _ := aOut.(Output)
-		//	return nState, out, ClaimError(err)
-		//}
-		//sp = NewParser[Output](p.Expected(), nParse, p.Recover)
-		nParse := func(
-			childID int32,
-			childStartState, childState State,
-			childOut interface{},
-			childErr *ParserError,
-			data interface{},
-		) (State, Output, *ParserError, interface{}) {
-			if childID < 0 {
-				childStartState = childState
-				childState, childOut, childErr = p.ParseAny(sp.ID(), childStartState)
-			}
-			if childErr == nil {
-				childState = childState.MoveSafeSpot() // move the mark!
-			}
-			out, _ := childOut.(Output)
-			return childState, out, childErr, data
-		}
-		sp = NewBranchParser[Output](
-			p.Expected(),
-			func() []AnyParser {
-				return []AnyParser{p}
-			},
-			nParse,
-		)
-		sp.setSaveSpot()
-		return sp
-	*/
 }
