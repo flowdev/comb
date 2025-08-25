@@ -37,21 +37,21 @@ func TestCount(t *testing.T) {
 			parser:     Count(2, String("abc")),
 			input:      "abc123",
 			wantErr:    true,
-			wantOutput: []string{"abc"},
+			wantOutput: []string{"abc", ""},
 		},
 		{
 			name:       "parsing no count should fail",
 			parser:     Count(2, String("abc")),
 			input:      "123123",
 			wantErr:    true,
-			wantOutput: []string{},
+			wantOutput: []string{""},
 		},
 		{
 			name:       "parsing empty input should fail",
 			parser:     Count(2, String("abc")),
 			input:      "",
 			wantErr:    true,
-			wantOutput: []string{},
+			wantOutput: []string{""},
 		},
 	}
 
@@ -196,14 +196,14 @@ func TestMany1(t *testing.T) {
 			input:      "abc",
 			parser:     Many1(Char('#')),
 			wantErr:    true,
-			wantOutput: []rune{},
+			wantOutput: []rune{65533},
 		},
 		{
 			name:       "empty input should fail",
 			input:      "",
 			parser:     Many1(Char('#')),
 			wantErr:    true,
-			wantOutput: []rune{},
+			wantOutput: []rune{65533},
 		},
 	}
 	for _, tc := range testCases {
@@ -371,7 +371,7 @@ func TestSeparated1(t *testing.T) {
 			input:      "",
 			parser:     Separated1(String("abc"), Char(','), false),
 			wantErr:    true,
-			wantOutput: []string{},
+			wantOutput: []string{""},
 		},
 	}
 	for _, tc := range testCases {

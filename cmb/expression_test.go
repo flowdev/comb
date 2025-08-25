@@ -541,6 +541,21 @@ func TestExpression_ErrorCases(t *testing.T) {
 			wantOutput: []int64{1, 3, 0, 2, -6, 0, 1},
 			wantErrors: 13,
 		}, {
+			name: "missing closing parenthesis",
+			parser: cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)),
+				cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+					{
+						Op:       "++",
+						SafeSpot: true,
+						Fn: func(i int64) int64 {
+							return i + 1
+						},
+					},
+				})).AddParentheses("(", ")", true).Parser()),
+			input:      "( 1 ++",
+			wantOutput: []int64{2},
+			wantErrors: 1,
+		}, {
 			name: "space parser",
 			parser: cmb.Count(4, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10))).
 				AddPrefixLevel(cmb.PrefixOp[int64]{
@@ -565,6 +580,31 @@ func TestExpression_ErrorCases(t *testing.T) {
 			input:      "-a[2* 3]++",
 			wantOutput: []int64{-2, 0, 0, 1},
 			wantErrors: 6,
+		}, {
+			name: "parse space after value in parentheses",
+			parser: cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10))).
+				AddPrefixLevel(cmb.PrefixOp[int64]{
+					Op:       "-",
+					SafeSpot: true,
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				}).AddPostfixLevel(cmb.PostfixOp[int64]{
+				Op:       "++",
+				SafeSpot: true,
+				Fn: func(i int64) int64 {
+					return i + 1
+				},
+			}).AddInfixLevel(cmb.InfixOp[int64]{
+				Op:       "*",
+				SafeSpot: true,
+				Fn: func(a, b int64) int64 {
+					return a * b
+				},
+			}).AddParentheses("[", "]", true).WithSpace(cmb.Whitespace1()).Parser()),
+			input:      " - [ 3] ",
+			wantOutput: []int64{-3},
+			wantErrors: 1,
 		}, {
 			name: "all mixed up",
 			parser: cmb.Count(11, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)),
