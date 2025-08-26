@@ -607,7 +607,7 @@ func TestExpression_ErrorCases(t *testing.T) {
 			wantErrors: 1,
 		}, {
 			name: "all mixed up",
-			parser: cmb.Count(11, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)),
+			parser: cmb.Count(12, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10)),
 				cmb.PrefixLevel([]cmb.PrefixOp[int64]{
 					{
 						Op:       "-",
@@ -698,9 +698,9 @@ func TestExpression_ErrorCases(t *testing.T) {
 						},
 					},
 				})).AddParentheses("(", ")", true).AddParentheses("[", "]", true).Parser()),
-			input:      " \\ - | ( ? ! ~ 2 ` ++ ' + ; 3 : -- . ) , * @ [ # 2 $ ++ ++ ^ & 2 { - } 12 < ++ % > 6 a ] b ++ ++ ++ ++ / c 4",
-			wantOutput: []int64{2, 1, 3, -1, 0, 2, 4, -12, 1, 0, 1},
-			wantErrors: 21,
+			input:      " \\ - | ( ? ! ~ 2 ` ++ ' + ; 3 : -- . ) , * @ [ # 2 $ ++ ++ ^ & 2 { - } 12 < ++ % > 6 a ] b ++ ++ ++ ++ / c 4 d +( 3 )",
+			wantOutput: []int64{2, 1, 3, -1, 0, 2, 4, -12, 1, 0, 1, 3},
+			wantErrors: 22,
 		},
 	}
 
@@ -718,5 +718,233 @@ func TestExpression_ErrorCases(t *testing.T) {
 				t.Errorf("err=%v, want errors=%d", err, want)
 			}
 		})
+	}
+}
+
+func TestExpression_Panics(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty string prefix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+				{
+					Op: "",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("nil prefix func", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+				{
+					Op: "-",
+					Fn: nil,
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate prefix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+				{
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				}, {
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("empty string infix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.InfixLevel([]cmb.InfixOp[int64]{
+				{
+					Op: "",
+					Fn: func(a, b int64) int64 {
+						return a + b
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("nil infix func", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.InfixLevel([]cmb.InfixOp[int64]{
+				{
+					Op: "+",
+					Fn: nil,
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate infix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.InfixLevel([]cmb.InfixOp[int64]{
+				{
+					Op: "+",
+					Fn: func(a, b int64) int64 {
+						return a + b
+					},
+				}, {
+					Op: "+",
+					Fn: func(a, b int64) int64 {
+						return a + b
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("empty string postfix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op: "",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("nil postfix func", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op: "-",
+					Fn: nil,
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate postfix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				}, {
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate multi-level prefix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+				{
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			}), cmb.PrefixLevel([]cmb.PrefixOp[int64]{
+				{
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate multi-level infix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.InfixLevel([]cmb.InfixOp[int64]{
+				{
+					Op: "+",
+					Fn: func(a, b int64) int64 {
+						return a + b
+					},
+				},
+			}), cmb.InfixLevel([]cmb.InfixOp[int64]{
+				{
+					Op: "+",
+					Fn: func(a, b int64) int64 {
+						return a + b
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate multi-level postfix op", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			}), cmb.PostfixLevel([]cmb.PostfixOp[int64]{
+				{
+					Op: "-",
+					Fn: func(i int64) int64 {
+						return -i
+					},
+				},
+			})).Parser()
+	})
+
+	t.Run("duplicate parentheses", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10)).
+			AddParentheses("(", ")", false).
+			AddParentheses("(", ")", false).Parser()
+	})
+
+	t.Run("empty postfix op level", func(t *testing.T) {
+		t.Parallel()
+		defer recoverFunc(t)()
+		cmb.Expression(cmb.Int64(false, 10),
+			cmb.PostfixLevel([]cmb.PostfixOp[int64]{})).Parser()
+	})
+
+}
+func recoverFunc(t *testing.T) func() {
+	return func() {
+		// if the test panics, recover() returns a non nil value
+		r := recover()
+		t.Logf("panic: %v", r)
+		if r == nil {
+			t.Errorf("test should panic")
+		}
 	}
 }
