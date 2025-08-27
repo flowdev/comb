@@ -153,6 +153,18 @@ func (st State) Delete1() State {
 }
 
 // ============================================================================
+// Parser Cache
+//
+
+func (st State) PutIntoCache(pID int32, value interface{}) {
+	st.constant.parserCache[pID] = value
+}
+
+func (st State) GetFromCache(pID int32) interface{} {
+	return st.constant.parserCache[pID]
+}
+
+// ============================================================================
 // Handle success and failure
 //
 

@@ -3,11 +3,13 @@ package cmb
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/flowdev/comb"
+	"github.com/flowdev/comb/x/omap"
 )
 
 // ============================================================================
@@ -138,6 +140,7 @@ func PostfixLevel[Output any](ops []PostfixOp[Output]) PrecedenceLevel[Output] {
 }
 
 type expr[Output any] struct {
+	id                func() int32
 	expected          string
 	value             comb.Parser[Output]
 	space             comb.Parser[string]
@@ -147,6 +150,7 @@ type expr[Output any] struct {
 	closeParenParser  comb.Parser[string]
 	closeParenParsers map[string]comb.Parser[string]
 	safeSpots         []safeSpot
+	recoverCache      *omap.OrderedMap[int, safeSpot]
 }
 type parens struct {
 	open, close string
@@ -244,6 +248,8 @@ func (e expr[Output]) WithExpected(expected string) expr[Output] {
 //   - double opening parentheses
 //   - double operators of the same type (prefix, infix or postfix)
 func (e expr[Output]) Parser() comb.Parser[Output] {
+	var p comb.Parser[Output]
+
 	ee := e.prepareParens()
 	ee = ee.checkOperators()
 	if ee.space == nil {
@@ -253,7 +259,9 @@ func (e expr[Output]) Parser() comb.Parser[Output] {
 		ee.expected = "expression"
 	}
 	ee.levels = append([]PrecedenceLevel[Output]{{}}, ee.levels...) // add level for values and parentheses
-	p := comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
+	ee.id = func() int32 { return p.ID() }
+	ee.recoverCache = omap.New[int, safeSpot](len(ee.safeSpots))
+	p = comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
 	if len(ee.safeSpots) > 0 {
 		return comb.SafeSpot(p)
 	}
@@ -348,8 +356,6 @@ func (e expr[Output]) prepareParens() expr[Output] {
 	return e
 }
 func (e expr[Output]) oneOfOperator(collection ...string) comb.Parser[string] {
-	var p comb.Parser[string]
-
 	n := len(collection)
 	if n == 0 {
 		panic("oneOfOperator has no strings to match")
@@ -361,7 +367,7 @@ func (e expr[Output]) oneOfOperator(collection ...string) comb.Parser[string] {
 		for _, token := range collection {
 			if strings.HasPrefix(input, token) {
 				nState := state.MoveBy(len(token))
-				if e.isEndOfOp(nState) {
+				if ok, _ := isEndOfOp(nState, e.openParenParser, e.closeParenParser); ok {
 					return nState, token, nil
 				}
 			}
@@ -369,8 +375,7 @@ func (e expr[Output]) oneOfOperator(collection ...string) comb.Parser[string] {
 		return state, "", state.NewSyntaxError(expected)
 	}
 
-	p = comb.NewParser[string](expected, parse, e.indexOfAnyOperator(collection...))
-	return p
+	return comb.NewParser[string](expected, parse, e.indexOfAnyOperator(collection...))
 }
 func (e expr[Output]) indexOfAnyOperator(stops ...string) comb.Recoverer {
 	n := len(stops)
@@ -380,19 +385,43 @@ func (e expr[Output]) indexOfAnyOperator(stops ...string) comb.Recoverer {
 	}
 
 	return func(state comb.State, _ interface{}) (int, interface{}) {
-		input := state.CurrentString()
+		orgInput := state.CurrentString()
 		pos := comb.RecoverWasteTooMuch
 		for i := 0; i < n; i++ {
-			switch j := strings.Index(input, stops[i]); j {
-			case -1: // ignore
-			case 0: // it won't get better than this
-				if e.isEndOfOp(state.MoveBy(len(stops[i]))) {
-					return 0, nil
-				}
-			default:
-				if pos < 0 || j < pos {
-					if e.isEndOfOp(state.MoveBy(j + len(stops[i]))) {
-						pos = j
+			input := orgInput
+			start := 0
+			stopLen := len(stops[i])
+			found := false // we might have to try multiple times because sometimes it just looks like the op but isn't
+			for !found {   // e.g.: "++" instead of "+"
+				switch j := strings.Index(input, stops[i]); j {
+				case -1: // ignore
+					found = true
+				case 0: // it won't get better than this
+					nState := state.MoveBy(stopLen)
+					opLen := endOfOp(nState, e.openParenParser, e.closeParenParser)
+					if opLen == 0 {
+						if pos < 0 || start < pos {
+							if start == 0 {
+								return 0, nil
+							}
+							pos = start
+							found = true
+						}
+					} else {
+						start += stopLen + opLen
+						input = input[stopLen+opLen:]
+					}
+				default:
+					if pos < 0 || start+j < pos {
+						nState := state.MoveBy(start + j + stopLen)
+						opLen := endOfOp(nState, e.openParenParser, e.closeParenParser)
+						if opLen == 0 {
+							pos = start + j
+							found = true
+						} else {
+							start += j + stopLen + opLen
+							input = input[j+stopLen+opLen:]
+						}
 					}
 				}
 			}
@@ -400,27 +429,38 @@ func (e expr[Output]) indexOfAnyOperator(stops ...string) comb.Recoverer {
 		return pos, nil
 	}
 }
-func (e expr[Output]) isEndOfOp(state comb.State) bool {
-	if state.AtEnd() {
-		return true
+func endOfOp(state comb.State, openParenParser, closeParenParser comb.Parser[string]) int {
+	end := 0
+	for {
+		found, rsize := isEndOfOp(state, openParenParser, closeParenParser)
+		if found {
+			return end
+		}
+		end += rsize
+		state = state.MoveBy(rsize)
 	}
-	r, _ := utf8.DecodeRuneInString(state.CurrentString())
+}
+func isEndOfOp(state comb.State, openParenParser, closeParenParser comb.Parser[string]) (bool, int) {
+	if state.AtEnd() {
+		return true, 0
+	}
+	r, rsize := utf8.DecodeRuneInString(state.CurrentString())
 	if r != utf8.RuneError {
 		if IsAlphanumeric(r) || unicode.IsSpace(r) {
-			return true
+			return true, 0
 		}
 	}
-	if e.openParenParser != nil {
-		if _, _, err := e.openParenParser.Parse(state); err == nil {
-			return true
+	if openParenParser != nil {
+		if _, _, err := openParenParser.Parse(state); err == nil {
+			return true, 0
 		}
 	}
-	if e.closeParenParser != nil {
-		if _, _, err := e.closeParenParser.Parse(state); err == nil {
-			return true
+	if closeParenParser != nil {
+		if _, _, err := closeParenParser.Parse(state); err == nil {
+			return true, 0
 		}
 	}
-	return false
+	return false, rsize
 }
 
 // recover finds the operator with minimal waste that has the highest priority.
@@ -429,26 +469,58 @@ func (e expr[Output]) recover(state comb.State, data interface{}) (int, interfac
 	if rData == nil {
 		rData = &recoverData[Output]{lData: make([]levelData[Output], len(e.levels))}
 	}
-	waste := math.MaxInt
-	bestSafeSpot := safeSpot{l: -1}
 
-	for _, ss := range e.safeSpots {
-		nWaste, _ := ss.rec.Recover(state, nil)
-		if nWaste >= 0 && nWaste < waste {
-			waste = nWaste
-			bestSafeSpot = ss
-			if waste == 0 {
-				break
+	pID := e.id()
+	_, _ = fmt.Fprintf(os.Stderr, "\n\nERROR?: pID: %d\n", pID)
+	pos := state.CurrentPos()
+	icache := state.GetFromCache(pID)
+	_, _ = fmt.Fprintf(os.Stderr, "ERROR?: pos: %d\n", pos)
+	_, _ = fmt.Fprintf(os.Stderr, "ERROR?: icache: %v\n", icache)
+	var cache *omap.OrderedMap[int, safeSpot]
+	var cache2 *omap.OrderedMap[int, safeSpot]
+	if icache == nil {
+		//if e.recoverCache.Len() == 0 {
+		cache2 = e.recoverCache
+		cache = omap.New[int, safeSpot](len(e.safeSpots))
+		for i, ss := range e.safeSpots {
+			waste, _ := ss.rec.Recover(state, nil)
+			if waste < 0 {
+				cache.Add(math.MaxInt-i, ss)  // don't add them all to the same spot
+				cache2.Add(math.MaxInt-i, ss) // don't add them all to the same spot
+			} else {
+				cache.Add(pos+waste, ss)
+				cache2.Add(pos+waste, ss)
+			}
+		}
+		if pID >= 0 { // don't cache parsers created by SafeSpot to find Forbidden recoverers
+			state.PutIntoCache(pID, cache)
+		}
+		e.recoverCache = cache2
+	} else {
+		cache = icache.(*omap.OrderedMap[int, safeSpot])
+		cache2 = e.recoverCache
+	}
+
+	n := state.CurrentPos() + state.BytesRemaining()
+	//cache = cache2
+	for {
+		npos, ss := cache.GetFirst()
+		if npos >= pos {
+			if npos >= n {
+				return comb.RecoverWasteTooMuch, rData
+			}
+			rData.safeSpotOp = ss.op
+			rData.safeSpotLevel = ss.l
+			return npos - pos, rData
+		} else {
+			waste, _ := ss.rec.Recover(state, nil)
+			if waste < 0 {
+				cache.ReplaceFirst(math.MaxInt, ss)
+			} else {
+				cache.ReplaceFirst(pos+waste, ss)
 			}
 		}
 	}
-	if bestSafeSpot.l < 0 { // no safe spot found
-		return comb.RecoverWasteTooMuch, rData
-	}
-
-	rData.safeSpotOp = bestSafeSpot.op
-	rData.safeSpotLevel = bestSafeSpot.l
-	return waste, rData
 }
 
 func (e expr[Output]) parseWithData(state comb.State, data interface{}) (comb.State, Output, *comb.ParserError, interface{}) {
