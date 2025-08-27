@@ -49,8 +49,8 @@ type Parser[Output any] interface {
 	ParseAny(parentID int32, state State) (State, interface{}, *ParserError) // used by PreparedParser (top -> down)
 	parseAnyAfterError(err *ParserError, state State,
 	) (lastParentID int32, newState State, output interface{}, newErr *ParserError) // used by parseAll (bottom -> up)
-	IsSaveSpot() bool
-	setSaveSpot() // used by SafeSpot parser
+	IsSafeSpot() bool
+	setSafeSpot() // used by SafeSpot parser
 	Recover(State, interface{}) (int, interface{})
 	IsStepRecoverer() bool
 	SwapRecoverer(Recoverer) // called during the construction phase
@@ -86,11 +86,12 @@ func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output
 // The parsers store and advance the position within the data but never change the data itself.
 // This allows good error reporting, including the full line of text containing the error.
 type ConstState struct {
-	binary    bool   // type of input (general)
-	bytes     []byte // for binary input and parsers
-	text      string // for string input and text parsers
-	n         int    // length of the bytes or text
-	maxErrors int    // maximal number of errors to recover from
+	binary      bool                  // type of input (general)
+	bytes       []byte                // for binary input and parsers
+	text        string                // for string input and text parsers
+	n           int                   // length of the bytes or text
+	maxErrors   int                   // maximal number of errors to recover from
+	parserCache map[int32]interface{} // for private data of parsers
 }
 
 func newConstState(binary bool, bytes []byte, text string, maxErrors int) *ConstState {
@@ -99,7 +100,7 @@ func newConstState(binary bool, bytes []byte, text string, maxErrors int) *Const
 		n = len(bytes)
 	}
 	return &ConstState{
-		binary: binary, bytes: bytes, text: text, n: n, maxErrors: maxErrors,
+		binary: binary, bytes: bytes, text: text, n: n, maxErrors: maxErrors, parserCache: make(map[int32]interface{}),
 	}
 }
 

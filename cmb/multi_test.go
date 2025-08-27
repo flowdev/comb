@@ -20,38 +20,38 @@ func TestCount(t *testing.T) {
 	}{
 		{
 			name:       "parsing exact count should succeed",
-			parser:     Count(String("abc"), 2),
+			parser:     Count(2, String("abc")),
 			input:      "abcabc",
 			wantErr:    false,
 			wantOutput: []string{"abc", "abc"},
 		},
 		{
 			name:       "parsing more than count should succeed",
-			parser:     Count(String("abc"), 2),
+			parser:     Count(2, String("abc")),
 			input:      "abcabcabc",
 			wantErr:    false,
 			wantOutput: []string{"abc", "abc"},
 		},
 		{
 			name:       "parsing less than count should fail",
-			parser:     Count(String("abc"), 2),
+			parser:     Count(2, String("abc")),
 			input:      "abc123",
 			wantErr:    true,
-			wantOutput: []string{"abc"},
+			wantOutput: []string{"abc", ""},
 		},
 		{
 			name:       "parsing no count should fail",
-			parser:     Count(String("abc"), 2),
+			parser:     Count(2, String("abc")),
 			input:      "123123",
 			wantErr:    true,
-			wantOutput: []string{},
+			wantOutput: []string{""},
 		},
 		{
 			name:       "parsing empty input should fail",
-			parser:     Count(String("abc"), 2),
+			parser:     Count(2, String("abc")),
 			input:      "",
 			wantErr:    true,
-			wantOutput: []string{},
+			wantOutput: []string{""},
 		},
 	}
 
@@ -76,7 +76,7 @@ func TestCount(t *testing.T) {
 }
 
 func BenchmarkCount(b *testing.B) {
-	parser := Count(Char('#'), 3)
+	parser := Count(3, Char('#'))
 	state := comb.NewFromString("###", 0)
 
 	b.ResetTimer()
@@ -196,14 +196,14 @@ func TestMany1(t *testing.T) {
 			input:      "abc",
 			parser:     Many1(Char('#')),
 			wantErr:    true,
-			wantOutput: []rune{},
+			wantOutput: []rune{65533},
 		},
 		{
 			name:       "empty input should fail",
 			input:      "",
 			parser:     Many1(Char('#')),
 			wantErr:    true,
-			wantOutput: []rune{},
+			wantOutput: []rune{65533},
 		},
 	}
 	for _, tc := range testCases {
@@ -371,7 +371,7 @@ func TestSeparated1(t *testing.T) {
 			input:      "",
 			parser:     Separated1(String("abc"), Char(','), false),
 			wantErr:    true,
-			wantOutput: []string{},
+			wantOutput: []string{""},
 		},
 	}
 	for _, tc := range testCases {

@@ -111,13 +111,13 @@ func (sd *separatedData[Output, S]) parseAfterChild(
 		if childID != sd.parser.ID() {
 			childStartState = endState
 			childState, childOut, childErr = sd.parser.ParseAny(sd.id(), childStartState)
+			out, _ := childOut.(Output) // in some rare cases out is important
 			if childErr != nil {
 				if sd.atLeast > count || childStartState.SafeSpotMoved(childState) { // fail
-					return childState, partRes.outs, childErr, partRes
+					return childState, append(partRes.outs, out), childErr, partRes
 				}
 				return resultState, partRes.outs, nil, nil // ignore error: we have enough output
 			}
-			out, _ := childOut.(Output)
 			partRes.outs = append(partRes.outs, out)
 			count++
 			endState = childState

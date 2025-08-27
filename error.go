@@ -12,6 +12,7 @@ import (
 //
 
 const errorMarker = 0x25B6 // easy to spot marker (▶) for the exact error position
+const SyntaxErrorStart = "expected "
 
 // ParserError is an error message from the parser.
 // It consists of the text itself and the position in the input where it happened.
@@ -26,7 +27,14 @@ type ParserError struct {
 }
 
 func (e *ParserError) Error() string {
-	return singleErrorMsg(*e)
+	fullMsg := strings.Builder{}
+	fullMsg.WriteString(e.text)
+	if e.binary {
+		fullMsg.WriteString(formatBinaryLine(e.line, e.col, e.srcLine))
+	} else {
+		fullMsg.WriteString(formatSrcLine(e.line, e.col, e.srcLine))
+	}
+	return fullMsg.String()
 }
 
 func (e *ParserError) ParserData(parserID int32) interface{} {
@@ -34,6 +42,17 @@ func (e *ParserError) ParserData(parserID int32) interface{} {
 }
 func (e *ParserError) StoreParserData(parserID int32, data interface{}) {
 	e.parserData[parserID] = data
+}
+
+func (e *ParserError) PatchMessage(subMsg string) {
+	if strings.Contains(e.text, subMsg) {
+		return
+	}
+	if strings.HasPrefix(e.text, SyntaxErrorStart) {
+		e.text = SyntaxErrorStart + subMsg + e.text[len(SyntaxErrorStart):]
+	} else {
+		e.text = subMsg + e.text
+	}
 }
 
 // ClaimError takes over an error from a sub-parser.
@@ -48,18 +67,6 @@ func ClaimError(err *ParserError) *ParserError {
 // ============================================================================
 // Error Reporting
 //
-
-func singleErrorMsg(pcbErr ParserError) string {
-	fullMsg := strings.Builder{}
-	fullMsg.WriteString(pcbErr.text)
-	if pcbErr.binary {
-		fullMsg.WriteString(formatBinaryLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
-	} else {
-		fullMsg.WriteString(formatSrcLine(pcbErr.line, pcbErr.col, pcbErr.srcLine))
-	}
-
-	return fullMsg.String()
-}
 
 func formatBinaryLine(line, col int, srcLine string) string {
 	start := line

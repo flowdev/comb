@@ -1,15 +1,16 @@
 package cmb
 
 import (
-	"github.com/flowdev/comb"
 	"math"
+
+	"github.com/flowdev/comb"
 )
 
 // Count runs the provided parser `count` times.
 //
 // If the provided parser cannot be successfully applied `count` times, the operation
 // fails and the Result will contain an error.
-func Count[Output any](parse comb.Parser[Output], count int) comb.Parser[[]Output] {
+func Count[Output any](count int, parse comb.Parser[Output]) comb.Parser[[]Output] {
 	if count < 0 {
 		panic("Count is unable to handle negative `count`")
 	}
