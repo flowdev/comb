@@ -156,10 +156,10 @@ func ZeroOf[T any]() T {
 
 // SetDebug sets the log level to debug if enabled or info otherwise.
 func SetDebug(enable bool) {
-	//if enable {
-	//	slog.SetLogLoggerLevel(slog.LevelDebug)
-	//	return
-	//}
+	if enable {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		return
+	}
 	slog.SetLogLoggerLevel(slog.LevelInfo)
 }
 

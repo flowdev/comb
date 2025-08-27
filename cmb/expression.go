@@ -3,7 +3,6 @@ package cmb
 import (
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -150,7 +149,6 @@ type expr[Output any] struct {
 	closeParenParser  comb.Parser[string]
 	closeParenParsers map[string]comb.Parser[string]
 	safeSpots         []safeSpot
-	recoverCache      *omap.OrderedMap[int, safeSpot]
 }
 type parens struct {
 	open, close string
@@ -260,7 +258,6 @@ func (e expr[Output]) Parser() comb.Parser[Output] {
 	}
 	ee.levels = append([]PrecedenceLevel[Output]{{}}, ee.levels...) // add level for values and parentheses
 	ee.id = func() int32 { return p.ID() }
-	ee.recoverCache = omap.New[int, safeSpot](len(ee.safeSpots))
 	p = comb.NewParserWithData(ee.expected, ee.parseWithData, ee.recover)
 	if len(ee.safeSpots) > 0 {
 		return comb.SafeSpot(p)
@@ -471,38 +468,27 @@ func (e expr[Output]) recover(state comb.State, data interface{}) (int, interfac
 	}
 
 	pID := e.id()
-	_, _ = fmt.Fprintf(os.Stderr, "\n\nERROR?: pID: %d\n", pID)
 	pos := state.CurrentPos()
 	icache := state.GetFromCache(pID)
-	_, _ = fmt.Fprintf(os.Stderr, "ERROR?: pos: %d\n", pos)
-	_, _ = fmt.Fprintf(os.Stderr, "ERROR?: icache: %v\n", icache)
 	var cache *omap.OrderedMap[int, safeSpot]
-	var cache2 *omap.OrderedMap[int, safeSpot]
 	if icache == nil {
-		//if e.recoverCache.Len() == 0 {
-		cache2 = e.recoverCache
 		cache = omap.New[int, safeSpot](len(e.safeSpots))
 		for i, ss := range e.safeSpots {
 			waste, _ := ss.rec.Recover(state, nil)
 			if waste < 0 {
-				cache.Add(math.MaxInt-i, ss)  // don't add them all to the same spot
-				cache2.Add(math.MaxInt-i, ss) // don't add them all to the same spot
+				cache.Add(math.MaxInt-i, ss) // don't add them all to the same spot
 			} else {
 				cache.Add(pos+waste, ss)
-				cache2.Add(pos+waste, ss)
 			}
 		}
 		if pID >= 0 { // don't cache parsers created by SafeSpot to find Forbidden recoverers
 			state.PutIntoCache(pID, cache)
 		}
-		e.recoverCache = cache2
 	} else {
 		cache = icache.(*omap.OrderedMap[int, safeSpot])
-		cache2 = e.recoverCache
 	}
 
 	n := state.CurrentPos() + state.BytesRemaining()
-	//cache = cache2
 	for {
 		npos, ss := cache.GetFirst()
 		if npos >= pos {
