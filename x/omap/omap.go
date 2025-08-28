@@ -56,7 +56,8 @@ func (om *OrderedMap[K, V]) ReplaceFirst(k K, v V) {
 			// we are already sorted
 			return
 		case 0: // same key? we have one less value!
-			om.s = append(om.s[:i+1], om.s[i+2:]...)
+			copy(om.s[i:], om.s[i+1:])
+			om.s = om.s[:n-1]
 			return
 		case 1:
 			om.s[i], om.s[i+1] = om.s[i+1], om.s[i]
@@ -75,9 +76,6 @@ func (om *OrderedMap[K, V]) Add(k K, v V) {
 			switch c := cmp.Compare(k, om.s[i-1]); c {
 			case -1:
 				om.s[i], om.s[i-1] = om.s[i-1], om.s[i]
-			case 0: // same key? we have one less value!
-				om.s = om.s[:n-1]
-				break FOR
 			case 1:
 				// we are already sorted
 				break FOR
