@@ -213,7 +213,6 @@ func TestDelimited(t *testing.T) {
 			wantOutput: "",
 		},
 	}
-	comb.SetDebug(true)
 	for _, tc := range testCases {
 		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
 		t.Run(tc.name, func(t *testing.T) {

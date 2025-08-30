@@ -51,7 +51,6 @@ func TestClaimError(t *testing.T) {
 	t.Parallel()
 
 	state := NewFromString("source", 0)
-	err := state.NewSyntaxError("no source")
 
 	tests := []struct {
 		name         string
@@ -77,6 +76,7 @@ func TestClaimError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			err := state.NewSyntaxError("no source")
 			err.parserID = tt.gotParserID
 			gotErr := ClaimError(err)
 			if got, want := gotErr.parserID, int32(-1); got != want {

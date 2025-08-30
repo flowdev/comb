@@ -259,6 +259,7 @@ func TestPreparedParserParseAll(t *testing.T) {
 			}
 		})
 	}
+	SetDebug(false)
 }
 
 func TestBranchParserToAnyParser(t *testing.T) {
