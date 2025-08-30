@@ -71,6 +71,9 @@ func ClaimError(err *ParserError) *ParserError {
 func formatBinaryLine(line, col int, srcLine string) string {
 	start := line
 	text := hex.Dump([]byte(srcLine))
+	if len(text) <= 10 {
+		return ": <EOF>"
+	}
 	text = text[10:] // remove wrong offset and spaces
 
 	m1 := col * 3

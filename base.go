@@ -31,9 +31,9 @@ type Separator interface {
 // forward 1 rune/byte at a time. :(
 type Recoverer func(state State, data interface{}) (int, interface{})
 
-const RecoverWasteUnknown = -1 // default value; 0 can't be used because it's a valid normal value
-const RecoverWasteTooMuch = -2 // used by recoverers to convey that they can't recover from the current state
-const RecoverNever = -3        // used by recoverers to convey that they can't recover ever at all
+const RecoverWasteUnknown = -2 // default value; 0 can't be used because it's a valid normal value
+const RecoverWasteTooMuch = -1 // has to be -1 because of Go Index... functions
+const RecoverNever = -3
 
 const DefaultMaxErrors = 10 // the maximum number of errors to recover from (same as for the Go compiler)
 
@@ -73,6 +73,9 @@ func RunOnBytes[Output any](input []byte, parse Parser[Output]) (Output, error) 
 	return RunOnState[Output](NewFromBytes(input, DefaultMaxErrors), NewPreparedParser(parse))
 }
 
+// RunOnState runs a parser on a given state and returns the output and error(s).
+// RunOnString and RunOnBytes are just convenience wrappers around RunOnState.
+// RunOnState is the only one that is concurrent-safe because preparing the parser is NOT.
 func RunOnState[Output any](state State, parser *PreparedParser[Output]) (Output, error) {
 	return parser.parseAll(state)
 }

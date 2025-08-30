@@ -14,7 +14,6 @@ func TestOrderedMap(t *testing.T) {
 		givenValues []bool // for Add/Build
 		givenExists []int  // for Exists
 		givenNoKey  int    // for Get
-		wantOKs     []bool // for Add
 		wantLen     int    // for Len
 		wantExists  []bool // for Exists
 		wantKeys    []int  // for All/Get
@@ -27,7 +26,6 @@ func TestOrderedMap(t *testing.T) {
 			givenValues: nil,
 			givenExists: nil,
 			givenNoKey:  -1,
-			wantOKs:     nil,
 			wantLen:     0,
 			wantExists:  nil,
 			wantKeys:    nil,
@@ -39,7 +37,6 @@ func TestOrderedMap(t *testing.T) {
 			givenValues: []bool{true},
 			givenExists: []int{1, 2},
 			givenNoKey:  -1,
-			wantOKs:     []bool{true},
 			wantLen:     1,
 			wantExists:  []bool{true, false},
 			wantKeys:    []int{1},
@@ -51,7 +48,6 @@ func TestOrderedMap(t *testing.T) {
 			givenValues: []bool{false, true},
 			givenExists: []int{2, 1},
 			givenNoKey:  -1,
-			wantOKs:     []bool{true, false},
 			wantLen:     1,
 			wantExists:  []bool{false, true},
 			wantKeys:    []int{1},
@@ -63,7 +59,6 @@ func TestOrderedMap(t *testing.T) {
 			givenValues: []bool{true, true, true},
 			givenExists: []int{1, 2, 3},
 			givenNoKey:  -1,
-			wantOKs:     []bool{true, true, true},
 			wantLen:     3,
 			wantExists:  []bool{true, true, true},
 			wantKeys:    []int{1, 2, 3},
@@ -71,11 +66,10 @@ func TestOrderedMap(t *testing.T) {
 		}, {
 			name:        "size-too-big",
 			givenSize:   32,
-			givenKeys:   []int{1, 2, 3},
+			givenKeys:   []int{3, 2, 1},
 			givenValues: []bool{true, true, true},
-			givenExists: []int{1, 2, 3},
+			givenExists: []int{3, 2, 1},
 			givenNoKey:  -1,
-			wantOKs:     []bool{true, true, true},
 			wantLen:     3,
 			wantExists:  []bool{true, true, true},
 			wantKeys:    []int{1, 2, 3},
@@ -122,6 +116,19 @@ func TestOrderedMap(t *testing.T) {
 			}
 			if om2.Len() != tt.wantLen {
 				t.Errorf("After Build(): Len() = %d, want %d", om2.Len(), tt.wantLen)
+			}
+			actKey, actValue := om2.GetFirst()
+			wantKey := 0
+			wantValue := false
+			if om2.Len() > 0 {
+				wantKey = tt.wantKeys[0]
+				wantValue = tt.wantValues[0]
+			}
+			if actKey != wantKey {
+				t.Errorf("GetFirst(key) = %v, want %v", actKey, wantKey)
+			}
+			if actValue != wantValue {
+				t.Errorf("GetFirst(value) = %v, want %v", actValue, wantValue)
 			}
 			for i := len(tt.givenKeys) - 1; i >= 0; i-- { // replace in opposite order
 				om2.ReplaceFirst(tt.givenKeys[i], tt.givenValues[i])
