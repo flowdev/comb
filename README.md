@@ -5,9 +5,9 @@ Comb is a library that simplifies building parsers in Go.
 
 For me, it has got the optimal feature set:
 1. Simple maintainability of a normal library thanks to being a parser combinator library.
-1. Report errors with exact (line and column) position and code snippet.
-1. Report **multiple** errors.
-1. UNICODE support.
+1. Report errors with the line and column position and code snippet.
+1. Reporting of **multiple** errors.
+1. UNICODE support (working on UTF-8 encoded UNICODE code points instead of bytes if requested).
 1. Support for binary input (including byte position and hex dump for errors).
 1. Type safety (including filling arbitrary typed data) using generics.
 1. Idiomatic Go code (no generated code, ...).

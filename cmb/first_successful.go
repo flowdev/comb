@@ -1,6 +1,8 @@
 package cmb
 
 import (
+	"slices"
+
 	"github.com/flowdev/comb"
 )
 
@@ -115,10 +117,7 @@ func (fsd *firstSuccessfulData[Output]) parseAfterChild(
 }
 
 func (fsd *firstSuccessfulData[Output]) indexForID(id int32) int {
-	for i, p := range fsd.parsers {
-		if p.ID() == id {
-			return i
-		}
-	}
-	return -1
+	return slices.IndexFunc(fsd.parsers, func(p comb.Parser[Output]) bool {
+		return p.ID() == id
+	})
 }

@@ -50,14 +50,12 @@ func Optional[Output any](parser comb.Parser[Output]) comb.Parser[Output] {
 //   - Even though Peek accepts a parser as an argument, it behaves like a leaf parser
 //     to the outside world. There will be no error recovery as we don't parse anything.
 func Peek[Output any](parse comb.Parser[Output]) comb.Parser[Output] {
-	var p comb.Parser[Output]
 	peekParse := func(state comb.State) (comb.State, Output, *comb.ParserError) {
 		_, aOut, err := parse.ParseAny(comb.ParentUnknown, state)
 		out, _ := aOut.(Output)
 		return state, out, comb.ClaimError(err)
 	}
-	p = comb.NewParser[Output]("Peek", peekParse, Forbidden())
-	return p
+	return comb.NewParser[Output]("Peek", peekParse, Forbidden())
 }
 
 // Not tries to apply the provided parser without consuming any input.
@@ -71,8 +69,6 @@ func Peek[Output any](parse comb.Parser[Output]) comb.Parser[Output] {
 //     to the outside world. There will be no error recovery as we don't parse anything.
 //   - The returned boolean value indicates its own success and not the given parsers.
 func Not[Output any](parser comb.Parser[Output]) comb.Parser[bool] {
-	var p comb.Parser[bool]
-
 	expected := "not " + parser.Expected()
 	notParse := func(state comb.State) (comb.State, bool, *comb.ParserError) {
 		_, _, err := parser.ParseAny(comb.ParentUnknown, state)
@@ -81,8 +77,70 @@ func Not[Output any](parser comb.Parser[Output]) comb.Parser[bool] {
 		}
 		return state, false, state.NewSyntaxError(expected)
 	}
-	p = comb.NewParser[bool](expected, notParse, Forbidden())
-	return p
+	return comb.NewParser[bool](expected, notParse, Forbidden())
+}
+
+// StringUntil parses everything until the provided parser succeeds.
+// It uses the recoverer of the provided parser.
+// This is great for performance.
+//
+// NOTE:
+//   - StringUntil panics during the construction of the parser if the provided parser
+//     has a Forbidden recoverer.
+//   - StringUntil can't be used as SafeSpot, but the provided parser can be a SafeSpot.
+//   - StringUntil DOES consume the matching parsers input.
+func StringUntil[Output any](p comb.Parser[Output]) comb.Parser[string] {
+	var bp comb.Parser[string]
+
+	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
+	if !p.IsStepRecoverer() {
+		waste, _ := p.Recover(comb.NewFromBytes([]byte{}, 0), nil)
+		if waste == comb.RecoverNever {
+			panic("a parser with a Forbidden recoverer can't be used with StringUntil")
+		}
+	}
+
+	bp = comb.NewBranchParser[string](
+		"StringUntil",
+		func() []comb.AnyParser {
+			return []comb.AnyParser{p}
+		}, func(
+			childID int32,
+			startState, state comb.State,
+			childOut interface{},
+			childErr *comb.ParserError,
+			data interface{},
+		) (comb.State, string, *comb.ParserError, interface{}) {
+			if childID >= 0 { // bottom-up
+				return state, "", childErr, nil // we don't know better
+			} else { // top-down
+				var err *comb.ParserError
+				startState = state
+				nState := state
+				id := bp.ID()
+				if p.IsStepRecoverer() {
+					for nState, _, err = p.ParseAny(id, state); err != nil && !state.AtEnd(); nState, _, err = p.ParseAny(id, state) {
+						state = state.Delete1()
+					}
+				} else {
+					waste, _ := p.Recover(startState, nil)
+					if waste < 0 {
+						err = startState.NewSemanticError("just signaling failure")
+					} else {
+						state = startState.MoveBy(waste)
+						nState, _, err = p.ParseAny(id, state) // should never fail (if recoverer is working)
+					}
+				}
+				if err != nil {
+					return startState, "",
+						startState.NewSyntaxError("unable to find %s in the input", p.Expected()),
+						nil
+				}
+				return nState, startState.StringTo(state), nil, nil
+			}
+		},
+	)
+	return bp
 }
 
 // Assign returns the provided value if the parser succeeds, otherwise

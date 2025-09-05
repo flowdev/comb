@@ -19,8 +19,6 @@ import (
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func Char(char rune) comb.Parser[rune] {
-	var p comb.Parser[rune]
-
 	expected := strconv.QuoteRune(char)
 
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
@@ -38,8 +36,28 @@ func Char(char rune) comb.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	p = comb.NewParser[rune](expected, parse, IndexOf(char))
-	return p
+	return comb.NewParser[rune](expected, parse, IndexOf(char))
+}
+
+// AnyChar parses a single rune.
+// The parser returns an error result only at the end of the input or in case of a UTF-8 error.
+// This parser is NOT a good candidate for SafeSpot and has a Forbidden recoverer.
+func AnyChar() comb.Parser[rune] {
+	expected := "any character"
+
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
+		r, size := utf8.DecodeRuneInString(state.CurrentString())
+		if r == utf8.RuneError {
+			if size == 0 {
+				return state, utf8.RuneError, state.NewSyntaxError(expected + " (at EOF)")
+			}
+			return state, utf8.RuneError, state.NewSyntaxError(expected + " (got UTF-8 error)")
+		}
+
+		return state.MoveBy(size), r, nil
+	}
+
+	return comb.NewParser[rune](expected, parse, Forbidden())
 }
 
 // Byte parses a single byte and matches it with
@@ -67,6 +85,27 @@ func Byte(byt byte) comb.Parser[byte] {
 
 	p = comb.NewParser[byte](expected, parse, IndexOf(byt))
 	return p
+}
+
+// AnyByte parses a single byte and matches it with
+// a provided candidate.
+// If the byte could not be found at the current position,
+// the parser returns an error result.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
+func AnyByte() comb.Parser[byte] {
+	expected := "any byte"
+
+	parse := func(state comb.State) (comb.State, byte, *comb.ParserError) {
+		buf := state.CurrentBytes()
+		if len(buf) == 0 {
+			return state, 0, state.NewSyntaxError(expected + " (at EOF)")
+		}
+		b := buf[0]
+
+		return state.MoveBy(1), b, nil
+	}
+
+	return comb.NewParser[byte](expected, parse, Forbidden())
 }
 
 // Satisfy parses a single character and ensures that it satisfies the given predicate.
@@ -147,7 +186,7 @@ func Bytes(token []byte) comb.Parser[[]byte] {
 
 // UntilString parses until it finds a token in the input and returns
 // the part of the input that preceded the token.
-// If found the parser moves beyond the stop string.
+// If found, the parser moves beyond the stop string.
 // If the token could not be found, the parser returns an error result.
 //
 // NOTE:
@@ -284,6 +323,8 @@ func Alpha1() comb.Parser[string] {
 }
 
 // Alphanumeric0 parses zero or more alphabetical or numerical Unicode characters.
+// An '_' is considered a valid character, too.
+// In the cases where the input is empty, or no matching character is found, the parser
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Alphanumeric0() comb.Parser[string] {
@@ -291,6 +332,7 @@ func Alphanumeric0() comb.Parser[string] {
 }
 
 // Alphanumeric1 parses one or more alphabetical or numerical Unicode characters.
+// An '_' is considered a valid character, too.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alphanumeric1() comb.Parser[string] {

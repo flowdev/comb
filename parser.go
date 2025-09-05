@@ -165,6 +165,9 @@ func (bp *brnchprsr[Output]) ParseAny(parentID int32, state State) (State, inter
 		bp.setParent(parentID)
 	}
 	nState, out, err, data := bp.prsAfterChild(-1, state, state, nil, nil, nil)
+	if err != nil && err.parserID < 0 {
+		err.parserID = bp.ID()
+	}
 	if err != nil && data != nil {
 		err.StoreParserData(bp.ID(), data)
 	}
@@ -327,10 +330,8 @@ func (lp *lazyprsr[Output]) setParent(id int32) {
 //     Any error will look as if coming from SafeSpot itself.
 func SafeSpot[Output any](p Parser[Output]) Parser[Output] {
 	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
-	recoverer := p.Recover
-	tstState := NewFromBytes([]byte{}, 0)
-	if recoverer != nil {
-		waste, _ := recoverer(tstState, nil)
+	if !p.IsStepRecoverer() {
+		waste, _ := p.Recover(NewFromBytes([]byte{}, 0), nil)
 		if waste == RecoverNever {
 			panic("can't make parser with Forbidden recoverer a safe spot")
 		}

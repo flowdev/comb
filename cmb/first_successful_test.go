@@ -22,22 +22,19 @@ func TestFirstSuccessful(t *testing.T) {
 			parser:     FirstSuccessful(Digit1(), Alpha0()),
 			wantErr:    false,
 			wantOutput: "123",
-		},
-		{
+		}, {
 			name:       "tail matching parser should succeed",
 			input:      "abc",
 			parser:     FirstSuccessful(Digit1(), Alpha0()),
 			wantErr:    false,
 			wantOutput: "abc",
-		},
-		{
+		}, {
 			name:       "no matching parser should fail",
 			input:      "$%^*",
 			parser:     FirstSuccessful(Digit1(), Alpha1()),
 			wantErr:    true,
 			wantOutput: "",
-		},
-		{
+		}, {
 			name:       "empty input should fail",
 			input:      "",
 			parser:     FirstSuccessful(Digit1(), Alpha1()),

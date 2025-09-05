@@ -95,8 +95,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 	if base == 0 {
 		recovererBase = 10
 	}
-	allRunes := digitsToRunes(allDigits)
-	return comb.NewParser[string](expected, parser, IndexOfAny(allRunes[:recovererBase]...))
+	return comb.NewParser[string](expected, parser, indexOfInteger(allDigits[:recovererBase], signAllowed))
 }
 
 func rebaseInt(input string, base, n int) (string, int, int) {
@@ -131,12 +130,18 @@ func rebaseInt(input string, base, n int) (string, int, int) {
 	return input, base, n
 }
 
-func digitsToRunes(digits string) []rune {
-	runes := make([]rune, len(digits))
-	for i, d := range []byte(digits) { // it's all ASCII
-		runes[i] = rune(d)
+func indexOfInteger(digits string, signAllowed bool) func(comb.State, interface{}) (int, interface{}) {
+	return func(state comb.State, data interface{}) (int, interface{}) {
+		input := state.CurrentString()
+		i := strings.IndexAny(input, digits)
+		if i < 0 {
+			return comb.RecoverWasteTooMuch, nil
+		}
+		if signAllowed && i > 0 && (input[i-1] == '-' || input[i-1] == '+') {
+			i--
+		}
+		return i, nil
 	}
-	return runes
 }
 
 // Int64 parses an integer from the input using `strconv.ParseInt`.
@@ -277,7 +282,7 @@ func Float(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[strin
 	if base == 0 {
 		recovererBase = 10 // best guess
 	}
-	return comb.NewParser[string](expected, parser, indexOfFloat(allDigits[:recovererBase]))
+	return comb.NewParser[string](expected, parser, indexOfFloat(allDigits[:recovererBase], signAllowed))
 }
 func rebaseFloat(input string, base int) (int, int) {
 	if base != 0 {
@@ -315,18 +320,20 @@ ForLoop:
 	return digit, n, good
 }
 
-func indexOfFloat(digits string) func(comb.State, interface{}) (int, interface{}) {
-	dotDigits := "." + digits
+func indexOfFloat(digits string, signAllowed bool) func(comb.State, interface{}) (int, interface{}) {
 	return func(state comb.State, data interface{}) (int, interface{}) {
 		input := state.CurrentString()
-		i := strings.IndexAny(input, dotDigits)
-		if i < 0 || strings.ContainsRune(digits, rune(input[i])) {
-			return i, nil
+		i := strings.IndexAny(input, digits)
+		if i < 0 {
+			return comb.RecoverWasteTooMuch, nil
 		}
-		if len(input) > i+1 && strings.ContainsRune(digits, rune(input[i+1])) {
-			return i, nil
+		if i > 0 && (input[i-1] == '.') {
+			i--
 		}
-		return comb.RecoverWasteTooMuch, nil
+		if signAllowed && i > 0 && (input[i-1] == '-' || input[i-1] == '+') {
+			i--
+		}
+		return i, nil
 	}
 }
 
