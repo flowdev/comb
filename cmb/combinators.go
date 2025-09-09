@@ -143,6 +143,70 @@ func StringUntil[Output any](p comb.Parser[Output]) comb.Parser[string] {
 	return bp
 }
 
+// BytesUntil parses everything until the provided parser succeeds.
+// It uses the recoverer of the provided parser.
+// This is great for performance.
+//
+// NOTE:
+//   - BytesUntil panics during the construction of the parser if the provided parser
+//     has a Forbidden recoverer.
+//   - BytesUntil can't be used as SafeSpot, but the provided parser can be a SafeSpot.
+//   - BytesUntil DOES consume the matching parsers input.
+func BytesUntil[Output any](p comb.Parser[Output]) comb.Parser[[]byte] {
+	var bp comb.Parser[[]byte]
+
+	// call Recoverer to find a Forbidden recoverer during the construction phase and panic
+	if !p.IsStepRecoverer() {
+		waste, _ := p.Recover(comb.NewFromBytes([]byte{}, 0), nil)
+		if waste == comb.RecoverNever {
+			panic("a parser with a Forbidden recoverer can't be used with BytesUntil")
+		}
+	}
+
+	bp = comb.NewBranchParser[[]byte](
+		"BytesUntil",
+		func() []comb.AnyParser {
+			return []comb.AnyParser{p}
+		}, func(
+			childID int32,
+			startState, state comb.State,
+			childOut interface{},
+			childErr *comb.ParserError,
+			data interface{},
+		) (comb.State, []byte, *comb.ParserError, interface{}) {
+			zero := []byte{}
+			if childID >= 0 { // bottom-up
+				return state, zero, childErr, nil // we don't know better
+			} else { // top-down
+				var err *comb.ParserError
+				startState = state
+				nState := state
+				id := bp.ID()
+				if p.IsStepRecoverer() {
+					for nState, _, err = p.ParseAny(id, state); err != nil && !state.AtEnd(); nState, _, err = p.ParseAny(id, state) {
+						state = state.Delete1()
+					}
+				} else {
+					waste, _ := p.Recover(startState, nil)
+					if waste < 0 {
+						err = startState.NewSemanticError("just signaling failure")
+					} else {
+						state = startState.MoveBy(waste)
+						nState, _, err = p.ParseAny(id, state) // should never fail (if recoverer is working)
+					}
+				}
+				if err != nil {
+					return startState, zero,
+						startState.NewSyntaxError("unable to find %s in the input", p.Expected()),
+						nil
+				}
+				return nState, startState.BytesTo(state), nil, nil
+			}
+		},
+	)
+	return bp
+}
+
 // Assign returns the provided value if the parser succeeds, otherwise
 // it returns an error result.
 func Assign[Output1, Output2 any](value Output1, parser comb.Parser[Output2]) comb.Parser[Output1] {
@@ -239,5 +303,7 @@ func Map5[PO1, PO2, PO3, PO4, PO5 any, MO any](
 	parse1 comb.Parser[PO1], parse2 comb.Parser[PO2], parse3 comb.Parser[PO3], parse4 comb.Parser[PO4], parse5 comb.Parser[PO5],
 	fn func(PO1, PO2, PO3, PO4, PO5) (MO, error),
 ) comb.Parser[MO] {
-	return MapN("Map5", parse1, parse2, parse3, parse4, parse5, 5, nil, nil, nil, nil, fn)
+	return MapN(
+		"Map5",
+		parse1, parse2, parse3, parse4, parse5, 5, nil, nil, nil, nil, fn)
 }

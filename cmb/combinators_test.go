@@ -1,6 +1,7 @@
 package cmb_test
 
 import (
+	"bytes"
 	"errors"
 	"strconv"
 	"testing"
@@ -224,8 +225,72 @@ func TestStringUntil(t *testing.T) {
 }
 
 func BenchmarkStringUntil(b *testing.B) {
-	parser := cmb.Peek(cmb.Alpha1())
-	input := comb.NewFromString("abcd;", 0)
+	parser := cmb.StringUntil(cmb.Alpha1())
+	input := comb.NewFromString("1abcd;", 0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestBytesUntil(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		parser     comb.Parser[[]byte]
+		input      string
+		wantErr    bool
+		wantOutput []byte
+	}{
+		{
+			name:       "immediately matching parser should succeed",
+			input:      "abcd;",
+			parser:     cmb.BytesUntil(cmb.Alpha1()),
+			wantErr:    false,
+			wantOutput: []byte{},
+		}, {
+			name:       "non matching parser should fail",
+			input:      "123;",
+			parser:     cmb.BytesUntil(cmb.Alpha1()),
+			wantErr:    true,
+			wantOutput: []byte{},
+		}, {
+			name:       "matching parser should succeed",
+			input:      "123abcd;",
+			parser:     cmb.BytesUntil(cmb.Alpha1()),
+			wantErr:    false,
+			wantOutput: []byte{'1', '2', '3'},
+		}, {
+			name:       "empty input should fail",
+			input:      "",
+			parser:     cmb.BytesUntil(cmb.Alpha1()),
+			wantErr:    true,
+			wantOutput: []byte{},
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotOutput, gotErr := comb.RunOnBytes([]byte(tc.input), tc.parser)
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			t.Logf("got output: %#v", gotOutput)
+			if !bytes.Equal(gotOutput, tc.wantOutput) {
+				t.Errorf("got output %#v, want output %#v", gotOutput, tc.wantOutput)
+			}
+		})
+	}
+}
+
+func BenchmarkBytesUntil(b *testing.B) {
+	parser := cmb.BytesUntil(cmb.Alpha1())
+	input := comb.NewFromString("1abcd;", 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

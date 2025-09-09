@@ -165,6 +165,118 @@ func BenchmarkAnyChar(b *testing.B) {
 	}
 }
 
+func TestQuotedChar(t *testing.T) {
+	t.Parallel()
+
+	rangeEscapes := "[]-"
+	expected := "range character"
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[rune]
+		input         string
+		wantErr       bool
+		wantOutput    rune
+		wantRemaining string
+	}{
+		{
+			name:          "parsing normal char from single char input should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         "a",
+			wantErr:       false,
+			wantOutput:    'a',
+			wantRemaining: "",
+		}, {
+			name:          "parsing octal char in longer input should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\101abc`,
+			wantErr:       false,
+			wantOutput:    'A',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing hex char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\x41abc`,
+			wantErr:       false,
+			wantOutput:    'A',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing 16 bit Unicode char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\u1234`,
+			wantErr:       false,
+			wantOutput:    '\u1234',
+			wantRemaining: "",
+		}, {
+			name:          "parsing 32 bit Unicode char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\U0001F600ab`,
+			wantErr:       false,
+			wantOutput:    '\U0001F600',
+			wantRemaining: "ab",
+		}, {
+			name:          "parsing additional escaped char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\-`,
+			wantErr:       false,
+			wantOutput:    '-',
+			wantRemaining: "",
+		}, {
+			name:          "parsing forbidden char should fail",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `]`,
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "]",
+		}, {
+			name:          "parsing non-valid Unicode char should fail",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         string([]byte{129, 65, 66, 67}),
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: string([]byte{129, 65, 66, 67}),
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         "",
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			t.Logf("got output: %q", gotOutput)
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentString()
+			if gotRemaining != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkQuotedChar(b *testing.B) {
+	parser := cmb.QuotedChar("double quoted character", "\"", "\"")
+	input := comb.NewFromString("\"", 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
 func TestByte(t *testing.T) {
 	t.Parallel()
 
@@ -1929,7 +2041,7 @@ func BenchmarkTab(b *testing.B) {
 	}
 }
 
-func TestToken(t *testing.T) {
+func TestString(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -1987,9 +2099,77 @@ func TestToken(t *testing.T) {
 	}
 }
 
-func BenchmarkToken(b *testing.B) {
+func BenchmarkString(b *testing.B) {
 	parser := cmb.String("Bonjour")
 	input := comb.NewFromString("Bonjour tout le monde", 0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestBytes(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[[]byte]
+		input         []byte
+		wantErr       bool
+		wantOutput    []byte
+		wantRemaining []byte
+	}{
+		{
+			name:          "parsing a token from an input starting with it should succeed",
+			parser:        cmb.Bytes([]byte("Bon")),
+			input:         []byte("Bon tout"),
+			wantErr:       false,
+			wantOutput:    []byte("Bon"),
+			wantRemaining: []byte(" tout"),
+		},
+		{
+			name:          "parsing a token from a non-matching input should fail",
+			parser:        cmb.Bytes([]byte("Bon")),
+			input:         []byte("Hello tout"),
+			wantErr:       true,
+			wantOutput:    []byte{},
+			wantRemaining: []byte("Hello tout"),
+		},
+		{
+			name:          "parsing a token from an empty input should fail",
+			parser:        cmb.Bytes([]byte("Bon")),
+			input:         []byte{},
+			wantErr:       true,
+			wantOutput:    []byte{},
+			wantRemaining: []byte{},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromBytes(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			if !bytes.Equal(gotOutput, tc.wantOutput) {
+				t.Errorf("got output 0x%x, want output 0x%x", gotOutput, tc.wantOutput)
+			}
+			gotRemaining := newState.CurrentBytes()
+			if !bytes.Equal(gotRemaining, tc.wantRemaining) {
+				t.Errorf("got remaining %#v, want remaining %#v", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkBytes(b *testing.B) {
+	parser := cmb.Bytes([]byte("Bonjour"))
+	input := comb.NewFromBytes([]byte("Bonjour tout le monde"), 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

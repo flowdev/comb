@@ -123,7 +123,7 @@ func SimpleString() comb.Parser[RESPMessage] {
 
 	return cmb.Prefixed(
 		S(string(SimpleStringKind)),
-		cmb.Map(cmb.UntilString("\r\n"), mapFn),
+		cmb.Map(cmb.StringUntil(cmb.String("\r\n")), mapFn),
 	)
 }
 
@@ -159,7 +159,7 @@ func Error() comb.Parser[RESPMessage] {
 
 	return cmb.Prefixed(
 		S(string(ErrorKind)),
-		cmb.Map(cmb.UntilString("\r\n"), mapFn),
+		cmb.Map(cmb.StringUntil(cmb.String("\r\n")), mapFn),
 	)
 }
 
@@ -195,7 +195,7 @@ func Integer() comb.Parser[RESPMessage] {
 
 	return cmb.Prefixed(
 		S(string(IntegerKind)),
-		cmb.Map(cmb.UntilString("\r\n"), mapFn),
+		cmb.Map(cmb.StringUntil(cmb.String("\r\n")), mapFn),
 	)
 }
 
@@ -249,7 +249,7 @@ func BulkString() comb.Parser[RESPMessage] {
 	return cmb.Map2(
 		sizePrefix(S(string(BulkStringKind))),
 		cmb.Optional(
-			cmb.UntilString("\r\n"),
+			cmb.StringUntil(cmb.String("\r\n")),
 		),
 		mapFn,
 	)

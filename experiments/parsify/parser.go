@@ -1,10 +1,12 @@
 package parsify
 
 import (
-	"github.com/flowdev/comb"
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/flowdev/comb"
 )
 
 // Delimited parses and discards the result from the prefix parser, then
@@ -94,6 +96,50 @@ func Char2[Output rune](char rune) Parser[Output] {
 
 		return state.MoveBy(size), Output(r), nil
 	}
+}
+
+// CMBUntilString parses until it finds a token in the input and returns
+// the part of the input that preceded the token.
+// If found, the parser moves beyond the stop string.
+// If the token could not be found, the parser returns an error result.
+//
+// NOTE:
+//   - This function panics if `stop` is empty.
+//   - CMBUntilString is rather dangerous especially in case of error recovery
+//     because it potentially consumes much more input than expected.
+//     In error cases it will usually start earlier because other parsers are skipped.
+//     Especially using it as a `SafeSpot` parser is a bad idea!
+func CMBUntilString(stop string) comb.Parser[string] {
+	var p comb.Parser[string]
+
+	expected := fmt.Sprintf("... %q", stop)
+
+	if stop == "" {
+		panic("stop is empty")
+	}
+
+	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
+		input := state.CurrentString()
+		i := strings.Index(input, stop)
+		if i == -1 {
+			return state, "", state.NewSyntaxError(expected)
+		}
+
+		newState := state.MoveBy(i + len(stop))
+		return newState, input[:i], nil
+	}
+
+	p = comb.NewParser[string](
+		expected,
+		parse,
+		func(state comb.State, _ interface{}) (int, interface{}) {
+			if strings.Contains(state.CurrentString(), stop) {
+				return 0, nil // this is probably not what the user wants but the only correct value :(
+			}
+			return comb.RecoverWasteTooMuch, nil
+		},
+	)
+	return p
 }
 
 // UntilString parses until it finds a token in the input and returns
