@@ -277,6 +277,96 @@ func BenchmarkQuotedChar(b *testing.B) {
 	}
 }
 
+func TestCharClassChar(t *testing.T) {
+	t.Parallel()
+
+	expected := "range character"
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[rune]
+		input         string
+		wantErr       bool
+		wantOutput    rune
+		wantRemaining string
+	}{
+		{
+			name:          "parsing given char from single char input should succeed",
+			parser:        cmb.CharClassChar(expected, []rune{'a', 'b', 'c'}, nil),
+			input:         "c",
+			wantErr:       false,
+			wantOutput:    'c',
+			wantRemaining: "",
+		}, {
+			name:          "parsing range char in longer input should succeed",
+			parser:        cmb.CharClassChar(expected, nil, [][]rune{{'0', '9'}, {'c', 'd'}}),
+			input:         `1abc`,
+			wantErr:       false,
+			wantOutput:    '1',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing square bracket should succeed",
+			parser:        cmb.CharClassChar(expected, []rune{'[', ']', '-'}, nil),
+			input:         `[abc`,
+			wantErr:       false,
+			wantOutput:    '[',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing 16 bit Unicode char should succeed",
+			parser:        cmb.CharClassChar(expected, []rune{'\u1234'}, nil),
+			input:         "\u1234",
+			wantErr:       false,
+			wantOutput:    '\u1234',
+			wantRemaining: "",
+		}, {
+			name:          "parsing char outside range should fail",
+			parser:        cmb.CharClassChar(expected, []rune{'1', '2', '3'}, [][]rune{{'a', 'm'}}),
+			input:         `n`,
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "n",
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.CharClassChar(expected, []rune{'1', '2', '3'}, [][]rune{{'a', 'm'}}),
+			input:         "",
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			t.Logf("got output: %q", gotOutput)
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentString()
+			if gotRemaining != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkCharClassChar(b *testing.B) {
+	parser := cmb.CharClassChar("range 'a' - 'b'", nil, [][]rune{{'a', 'b'}})
+	input := comb.NewFromString("b", 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
 func TestByte(t *testing.T) {
 	t.Parallel()
 

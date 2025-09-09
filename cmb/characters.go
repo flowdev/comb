@@ -68,14 +68,14 @@ func AnyChar() comb.Parser[rune] {
 // '\\' 'x'[0-9a-fA-F][0-9a-fA-F] // hexadecimal escapes (possibly illegal UTF-8)
 // '\\' 'u'[0-9a-fA-F]{4,4} // 4 hex digits for a 16 bit Unicode character
 // '\\' 'U'[0-9a-fA-F]{8,8} // 8 hex digits for a 32 bit Unicode character
-func QuotedChar(expected, forbiddenASCIIChars, additionalEscapedChars string) comb.Parser[rune] {
+func QuotedChar(expected, forbiddenChars, additionalEscapedChars string) comb.Parser[rune] {
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
 		input := state.CurrentString()
 		r, size, pErr := decodeRune(input, expected, state)
 		if pErr != nil {
 			return state, r, pErr
 		}
-		if strings.ContainsRune(forbiddenASCIIChars, r) { // handle forbidden chars
+		if strings.ContainsRune(forbiddenChars, r) { // handle forbidden chars
 			return state, utf8.RuneError, state.NewSyntaxError("%s found %q", expected, r)
 		}
 		if r == '\\' { // handle additional escaped chars
@@ -93,6 +93,35 @@ func QuotedChar(expected, forbiddenASCIIChars, additionalEscapedChars string) co
 			return state, utf8.RuneError, state.NewSyntaxError("%s (%v)", expected, err)
 		}
 		return state.MoveBy(len(input) - len(rest)), c, nil
+	}
+
+	return comb.NewParser[rune](expected, parse, Forbidden())
+}
+
+func CharClassChar(expected string, classRunes []rune, classRanges [][]rune) comb.Parser[rune] {
+	if len(classRunes) == 0 && len(classRanges) == 0 {
+		panic("no class runes and no class ranges provided")
+	}
+	for i, cr := range classRanges {
+		if len(cr) < 2 {
+			panic(fmt.Sprintf("class ranges must contain two runes (index %d has only %d)", i, len(cr)))
+		}
+	}
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
+		input := state.CurrentString()
+		r, size, pErr := decodeRune(input, expected, state)
+		if pErr != nil {
+			return state, r, pErr
+		}
+		if slices.Contains(classRunes, r) {
+			return state.MoveBy(size), r, nil
+		}
+		for _, cr := range classRanges {
+			if r >= cr[0] && r <= cr[1] {
+				return state.MoveBy(size), r, nil
+			}
+		}
+		return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
 	}
 
 	return comb.NewParser[rune](expected, parse, Forbidden())
