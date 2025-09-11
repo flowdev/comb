@@ -62,11 +62,32 @@ func TestInt64(t *testing.T) {
 			wantOutput:    -0o171,
 			wantRemaining: "",
 		}, {
+			name:          "parsing binary integer should succeed",
+			parser:        cmb.Int64(true, 2),
+			input:         "-10",
+			wantErr:       false,
+			wantOutput:    -2,
+			wantRemaining: "",
+		}, {
+			name:          "parsing octal integer should succeed",
+			parser:        cmb.Int64(true, 8),
+			input:         "+13",
+			wantErr:       false,
+			wantOutput:    11,
+			wantRemaining: "",
+		}, {
 			name:          "parsing hex integer should succeed",
 			parser:        cmb.Int64(true, 16),
 			input:         "+1f",
 			wantErr:       false,
 			wantOutput:    31,
+			wantRemaining: "",
+		}, {
+			name:          "parsing integer of base 20 should succeed",
+			parser:        cmb.Int64(true, 20),
+			input:         "+1j",
+			wantErr:       false,
+			wantOutput:    39,
 			wantRemaining: "",
 		}, {
 			name:          "parsing overflowing integer should fail",
@@ -207,60 +228,88 @@ func TestFloat64(t *testing.T) {
 	}{
 		{
 			name:          "parsing positive float should succeed",
-			parser:        cmb.Float64(false, 10),
+			parser:        cmb.Float64(false, 10, true),
 			input:         "12.3",
 			wantErr:       false,
 			wantOutput:    12.3,
 			wantRemaining: "",
 		}, {
 			name:          "parsing negative float should succeed",
-			parser:        cmb.Float64(true, 10),
+			parser:        cmb.Float64(true, 10, true),
 			input:         "-.123",
 			wantErr:       false,
 			wantOutput:    -.123,
 			wantRemaining: "",
 		}, {
+			name:          "parsing integer in non-strict mode should succeed",
+			parser:        cmb.Float64(false, 10, false),
+			input:         "123_",
+			wantErr:       false,
+			wantOutput:    123.0,
+			wantRemaining: "_",
+		}, {
+			name:          "parsing integer in strict mode should fail",
+			parser:        cmb.Float64(false, 10, true),
+			input:         "123",
+			wantErr:       true,
+			wantOutput:    0.0,
+			wantRemaining: "123",
+		}, {
 			name:          "parsing positive float prefix should succeed",
-			parser:        cmb.Float64(false, 0),
+			parser:        cmb.Float64(false, 0, true),
 			input:         "0x1_2.p3abc",
 			wantErr:       false,
 			wantOutput:    0x1_2.p3,
 			wantRemaining: "abc",
 		}, {
 			name:          "parsing negative float prefix should succeed",
-			parser:        cmb.Float64(true, 0),
+			parser:        cmb.Float64(true, 0, true),
 			input:         "-1.2_3e4abc",
 			wantErr:       false,
 			wantOutput:    -1.2_3e4,
 			wantRemaining: "abc",
 		}, {
 			name:          "parsing wild hex float should succeed",
-			parser:        cmb.Float64(true, 16),
+			parser:        cmb.Float64(true, 16, true),
 			input:         "-.2p3",
 			wantErr:       false,
 			wantOutput:    -0x.2p3,
 			wantRemaining: "",
 		}, {
 			name:          "parsing wilder hex float should succeed",
-			parser:        cmb.Float64(true, 0),
+			parser:        cmb.Float64(true, 0, true),
 			input:         "-0x.2p3",
 			wantErr:       false,
 			wantOutput:    -0x.2p3,
 			wantRemaining: "",
 		}, {
 			name:          "parsing overflowing float should fail",
-			parser:        cmb.Float64(true, 10),
-			input:         "1.79769313486231570814527423731704356798071e+308", // max float64 + very little
+			parser:        cmb.Float64(true, 10, false),
+			input:         "1.79769313486231589999999999999999999999999e+308", // max float64 + a little
 			wantErr:       true,
-			wantOutput:    0.0,
-			wantRemaining: "1.79769313486231570814527423731704356798071e+308",
+			wantOutput:    math.Inf(1),
+			wantRemaining: "1.79769313486231589999999999999999999999999e+308",
 		}, {
 			name:          "parsing float with invalid leading sign should fail",
-			parser:        cmb.Float64(true, 10),
+			parser:        cmb.Float64(true, 10, false),
 			input:         "!1.27",
 			wantErr:       true,
 			wantOutput:    0,
 			wantRemaining: "!1.27",
+		}, {
+			name:          "sign only should fail",
+			parser:        cmb.Float64(true, 10, false),
+			input:         "-",
+			wantErr:       true,
+			wantOutput:    0,
+			wantRemaining: "-",
+		}, {
+			name:          "empty input should fail",
+			parser:        cmb.Float64(true, 10, false),
+			input:         "",
+			wantErr:       true,
+			wantOutput:    0,
+			wantRemaining: "",
 		},
 	}
 
@@ -270,6 +319,7 @@ func TestFloat64(t *testing.T) {
 			t.Parallel()
 
 			newState, gotResult, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			t.Logf("got error: %v", gotErr)
 			if (gotErr != nil) != tc.wantErr {
 				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
 			}
@@ -287,7 +337,7 @@ func TestFloat64(t *testing.T) {
 }
 
 func BenchmarkFloat64(b *testing.B) {
-	parser := cmb.Float64(false, 10)
+	parser := cmb.Float64(false, 10, true)
 	input := comb.NewFromString("1.23", 0)
 
 	b.ResetTimer()

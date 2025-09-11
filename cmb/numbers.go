@@ -207,7 +207,8 @@ func UInt64(signAllowed bool, base int) comb.Parser[uint64] {
 // `underscoreAllowed` can be true to allow '_' characters.
 // No check on position or number of (consecutive) underscores is done.
 // The Go parse functions will do more checks on this.
-func Float(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[string] {
+// `strict` can be true to disallow integer values (the number HAS to contain a decimal point or an exponent).
+func Float(signAllowed bool, base int, underscoreAllowed, strict bool) comb.Parser[string] {
 	if base != 0 && base != 10 && base != 16 {
 		panic(fmt.Sprintf("The base has to be 0, 10 or 16, but is: %d", base))
 	}
@@ -230,8 +231,10 @@ func Float(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[strin
 		}
 
 		n := 0 // number of bytes read from input
+		hasPoint := false
+		hasExponent := false
 
-		// Pick off the leading sign.
+		// pick off the leading sign
 		if signAllowed {
 			if input[0] == '+' || input[0] == '-' {
 				n = 1
@@ -250,7 +253,7 @@ func Float(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[strin
 
 		digit, m, good = readDigits(input[n:], underscoreAllowed, digits)
 		if !good && digit != '.' {
-			return state, "", state.NewSyntaxError("%s found '%c'", expected, digit)
+			return state, "", state.MoveBy(n).NewSyntaxError("%s found '%c'", expected, digit)
 		}
 		n += m
 		hasDigits := good
@@ -259,22 +262,28 @@ func Float(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[strin
 			n++
 			digit, m, good = readDigits(input[n:], underscoreAllowed, digits)
 			if !good && !hasDigits {
-				return state, "", state.NewSyntaxError("%s found '%c'", expected, digit)
+				return state, "", state.MoveBy(n).NewSyntaxError("%s found '%c'", expected, digit)
 			}
 			n += m
+			hasPoint = true
 		}
 
-		if (base == 10 && (digit == 'e' || digit == 'E')) ||
-			(base == 16 && (digit == 'p' || digit == 'P')) {
-
+		if isExponent(digit, base) {
 			n++
+			if len(input) > n && (input[n] == '-' || input[n] == '+') {
+				n++
+			}
 			digit, m, good = readDigits(input[n:], underscoreAllowed, allDigits[:10])
 			if !good {
-				return state, "", state.NewSyntaxError("%s found '%c'", expected, digit)
+				return state, "", state.MoveBy(n).NewSyntaxError("%s found '%c'", expected, digit)
 			}
 			n += m
+			hasExponent = true
 		}
 
+		if strict && !hasPoint && !hasExponent {
+			return state, "", state.NewSyntaxError("%s (no decimal point or exponent found)", expected)
+		}
 		return state.MoveBy(n), input[:n], nil
 	}
 
@@ -282,7 +291,11 @@ func Float(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[strin
 	if base == 0 {
 		recovererBase = 10 // best guess
 	}
-	return comb.NewParser[string](expected, parser, indexOfFloat(allDigits[:recovererBase], signAllowed))
+	return comb.NewParser[string](
+		expected,
+		parser,
+		indexOfFloat(signAllowed, allDigits[:recovererBase], underscoreAllowed, strict),
+	)
 }
 func rebaseFloat(input string, base int) (int, int) {
 	if base != 0 {
@@ -319,35 +332,66 @@ ForLoop:
 	}
 	return digit, n, good
 }
-
-func indexOfFloat(digits string, signAllowed bool) func(comb.State, interface{}) (int, interface{}) {
+func indexOfFloat(signAllowed bool, digits string, underscoreAllowed, strict bool) func(comb.State, interface{}) (int, interface{}) {
 	return func(state comb.State, data interface{}) (int, interface{}) {
-		input := state.CurrentString()
-		i := strings.IndexAny(input, digits)
-		if i < 0 {
-			return comb.RecoverWasteTooMuch, nil
+		orgInput := state.CurrentString()
+		input := orgInput
+		i := 0
+		j := -1
+		isStrict := false
+		for (j < 0) || (strict && !isStrict) {
+			j = strings.IndexAny(input, digits)
+			if j < 0 {
+				return comb.RecoverWasteTooMuch, nil
+			}
+			if j > 0 && (input[j-1] == '.') {
+				j--
+				isStrict = true
+			} else if strict {
+				char, n, _ := readDigits(input[j+1:], underscoreAllowed, digits)
+				if char == '.' {
+					isStrict = true
+				} else if isExponent(char, len(digits)) && len(input) > j+1+n+1 {
+					c1 := rune(input[j+1+n+1])
+					c2 := ' '
+					if len(input) > j+1+n+2 {
+						c2 = rune(input[j+1+n+2])
+					}
+					if strings.ContainsRune(digits, c1) || ((c1 == '-' || c1 == '+') && strings.ContainsRune(digits, c2)) {
+						isStrict = true
+					} else {
+						j += n + 2 // start the next search after digits and char
+					}
+				} else {
+					j += n + 1 // start the next search after digits
+				}
+			}
+			i += j
+			input = orgInput[i:]
 		}
-		if i > 0 && (input[i-1] == '.') {
-			i--
-		}
-		if signAllowed && i > 0 && (input[i-1] == '-' || input[i-1] == '+') {
+		if signAllowed && i > 0 && (orgInput[i-1] == '-' || orgInput[i-1] == '+') {
 			i--
 		}
 		return i, nil
 	}
 }
+func isExponent(char rune, base int) bool {
+	if base < 14 {
+		return char == 'e' || char == 'E'
+	}
+	return char == 'p' || char == 'P'
+}
 
 // Float64 parses a floating point number from the input using `strconv.ParseFloat`.
-func Float64(signAllowed bool, base int) comb.Parser[float64] {
+func Float64(signAllowed bool, base int, strict bool) comb.Parser[float64] {
 	underscoreAllowed := false
 	if base == 0 {
 		underscoreAllowed = true
 	}
-	floatParser := Float(signAllowed, base, underscoreAllowed)
+	floatParser := Float(signAllowed, base, underscoreAllowed, strict)
 
 	parser := func(state comb.State) (comb.State, float64, *comb.ParserError) {
-		nState, out, pErr := floatParser.ParseAny(0, state)
-		str, _ := out.(string)
+		nState, str, pErr := floatParser.Parse(state)
 		if pErr != nil {
 			return state, 0, comb.ClaimError(pErr)
 		}
@@ -361,7 +405,7 @@ func Float64(signAllowed bool, base int) comb.Parser[float64] {
 		}
 		f, err := strconv.ParseFloat(str, 64)
 		if err != nil {
-			return nState, f, state.NewSemanticError(err.Error())
+			return state, f, state.NewSemanticError(err.Error())
 		}
 		return nState, f, nil
 	}
