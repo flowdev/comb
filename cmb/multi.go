@@ -18,12 +18,12 @@ func Count[Output any](count int, parse comb.Parser[Output]) comb.Parser[[]Outpu
 	return ManyMN(parse, count, count)
 }
 
-// Many0 applies a parser repeatedly until it fails, and returns a slice of all
+// Many0 applies a parser repeatedly until it fails and returns a slice of all
 // the results as the Result's Output.
 //
-// Note that Many0 will succeed even if the parser fails to match at all. It will
-// however fail if the provided parser accepts empty inputs (such as `Digit0`, or
-// `Alpha0`) in order to prevent infinite loops.
+// Note that Many0 will succeed even if the parser fails to match at all. It will,
+// however, fail if the provided parser accepts empty inputs (such as `Digit0`, or
+// `Alpha0`) to prevent infinite loops.
 func Many0[Output any](parse comb.Parser[Output]) comb.Parser[[]Output] {
 	return ManyMN(parse, 0, math.MaxInt)
 }
@@ -33,7 +33,7 @@ func Many0[Output any](parse comb.Parser[Output]) comb.Parser[[]Output] {
 // match at least once.
 //
 // Note that Many1 will fail if the provided parser accepts empty
-// inputs (such as `Digit0`, or `Alpha0`) in order to prevent infinite loops.
+// inputs (such as `Digit0`, or `Alpha0`) to prevent infinite loops.
 func Many1[Output any](parse comb.Parser[Output]) comb.Parser[[]Output] {
 	return ManyMN(parse, 1, math.MaxInt)
 }
@@ -42,12 +42,12 @@ func Many1[Output any](parse comb.Parser[Output]) comb.Parser[[]Output] {
 // the results as the Result's Output.
 //
 // Note that ManyMN fails if the provided parser accepts empty inputs (such as
-// `Digit0`, or `Alpha0`) in order to prevent infinite loops.
+// `Digit0`, or `Alpha0`) to prevent infinite loops.
 func ManyMN[Output any](parse comb.Parser[Output], atLeast, atMost int) comb.Parser[[]Output] {
 	return SeparatedMN[Output, string](parse, nil, atLeast, atMost, false)
 }
 
-// Separated0 applies an element parser and a separator parser repeatedly in order
+// Separated0 applies an element parser and a separator parser repeatedly
 // to produce a list of elements.
 //
 // Note that Separated0 will succeed even if the element parser fails to match at all.
@@ -56,16 +56,16 @@ func ManyMN[Output any](parse comb.Parser[Output], atLeast, atMost int) comb.Par
 // from the provided main parser, it will succeed even if the separator parser fails to
 // match at all.
 //
-// The parser will fail if the both parsers together accepted an empty input
-// in order to prevent infinite loops.
-func Separated0[Output any, S comb.Separator](
+// The parser will fail if both parsers together accepted an empty input
+// to prevent infinite loops.
+func Separated0[Output any, S any](
 	parse comb.Parser[Output], separator comb.Parser[S],
 	parseSeparatorAtEnd bool,
 ) comb.Parser[[]Output] {
 	return SeparatedMN(parse, separator, 0, math.MaxInt, parseSeparatorAtEnd)
 }
 
-// Separated1 applies an element parser and a separator parser repeatedly in order
+// Separated1 applies an element parser and a separator parser repeatedly
 // to produce a list of elements.
 //
 // Note that Separated1 will fail if the element parser fails to match at all.
@@ -73,7 +73,10 @@ func Separated0[Output any, S comb.Separator](
 // Because the `SeparatedList1` is really looking to produce a list of elements resulting
 // from the provided main parser, it will succeed even if the separator parser fails to
 // match at all.
-func Separated1[Output any, S comb.Separator](
+//
+// The parser will fail if both parsers together accepted an empty input
+// to prevent infinite loops.
+func Separated1[Output any, S any](
 	parse comb.Parser[Output], separator comb.Parser[S],
 	parseSeparatorAtEnd bool,
 ) comb.Parser[[]Output] {

@@ -4,7 +4,7 @@ import (
 	"github.com/flowdev/comb"
 )
 
-// SeparatedMN applies an element parser and a separator parser repeatedly in order
+// SeparatedMN applies an element parser and a separator parser repeatedly
 // to produce a slice of elements.
 //
 // Because SeparatedMN is really looking to produce a list of elements resulting
@@ -15,7 +15,7 @@ import (
 //
 // The parser will fail if both parsers together accepted an empty input
 // to prevent infinite loops.
-func SeparatedMN[Output any, S comb.Separator](
+func SeparatedMN[Output any, S any](
 	parser comb.Parser[Output], separator comb.Parser[S],
 	atLeast, atMost int,
 	parseSeparatorAtEnd bool,
@@ -43,7 +43,7 @@ func SeparatedMN[Output any, S comb.Separator](
 	return p
 }
 
-type separatedData[Output any, S comb.Separator] struct {
+type separatedData[Output any, S any] struct {
 	id                  func() int32
 	parser              comb.Parser[Output]
 	separator           comb.Parser[S]

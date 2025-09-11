@@ -19,7 +19,7 @@ func TestDelimitedByChar(t *testing.T) {
 		{
 			name:           "normal parser without Parsify",
 			basicParser1:   C('{'),
-			complexParser1: cmb.Delimited(C('{'), cmb.UntilString("STOP"), C('}')),
+			complexParser1: cmb.Delimited(C('{'), CMBUntilString("STOP"), C('}')),
 		}, {
 			name:           "normal parser with Parsify",
 			basicParser2:   Char('{'),

@@ -1,6 +1,7 @@
 package cmb_test
 
 import (
+	"bytes"
 	"testing"
 	"unicode"
 	"unicode/utf8"
@@ -27,24 +28,28 @@ func TestChar(t *testing.T) {
 			wantErr:       false,
 			wantOutput:    'a',
 			wantRemaining: "",
-		},
-		{
+		}, {
 			name:          "parsing valid char in longer input should succeed",
 			parser:        cmb.Char('a'),
 			input:         "abc",
 			wantErr:       false,
 			wantOutput:    'a',
 			wantRemaining: "bc",
-		},
-		{
-			name:          "parsing single non-char input should fail",
+		}, {
+			name:          "parsing wrong char input should fail",
 			parser:        cmb.Char('a'),
 			input:         "123",
 			wantErr:       true,
 			wantOutput:    utf8.RuneError,
 			wantRemaining: "123",
-		},
-		{
+		}, {
+			name:          "parsing non-valid Unicode char should fail",
+			parser:        cmb.Char('a'),
+			input:         string([]byte{129, 65, 66, 67}),
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: string([]byte{129, 65, 66, 67}),
+		}, {
 			name:          "parsing empty input should fail",
 			parser:        cmb.Char('a'),
 			input:         "",
@@ -79,6 +84,423 @@ func TestChar(t *testing.T) {
 func BenchmarkChar(b *testing.B) {
 	parser := cmb.Char('a')
 	input := comb.NewFromString("a", 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestAnyChar(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[rune]
+		input         string
+		wantErr       bool
+		wantOutput    rune
+		wantRemaining string
+	}{
+		{
+			name:          "parsing char from single char input should succeed",
+			parser:        cmb.AnyChar(),
+			input:         "a",
+			wantErr:       false,
+			wantOutput:    'a',
+			wantRemaining: "",
+		}, {
+			name:          "parsing valid char in longer input should succeed",
+			parser:        cmb.AnyChar(),
+			input:         "abc",
+			wantErr:       false,
+			wantOutput:    'a',
+			wantRemaining: "bc",
+		}, {
+			name:          "parsing non-valid Unicode char should fail",
+			parser:        cmb.AnyChar(),
+			input:         string([]byte{129, 65, 66, 67}),
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: string([]byte{129, 65, 66, 67}),
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.AnyChar(),
+			input:         "",
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentString()
+			if gotRemaining != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkAnyChar(b *testing.B) {
+	parser := cmb.AnyChar()
+	input := comb.NewFromString("a", 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestQuotedChar(t *testing.T) {
+	t.Parallel()
+
+	rangeEscapes := "[]-"
+	expected := "range character"
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[rune]
+		input         string
+		wantErr       bool
+		wantOutput    rune
+		wantRemaining string
+	}{
+		{
+			name:          "parsing normal char from single char input should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         "a",
+			wantErr:       false,
+			wantOutput:    'a',
+			wantRemaining: "",
+		}, {
+			name:          "parsing octal char in longer input should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\101abc`,
+			wantErr:       false,
+			wantOutput:    'A',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing hex char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\x41abc`,
+			wantErr:       false,
+			wantOutput:    'A',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing 16 bit Unicode char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\u1234`,
+			wantErr:       false,
+			wantOutput:    '\u1234',
+			wantRemaining: "",
+		}, {
+			name:          "parsing 32 bit Unicode char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\U0001F600ab`,
+			wantErr:       false,
+			wantOutput:    '\U0001F600',
+			wantRemaining: "ab",
+		}, {
+			name:          "parsing additional escaped char should succeed",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `\-`,
+			wantErr:       false,
+			wantOutput:    '-',
+			wantRemaining: "",
+		}, {
+			name:          "parsing forbidden char should fail",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         `]`,
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "]",
+		}, {
+			name:          "parsing non-valid Unicode char should fail",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         string([]byte{129, 65, 66, 67}),
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: string([]byte{129, 65, 66, 67}),
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.QuotedChar(expected, rangeEscapes, rangeEscapes),
+			input:         "",
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			t.Logf("got output: %q", gotOutput)
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentString()
+			if gotRemaining != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkQuotedChar(b *testing.B) {
+	parser := cmb.QuotedChar("double quoted character", "\"", "\"")
+	input := comb.NewFromString("\"", 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestCharClassChar(t *testing.T) {
+	t.Parallel()
+
+	expected := "range character"
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[rune]
+		input         string
+		wantErr       bool
+		wantOutput    rune
+		wantRemaining string
+	}{
+		{
+			name:          "parsing given char from single char input should succeed",
+			parser:        cmb.CharClassChar(expected, []rune{'a', 'b', 'c'}, nil),
+			input:         "c",
+			wantErr:       false,
+			wantOutput:    'c',
+			wantRemaining: "",
+		}, {
+			name:          "parsing range char in longer input should succeed",
+			parser:        cmb.CharClassChar(expected, nil, [][]rune{{'0', '9'}, {'c', 'd'}}),
+			input:         `1abc`,
+			wantErr:       false,
+			wantOutput:    '1',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing square bracket should succeed",
+			parser:        cmb.CharClassChar(expected, []rune{'[', ']', '-'}, nil),
+			input:         `[abc`,
+			wantErr:       false,
+			wantOutput:    '[',
+			wantRemaining: "abc",
+		}, {
+			name:          "parsing 16 bit Unicode char should succeed",
+			parser:        cmb.CharClassChar(expected, []rune{'\u1234'}, nil),
+			input:         "\u1234",
+			wantErr:       false,
+			wantOutput:    '\u1234',
+			wantRemaining: "",
+		}, {
+			name:          "parsing char outside range should fail",
+			parser:        cmb.CharClassChar(expected, []rune{'1', '2', '3'}, [][]rune{{'a', 'm'}}),
+			input:         `n`,
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "n",
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.CharClassChar(expected, []rune{'1', '2', '3'}, [][]rune{{'a', 'm'}}),
+			input:         "",
+			wantErr:       true,
+			wantOutput:    utf8.RuneError,
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			t.Logf("got output: %q", gotOutput)
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentString()
+			if gotRemaining != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkCharClassChar(b *testing.B) {
+	parser := cmb.CharClassChar("range 'a' - 'b'", nil, [][]rune{{'a', 'b'}})
+	input := comb.NewFromString("b", 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestByte(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[byte]
+		input         []byte
+		wantErr       bool
+		wantOutput    byte
+		wantRemaining []byte
+	}{
+		{
+			name:          "parsing char from single char input should succeed",
+			parser:        cmb.Byte(7),
+			input:         []byte{7},
+			wantErr:       false,
+			wantOutput:    byte(7),
+			wantRemaining: []byte{},
+		}, {
+			name:          "parsing byte in longer input should succeed",
+			parser:        cmb.Byte(7),
+			input:         []byte{7, 8, 9},
+			wantErr:       false,
+			wantOutput:    byte(7),
+			wantRemaining: []byte{8, 9},
+		}, {
+			name:          "parsing wrong byte should fail",
+			parser:        cmb.Byte(7),
+			input:         []byte{8, 9},
+			wantErr:       true,
+			wantOutput:    byte(0),
+			wantRemaining: []byte{8, 9},
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.Byte(7),
+			input:         []byte{},
+			wantErr:       true,
+			wantOutput:    byte(0),
+			wantRemaining: []byte{},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromBytes(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentBytes()
+			if !bytes.Equal(gotRemaining, tc.wantRemaining) {
+				t.Errorf("got remaining %#v, want remaining %#v", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkByte(b *testing.B) {
+	parser := cmb.Byte(7)
+	input := comb.NewFromBytes([]byte{7}, 10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestAnyByte(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[byte]
+		input         []byte
+		wantErr       bool
+		wantOutput    byte
+		wantRemaining []byte
+	}{
+		{
+			name:          "parsing char from single char input should succeed",
+			parser:        cmb.AnyByte(),
+			input:         []byte{7},
+			wantErr:       false,
+			wantOutput:    byte(7),
+			wantRemaining: []byte{},
+		}, {
+			name:          "parsing valid char in longer input should succeed",
+			parser:        cmb.AnyByte(),
+			input:         []byte{7, 8, 9},
+			wantErr:       false,
+			wantOutput:    byte(7),
+			wantRemaining: []byte{8, 9},
+		}, {
+			name:          "parsing empty input should fail",
+			parser:        cmb.AnyByte(),
+			input:         []byte{},
+			wantErr:       true,
+			wantOutput:    byte(0),
+			wantRemaining: []byte{},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromBytes(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %q, want output %q", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentBytes()
+			if !bytes.Equal(gotRemaining, tc.wantRemaining) {
+				t.Errorf("got remaining %#v, want remaining %#v", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkAnyByte(b *testing.B) {
+	parser := cmb.AnyByte()
+	input := comb.NewFromBytes([]byte("a"), 10)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1709,7 +2131,7 @@ func BenchmarkTab(b *testing.B) {
 	}
 }
 
-func TestToken(t *testing.T) {
+func TestString(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -1767,9 +2189,77 @@ func TestToken(t *testing.T) {
 	}
 }
 
-func BenchmarkToken(b *testing.B) {
+func BenchmarkString(b *testing.B) {
 	parser := cmb.String("Bonjour")
 	input := comb.NewFromString("Bonjour tout le monde", 0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = parser.Parse(input)
+	}
+}
+
+func TestBytes(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[[]byte]
+		input         []byte
+		wantErr       bool
+		wantOutput    []byte
+		wantRemaining []byte
+	}{
+		{
+			name:          "parsing a token from an input starting with it should succeed",
+			parser:        cmb.Bytes([]byte("Bon")),
+			input:         []byte("Bon tout"),
+			wantErr:       false,
+			wantOutput:    []byte("Bon"),
+			wantRemaining: []byte(" tout"),
+		},
+		{
+			name:          "parsing a token from a non-matching input should fail",
+			parser:        cmb.Bytes([]byte("Bon")),
+			input:         []byte("Hello tout"),
+			wantErr:       true,
+			wantOutput:    []byte{},
+			wantRemaining: []byte("Hello tout"),
+		},
+		{
+			name:          "parsing a token from an empty input should fail",
+			parser:        cmb.Bytes([]byte("Bon")),
+			input:         []byte{},
+			wantErr:       true,
+			wantOutput:    []byte{},
+			wantRemaining: []byte{},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromBytes(tc.input, 10))
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error: %t", gotErr, tc.wantErr)
+			}
+
+			if !bytes.Equal(gotOutput, tc.wantOutput) {
+				t.Errorf("got output 0x%x, want output 0x%x", gotOutput, tc.wantOutput)
+			}
+			gotRemaining := newState.CurrentBytes()
+			if !bytes.Equal(gotRemaining, tc.wantRemaining) {
+				t.Errorf("got remaining %#v, want remaining %#v", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func BenchmarkBytes(b *testing.B) {
+	parser := cmb.Bytes([]byte("Bonjour"))
+	input := comb.NewFromBytes([]byte("Bonjour tout le monde"), 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

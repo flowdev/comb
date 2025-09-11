@@ -19,17 +19,12 @@ import (
 // the parser returns an error result.
 // This parser is a good candidate for SafeSpot and has an optimized recoverer.
 func Char(char rune) comb.Parser[rune] {
-	var p comb.Parser[rune]
-
 	expected := strconv.QuoteRune(char)
 
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
-		r, size := utf8.DecodeRuneInString(state.CurrentString())
-		if r == utf8.RuneError {
-			if size == 0 {
-				return state, utf8.RuneError, state.NewSyntaxError("%s (at EOF)", expected)
-			}
-			return state, utf8.RuneError, state.NewSyntaxError("%s (got UTF-8 error)", expected)
+		r, size, pErr := decodeRune(state.CurrentString(), expected, state)
+		if pErr != nil {
+			return state, r, pErr
 		}
 		if r != char {
 			return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
@@ -38,8 +33,109 @@ func Char(char rune) comb.Parser[rune] {
 		return state.MoveBy(size), r, nil
 	}
 
-	p = comb.NewParser[rune](expected, parse, IndexOf(char))
-	return p
+	return comb.NewParser[rune](expected, parse, IndexOf(char))
+}
+
+// AnyChar parses a single rune.
+// The parser returns an error result only at the end of the input or in case of a UTF-8 error.
+// This parser is NOT a good candidate for SafeSpot and has a Forbidden recoverer.
+func AnyChar() comb.Parser[rune] {
+	expected := "any character"
+
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
+		r, size, pErr := decodeRune(state.CurrentString(), expected, state)
+		if pErr != nil {
+			return state, r, pErr
+		}
+		return state.MoveBy(size), r, nil
+	}
+
+	return comb.NewParser[rune](expected, parse, Forbidden())
+}
+
+// QuotedChar parses and returns a single rune.
+// forbiddenChars is a string containing all characters that are forbidden to be used without escaping.
+// additionalEscapedChars is a string containing all characters that have to be escaped next to the standard ones.
+// In almost all cases forbiddenChars and additionalEscapedChars should be the same.
+//
+// This parser is NOT a good candidate for SafeSpot and has a Forbidden recoverer.
+// But parsers using QuotedChar in a more constrained context are a good candidate for SafeSpot.
+//
+// The parser returns an error result only at the end of the input or in case of a UTF-8 error.
+// The standard escapes are:
+// '\\' [abefnrtv\\]  // standard ANSI escapes
+// '\\' [0-3][0-7][0-7] // octal escapes (possibly illegal UTF-8)
+// '\\' 'x'[0-9a-fA-F][0-9a-fA-F] // hexadecimal escapes (possibly illegal UTF-8)
+// '\\' 'u'[0-9a-fA-F]{4,4} // 4 hex digits for a 16 bit Unicode character
+// '\\' 'U'[0-9a-fA-F]{8,8} // 8 hex digits for a 32 bit Unicode character
+func QuotedChar(expected, forbiddenChars, additionalEscapedChars string) comb.Parser[rune] {
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
+		input := state.CurrentString()
+		r, size, pErr := decodeRune(input, expected, state)
+		if pErr != nil {
+			return state, r, pErr
+		}
+		if strings.ContainsRune(forbiddenChars, r) { // handle forbidden chars
+			return state, utf8.RuneError, state.NewSyntaxError("%s found %q", expected, r)
+		}
+		if r == '\\' { // handle additional escaped chars
+			backslashLen := len("\\") // should be always 1; but better safe than sorry
+			r, size, pErr = decodeRune(input[backslashLen:], expected, state)
+			if pErr != nil {
+				return state, r, pErr
+			}
+			if strings.ContainsRune(additionalEscapedChars, r) {
+				return state.MoveBy(backslashLen + size), r, nil
+			}
+		}
+		c, _, rest, err := strconv.UnquoteChar(input, 0) // all other escaped chars are handled here
+		if err != nil {
+			return state, utf8.RuneError, state.NewSyntaxError("%s (%v)", expected, err)
+		}
+		return state.MoveBy(len(input) - len(rest)), c, nil
+	}
+
+	return comb.NewParser[rune](expected, parse, Forbidden())
+}
+
+func CharClassChar(expected string, classRunes []rune, classRanges [][]rune) comb.Parser[rune] {
+	if len(classRunes) == 0 && len(classRanges) == 0 {
+		panic("no class runes and no class ranges provided")
+	}
+	for i, cr := range classRanges {
+		if len(cr) < 2 {
+			panic(fmt.Sprintf("class ranges must contain two runes (index %d has only %d)", i, len(cr)))
+		}
+	}
+	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
+		input := state.CurrentString()
+		r, size, pErr := decodeRune(input, expected, state)
+		if pErr != nil {
+			return state, r, pErr
+		}
+		if slices.Contains(classRunes, r) {
+			return state.MoveBy(size), r, nil
+		}
+		for _, cr := range classRanges {
+			if r >= cr[0] && r <= cr[1] {
+				return state.MoveBy(size), r, nil
+			}
+		}
+		return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
+	}
+
+	return comb.NewParser[rune](expected, parse, Forbidden())
+}
+
+func decodeRune(input string, expected string, state comb.State) (rune, int, *comb.ParserError) {
+	r, size := utf8.DecodeRuneInString(input)
+	if r == utf8.RuneError {
+		if size == 0 {
+			return utf8.RuneError, 0, state.NewSyntaxError(expected + " (at EOF)")
+		}
+		return utf8.RuneError, 1, state.NewSyntaxError(expected + " (got UTF-8 error)")
+	}
+	return r, size, nil
 }
 
 // Byte parses a single byte and matches it with
@@ -69,6 +165,27 @@ func Byte(byt byte) comb.Parser[byte] {
 	return p
 }
 
+// AnyByte parses a single byte and matches it with
+// a provided candidate.
+// If the byte could not be found at the current position,
+// the parser returns an error result.
+// This parser is a good candidate for SafeSpot and has an optimized recoverer.
+func AnyByte() comb.Parser[byte] {
+	expected := "any byte"
+
+	parse := func(state comb.State) (comb.State, byte, *comb.ParserError) {
+		buf := state.CurrentBytes()
+		if len(buf) == 0 {
+			return state, 0, state.NewSyntaxError(expected + " (at EOF)")
+		}
+		b := buf[0]
+
+		return state.MoveBy(1), b, nil
+	}
+
+	return comb.NewParser[byte](expected, parse, Forbidden())
+}
+
 // Satisfy parses a single character and ensures that it satisfies the given predicate.
 // `expected` is used in error messages to tell the user what is expected at the current position.
 //
@@ -78,12 +195,9 @@ func Satisfy(expected string, predicate func(rune) bool) comb.Parser[rune] {
 	var p comb.Parser[rune]
 
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
-		r, size := utf8.DecodeRuneInString(state.CurrentString())
-		if r == utf8.RuneError {
-			if size == 0 {
-				return state, utf8.RuneError, state.NewSyntaxError("%s (at EOF)", expected)
-			}
-			return state, utf8.RuneError, state.NewSyntaxError("%s (got UTF-8 error)", expected)
+		r, size, pErr := decodeRune(state.CurrentString(), expected, state)
+		if pErr != nil {
+			return state, r, pErr
 		}
 		if !predicate(r) {
 			return state, utf8.RuneError, state.NewSyntaxError("%s (got %q)", expected, r)
@@ -142,50 +256,6 @@ func Bytes(token []byte) comb.Parser[[]byte] {
 	}
 
 	p = comb.NewParser[[]byte](expected, parse, IndexOf(token))
-	return p
-}
-
-// UntilString parses until it finds a token in the input and returns
-// the part of the input that preceded the token.
-// If found the parser moves beyond the stop string.
-// If the token could not be found, the parser returns an error result.
-//
-// NOTE:
-//   - This function panics if `stop` is empty.
-//   - UntilString is rather dangerous especially in case of error recovery
-//     because it potentially consumes much more input than expected.
-//     In error cases it will usually start earlier because other parsers are skipped.
-//     Especially using it as a `SafeSpot` parser is a bad idea!
-func UntilString(stop string) comb.Parser[string] {
-	var p comb.Parser[string]
-
-	expected := fmt.Sprintf("... %q", stop)
-
-	if stop == "" {
-		panic("stop is empty")
-	}
-
-	parse := func(state comb.State) (comb.State, string, *comb.ParserError) {
-		input := state.CurrentString()
-		i := strings.Index(input, stop)
-		if i == -1 {
-			return state, "", state.NewSyntaxError(expected)
-		}
-
-		newState := state.MoveBy(i + len(stop))
-		return newState, input[:i], nil
-	}
-
-	p = comb.NewParser[string](
-		expected,
-		parse,
-		func(state comb.State, _ interface{}) (int, interface{}) {
-			if strings.Contains(state.CurrentString(), stop) {
-				return 0, nil // this is probably not what the user wants but the only correct value :(
-			}
-			return comb.RecoverWasteTooMuch, nil
-		},
-	)
 	return p
 }
 
@@ -276,7 +346,7 @@ func Alpha0() comb.Parser[string] {
 	return SatisfyMN("letter", 0, math.MaxInt, unicode.IsLetter)
 }
 
-// Alpha1 parses one or more lowercase or uppercase alphabetic characters: a-z, A-Z.
+// Alpha1 parses one or more lowercase or uppercase alphabetic Unicode characters (e.g., a-z or A-Z).
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alpha1() comb.Parser[string] {
@@ -284,6 +354,7 @@ func Alpha1() comb.Parser[string] {
 }
 
 // Alphanumeric0 parses zero or more alphabetical or numerical Unicode characters.
+// An '_' is considered a valid character, too.
 // In the cases where the input is empty, or no matching character is found, the parser
 // returns the input as is.
 func Alphanumeric0() comb.Parser[string] {
@@ -291,6 +362,7 @@ func Alphanumeric0() comb.Parser[string] {
 }
 
 // Alphanumeric1 parses one or more alphabetical or numerical Unicode characters.
+// An '_' is considered a valid character, too.
 // In the cases where the input doesn't hold enough data, or a terminating character
 // is found before any matching ones were, the parser returns an error result.
 func Alphanumeric1() comb.Parser[string] {

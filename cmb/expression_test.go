@@ -1,6 +1,7 @@
 package cmb_test
 
 import (
+	"math"
 	"slices"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/flowdev/comb/cmb"
 )
 
-func TestExpression_HappyPath(t *testing.T) {
+func TestExpression_IntHappyPath(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -317,7 +318,190 @@ func TestExpression_HappyPath(t *testing.T) {
 	}
 }
 
-func TestExpression_ErrorCases(t *testing.T) {
+func TestExpression_FloatHappyPath(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		parser        comb.Parser[float64]
+		input         string
+		wantOutput    float64
+		wantRemaining string
+	}{
+		{
+			name:          "just value",
+			parser:        cmb.Expression(cmb.Float64(false, 16, false)).Parser(),
+			input:         "12p3 ",
+			wantOutput:    0x12p3,
+			wantRemaining: " ",
+		}, {
+			name: "multi level infix ops",
+			parser: cmb.Expression(cmb.Float64(false, 10, false), cmb.InfixLevel([]cmb.InfixOp[float64]{
+				{
+					Op:       "*",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a * b
+					},
+				}, {
+					Op:       "/",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a / b
+					},
+				},
+			}), cmb.InfixLevel([]cmb.InfixOp[float64]{
+				{
+					Op:       "-",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a - b
+					},
+				}, {
+					Op:       "+",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a + b
+					},
+				},
+			})).Parser(),
+			input:         " \t 1 + 3 * \t 2 - 6 / 3 ag",
+			wantOutput:    5,
+			wantRemaining: " ag",
+		}, {
+			name: "parentheses and infix ops with strict floats",
+			parser: cmb.Expression(cmb.Float64(false, 10, true), cmb.InfixLevel([]cmb.InfixOp[float64]{
+				{
+					Op:       "*",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a * b
+					},
+				}, {
+					Op:       "/",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a / b
+					},
+				},
+			}), cmb.InfixLevel([]cmb.InfixOp[float64]{
+				{
+					Op:       "-",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a - b
+					},
+				}, {
+					Op:       "+",
+					SafeSpot: true,
+					Fn: func(a, b float64) float64 {
+						return a + b
+					},
+				},
+			})).AddParentheses("(", ")", true).Parser(),
+			input:         " \t( 1.0 + 3. ) * (\t 2. - 6.0 \t ) * .25",
+			wantOutput:    -4.0,
+			wantRemaining: "",
+		}, {
+			name: "all mixed up",
+			parser: cmb.Expression(cmb.Float64(false, 10, true)).AddPrefixLevel(cmb.PrefixOp[float64]{
+				Op:       "-",
+				SafeSpot: false,
+				Fn: func(i float64) float64 {
+					return -i
+				},
+			}).AddPostfixLevel(cmb.PostfixOp[float64]{
+				Op:       "--",
+				SafeSpot: false,
+				Fn: func(i float64) float64 {
+					return i - 1
+				},
+			}, cmb.PostfixOp[float64]{
+				Op:       "++",
+				SafeSpot: false,
+				Fn: func(i float64) float64 {
+					return i + 1
+				},
+			}).AddPrefixLevel(cmb.PrefixOp[float64]{
+				Op:       "!",
+				SafeSpot: false,
+				Fn: func(v float64) float64 {
+					r := float64(1)
+					for i := float64(1); i <= v; i++ {
+						r *= i
+					}
+					return r
+				},
+			}).AddInfixLevel(cmb.InfixOp[float64]{
+				Op:       "^",
+				SafeSpot: true,
+				Fn: func(a, b float64) float64 {
+					r := float64(1)
+					for i := float64(0); i < b; i++ {
+						r *= a
+					}
+					return r
+				},
+			}, cmb.InfixOp[float64]{
+				Op:       "%",
+				SafeSpot: true,
+				Fn: func(a, b float64) float64 {
+					return math.Remainder(a, b)
+				},
+			}).AddInfixLevel(cmb.InfixOp[float64]{
+				Op:       "*",
+				SafeSpot: true,
+				Fn: func(a, b float64) float64 {
+					return a * b
+				},
+			}, cmb.InfixOp[float64]{
+				Op:       "/",
+				SafeSpot: true,
+				Fn: func(a, b float64) float64 {
+					return a / b
+				},
+			}).AddInfixLevel(cmb.InfixOp[float64]{
+				Op:       "-",
+				SafeSpot: true,
+				Fn: func(a, b float64) float64 {
+					return a - b
+				},
+			}, cmb.InfixOp[float64]{
+				Op:       "+",
+				SafeSpot: true,
+				Fn: func(a, b float64) float64 {
+					return a + b
+				},
+			}).AddParentheses("(", ")", true).AddParentheses("[", "]", true).Parser(),
+			input:         "-  (\t ! 2. \t ++ + 3.0 --) * \t [ 2.0 ^ 2. - 12.000 % 6. ] / 4.0",
+			wantOutput:    -8,
+			wantRemaining: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			newState, gotOutput, gotErr := tc.parser.Parse(comb.NewFromString(tc.input, 10))
+			if gotErr != nil {
+				t.Errorf("found error %v", gotErr)
+			}
+
+			if gotOutput != tc.wantOutput {
+				t.Errorf("got output %f, want output %f", gotOutput, tc.wantOutput)
+			}
+
+			gotRemaining := newState.CurrentString()
+			if gotRemaining != tc.wantRemaining {
+				t.Errorf("got remaining %q, want remaining %q", gotRemaining, tc.wantRemaining)
+			}
+		})
+	}
+}
+
+func TestExpression_IntErrorCases(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -329,9 +513,9 @@ func TestExpression_ErrorCases(t *testing.T) {
 	}{
 		{
 			name:       "additional character before value",
-			parser:     cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Int64(false, 10))).Parser()),
-			input:      "] 123",
-			wantOutput: []int64{123},
+			parser:     cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Int64(true, 10))).Parser()),
+			input:      "] -123",
+			wantOutput: []int64{-123},
 			wantErrors: 1,
 		}, {
 			name: "prefix op",
@@ -700,6 +884,174 @@ func TestExpression_ErrorCases(t *testing.T) {
 				})).AddParentheses("(", ")", true).AddParentheses("[", "]", true).Parser()),
 			input:      " \\ - | ( ? ! ~ 2 ` ++ ' + ; 3 : -- . ) , * @ [ # 2 $ ++ ++ ^ & 2 { - } 12 < ++ % > 6 a ] b ++ ++ ++ ++ / c 4 d +( 3 )",
 			wantOutput: []int64{2, 1, 3, -1, 0, 2, 4, -12, 1, 0, 1, 3},
+			wantErrors: 22,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // this is needed for t.Parallel() to work correctly (or the same test case will be executed N times)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotOutput, err := comb.RunOnState(comb.NewFromString(tc.input, 50), comb.NewPreparedParser(tc.parser))
+			t.Logf("got error(s) %v", err)
+			if slices.Compare(gotOutput, tc.wantOutput) != 0 {
+				t.Errorf("got output %#v, want output %#v", gotOutput, tc.wantOutput)
+			}
+			if got, want := len(comb.UnwrapErrors(err)), tc.wantErrors; got != want {
+				t.Errorf("err=%v, want errors=%d", err, want)
+			}
+		})
+	}
+}
+
+func TestExpression_FloatErrorCases(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		parser     comb.Parser[[]float64]
+		input      string
+		wantOutput []float64
+		wantErrors int
+	}{
+		{
+			name:       "additional character before value",
+			parser:     cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Float64(true, 10, false))).Parser()),
+			input:      "] -123",
+			wantOutput: []float64{-123},
+			wantErrors: 1,
+		}, {
+			name:       "integer as strict float value",
+			parser:     cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Float64(false, 10, true))).Parser()),
+			input:      "123 125.",
+			wantOutput: []float64{125.0},
+			wantErrors: 1,
+		}, {
+			name: "prefix op",
+			parser: cmb.Count(1, cmb.Expression(comb.SafeSpot(cmb.Float64(false, 10, false)),
+				cmb.PrefixLevel([]cmb.PrefixOp[float64]{
+					{
+						Op:       "-",
+						SafeSpot: true,
+						Fn: func(i float64) float64 {
+							return -i
+						},
+					},
+				})).Parser()),
+			input:      "! - | .123",
+			wantOutput: []float64{-.123},
+			wantErrors: 2,
+		}, {
+			name: "infix op",
+			parser: cmb.Count(2, cmb.Expression(comb.SafeSpot(cmb.Float64(false, 10, true)),
+				cmb.InfixLevel([]cmb.InfixOp[float64]{
+					{
+						Op:       "+",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							return a + b
+						},
+					},
+				})).Parser()),
+			input:      "(12e3)+ 4e- 456.",
+			wantOutput: []float64{12e3, 456.},
+			wantErrors: 3,
+		}, {
+			name: "all mixed up",
+			parser: cmb.Count(12, cmb.Expression(comb.SafeSpot(cmb.Float64(false, 10, false)),
+				cmb.PrefixLevel([]cmb.PrefixOp[float64]{
+					{
+						Op:       "-",
+						SafeSpot: true,
+						Fn: func(i float64) float64 {
+							return -i
+						},
+					},
+				}), cmb.PostfixLevel([]cmb.PostfixOp[float64]{
+					{
+						Op:       "--",
+						SafeSpot: true,
+						Fn: func(i float64) float64 {
+							return i - 1
+						},
+					}, {
+						Op:       "++",
+						SafeSpot: true,
+						Fn: func(i float64) float64 {
+							return i + 1
+						},
+					},
+				}), cmb.PrefixLevel([]cmb.PrefixOp[float64]{
+					{
+						Op:       "!",
+						SafeSpot: true,
+						Fn: func(v float64) float64 {
+							r := float64(1)
+							for i := float64(1); i <= v; i++ {
+								r *= i
+							}
+							return r
+						},
+					},
+				}), cmb.InfixLevel([]cmb.InfixOp[float64]{
+					{
+						Op:       "^",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							r := float64(1)
+							for i := float64(0); i < b; i++ {
+								r *= a
+							}
+							return r
+						},
+					}, {
+						Op:       "%",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							if b == 0 {
+								return 0
+							}
+							return math.Remainder(a, b)
+						},
+					},
+				}), cmb.InfixLevel([]cmb.InfixOp[float64]{
+					{
+						Op:       "*",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							return a * b
+						},
+					}, {
+						Op:       "/",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							if b == 0 {
+								if a >= 0 {
+									return 99999
+								}
+								return -99999
+							}
+							return a / b
+						},
+					},
+				}), cmb.InfixLevel([]cmb.InfixOp[float64]{
+					{
+						Op:       "-",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							return a - b
+						},
+					}, {
+						Op:       "+",
+						SafeSpot: true,
+						Fn: func(a, b float64) float64 {
+							return a + b
+						},
+					},
+				})).AddParentheses("(", ")", true).AddParentheses("[", "]", true).Parser()),
+			input:      " \\ - | ( ? ! ~ 2 ` ++ ' + ; 3 : -- . ) , * @ [ # 2 $ ++ ++ ^ & 2 { - } 12 < ++ % > 6 a ] b ++ ++ ++ ++ / c 4 d +( 3 )",
+			wantOutput: []float64{2, 1, 3, -1, 0, 2, 4, -12, 1, 0, 1, 3},
 			wantErrors: 22,
 		},
 	}
