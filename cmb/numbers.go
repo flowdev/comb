@@ -77,7 +77,7 @@ func Integer(signAllowed bool, base int, underscoreAllowed bool) comb.Parser[str
 					break ForLoop // don't break switch but for
 				}
 				n++
-			case strings.IndexRune(digits, unicode.ToLower(digit)) >= 0:
+			case strings.ContainsRune(digits, unicode.ToLower(digit)):
 				n++
 				good = true
 			default:
@@ -323,7 +323,7 @@ ForLoop:
 				break ForLoop // don't break switch but for
 			}
 			n++
-		case strings.IndexRune(digits, unicode.ToLower(digit)) >= 0:
+		case strings.ContainsRune(digits, unicode.ToLower(digit)):
 			n++
 			good = true
 		default:
