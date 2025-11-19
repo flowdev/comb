@@ -71,7 +71,7 @@ func AnyChar() comb.Parser[rune] {
 func QuotedChar(expected, forbiddenChars, additionalEscapedChars string) comb.Parser[rune] {
 	parse := func(state comb.State) (comb.State, rune, *comb.ParserError) {
 		input := state.CurrentString()
-		r, size, pErr := decodeRune(input, expected, state)
+		r, _, pErr := decodeRune(input, expected, state)
 		if pErr != nil {
 			return state, r, pErr
 		}
@@ -79,6 +79,7 @@ func QuotedChar(expected, forbiddenChars, additionalEscapedChars string) comb.Pa
 			return state, utf8.RuneError, state.NewSyntaxError("%s found %q", expected, r)
 		}
 		if r == '\\' { // handle additional escaped chars
+			var size int
 			backslashLen := len("\\") // should be always 1; but better safe than sorry
 			r, size, pErr = decodeRune(input[backslashLen:], expected, state)
 			if pErr != nil {

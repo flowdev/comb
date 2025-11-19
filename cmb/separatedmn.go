@@ -129,7 +129,7 @@ func (sd *separatedData[Output, S]) parseAfterChild(
 
 		if sd.separator != nil {
 			sepState := childState
-			sepState, childOut, childErr = sd.separator.ParseAny(sd.id(), childState)
+			sepState, _, childErr = sd.separator.ParseAny(sd.id(), childState)
 			if childErr != nil {
 				if sd.atLeast > count || childState.SafeSpotMoved(sepState) { // fail
 					return sepState, partRes.outs, childErr, partRes

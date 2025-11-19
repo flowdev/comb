@@ -25,7 +25,7 @@ func TestParseRESPMessage(t *testing.T) {
 }
 `
 
-	output, err := comb.RunOnString(testJSON, valuep)
+	output, err := comb.RunOnString(testJSON, parseValue())
 
 	//if err != nil {
 	if got, want := err, error(nil); got != want {
